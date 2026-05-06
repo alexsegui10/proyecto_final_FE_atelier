@@ -156,8 +156,19 @@ export function DiscoverChat() {
       if (!response.ok) {
         throw new Error(`project create failed: ${response.status}`);
       }
-      const data = (await response.json()) as { id: string };
-      router.push(`/studio/${data.id}`);
+      const project = (await response.json()) as { id: string };
+
+      // Phase 2: kick off the generator agents and redirect to the live Studio.
+      const startResponse = await fetch("/api/generate/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId: project.id }),
+      });
+      if (!startResponse.ok) {
+        throw new Error(`generate/start failed: ${startResponse.status}`);
+      }
+      const { generationId } = (await startResponse.json()) as { generationId: string };
+      router.push(`/studio/${generationId}`);
     } catch (err) {
       setState((s) => ({ ...s, error: (err as Error).message }));
       setBuilding(false);
