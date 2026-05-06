@@ -1,0 +1,103 @@
+// Atelier-generated Prisma schema.
+// Source of truth for the database. Migrations are applied via `prisma migrate dev`.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/infrastructure/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  email        String   @unique
+  name         String
+  // allowed: admin, profesor, alumno
+  role         String
+  passwordHash String
+  isActive     Boolean  @default(true)
+  // allowed: activo, eliminado, pendiente
+  status       String   @default("activo")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  classesTaught Class[]      @relation("TeacherClasses")
+  bookings      Booking[]
+  memberships   Membership[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model Class {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  description     String
+  teacherId       String
+  startsAt        DateTime
+  durationMinutes Int
+  capacity        Int
+  // allowed: principiante, intermedio, avanzado
+  level           String
+  isActive        Boolean  @default(true)
+  // allowed: activo, eliminado, cancelada
+  status          String   @default("activo")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  teacher  User      @relation("TeacherClasses", fields: [teacherId], references: [id])
+  bookings Booking[]
+
+  @@index([teacherId])
+  @@index([startsAt])
+  @@index([status])
+}
+
+model Booking {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  userId      String
+  classId     String
+  cancelledAt DateTime?
+  isActive    Boolean   @default(true)
+  // allowed: activa, eliminado, invalidada
+  status      String    @default("activa")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  class Class @relation(fields: [classId], references: [id])
+
+  @@unique([userId, classId])
+  @@index([userId])
+  @@index([classId])
+  @@index([status])
+}
+
+model Membership {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  userId       String
+  // allowed: mensual, trimestral
+  tier         String
+  validFrom    DateTime
+  validUntil   DateTime
+  creditsUsed  Int      @default(0)
+  creditsTotal Int
+  isActive     Boolean  @default(true)
+  // allowed: activa, eliminado, expirada
+  status       String   @default("activa")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([validUntil])
+  @@index([status])
+}
