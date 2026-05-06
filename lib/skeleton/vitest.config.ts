@@ -8,12 +8,15 @@ export default defineConfig({
   test: {
     environment: "node",
     include: [
-      "lib/**/*.test.ts",
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
       "app/**/*.test.ts",
-      "components/**/*.test.ts",
-      "components/**/*.test.tsx",
+      "app/**/*.test.tsx",
     ],
-    exclude: ["node_modules", "lib/skeleton/**"],
+    exclude: ["node_modules", "tests/e2e/**"],
+    // Skeleton ships with no tests; agents add them. Don't fail the QA gate
+    // on an empty repo.
+    passWithNoTests: true,
   },
   resolve: {
     alias: {

@@ -1,0 +1,23 @@
+// Atelier-generated Prisma schema.
+// The Domain & Persistence agent extends this with per-feature models.
+// Keep `User` here as a placeholder so generator agents have an anchor entity.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/infrastructure/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  email     String   @unique
+  role      String // allowed: admin (extend per project)
+  isActive  Boolean  @default(true)
+  status    String   @default("activo") // allowed: activo, eliminado, pendiente
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

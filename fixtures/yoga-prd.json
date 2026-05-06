@@ -1,0 +1,43 @@
+{
+  "objective": "App de gestión de un estudio de yoga: el alumno reserva clases con cupo limitado, el profesor consulta su agenda, el admin lo gestiona todo y revisa pagos vía membresías.",
+  "roles": ["admin", "profesor", "alumno"],
+  "entities": [
+    {
+      "name": "User",
+      "fields": ["email", "name", "role", "passwordHash"],
+      "notes": "Rol: admin | profesor | alumno. Sin rol único — un alumno también puede ser profesor en otra clase."
+    },
+    {
+      "name": "Class",
+      "fields": ["title", "description", "teacherId", "startsAt", "durationMinutes", "capacity", "level"],
+      "notes": "level: principiante | intermedio | avanzado. capacity entre 1 y 30."
+    },
+    {
+      "name": "Booking",
+      "fields": ["userId", "classId", "createdAt", "cancelledAt"],
+      "notes": "Una reserva por (userId, classId). Cancela seteando cancelledAt y status='eliminado'. Cancelaciones cierran 2 horas antes de startsAt."
+    },
+    {
+      "name": "Membership",
+      "fields": ["userId", "tier", "validFrom", "validUntil", "creditsUsed", "creditsTotal"],
+      "notes": "tier: mensual | trimestral. mensual = 12 créditos/mes, trimestral = 36 créditos/3 meses. Reservar consume un crédito; cancelar (≥2h antes) lo devuelve."
+    }
+  ],
+  "useCases": [
+    "alumno reserva una clase (consume crédito de su membresía activa)",
+    "alumno cancela una reserva propia hasta 2h antes (devuelve crédito)",
+    "alumno consulta su agenda y créditos restantes",
+    "profesor consulta sus clases programadas",
+    "profesor cancela una clase propia y libera reservas",
+    "admin crea, edita y elimina (soft) clases",
+    "admin gestiona membresías de cualquier alumno",
+    "admin invalida una reserva manualmente"
+  ],
+  "notes": [
+    "Cancelaciones cierran 2h antes del inicio.",
+    "Solo membresías; no se venden clases sueltas.",
+    "Alumno solo ve y modifica sus propias reservas.",
+    "Profesor solo ve sus propias clases pero puede cancelarlas.",
+    "Admin tiene acceso total."
+  ]
+}
