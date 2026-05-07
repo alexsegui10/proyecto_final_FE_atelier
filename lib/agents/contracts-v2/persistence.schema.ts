@@ -15,21 +15,26 @@ const indexSchema = z
   })
   .strict();
 
+// Passthrough — LLM may produce alternative check shapes (e.g. {model, field,
+// values, documentedAs} for enum-like CHECK constraints) which are sensible
+// even when the canonical shape is {model, constraint}. We require `model`
+// only; the rest is flexible. Downstream Persistence-impl agent can adapt.
 const checkSchema = z
   .object({
     model: z.string().min(1),
-    constraint: z.string().min(1),
+    constraint: z.string().min(1).optional(),
   })
-  .strict();
+  .passthrough();
 
 const repoMethodSchema = z
   .object({
     name: z.string().min(1),
-    params: z.string().min(1),
+    // empty string accepted for parameterless methods (e.g. listAll())
+    params: z.string(),
     returns: z.string().min(1),
     notes: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 const repositorySchema = z
   .object({
@@ -41,7 +46,7 @@ const repositorySchema = z
       .optional(),
     methods: z.array(repoMethodSchema).min(2),
   })
-  .strict();
+  .passthrough();
 
 export const persistenceSchema = z
   .object({
@@ -53,16 +58,17 @@ export const persistenceSchema = z
               name: z.string().regex(/^[A-Z][A-Za-z0-9]*$/),
               feature: z.string().regex(/^[a-z][a-z0-9-]*$/),
               softDelete: z.boolean().optional(),
-            }),
+            }).passthrough(),
           )
           .min(1),
         indices: z.array(indexSchema),
         checks: z.array(checkSchema),
       })
-      .strict(),
+      .passthrough(),
     repositories: z.array(repositorySchema).min(1),
   })
-  .strict();
+  .passthrough(); // top-level passthrough so the agent can attach `shared`,
+                  // `migrations`, or other top-level metadata sections.
 
 export type PersistenceArtifact = z.infer<typeof persistenceSchema>;
 export type RepositoryDecl = z.infer<typeof repositorySchema>;

@@ -14,9 +14,17 @@ const credentialsSchema = z
   })
   .strict();
 
-const distributionSchema = z
-  .record(z.string().min(1), z.number().int().nonnegative())
-  .refine((d) => Object.keys(d).length > 0, "distribution must have at least one bucket");
+// Distribution is either:
+//   - a record mapping bucket → count (e.g. { active: 8, newcomers: 2, lapsed: 2 }), or
+//   - a free-text description (e.g. "60% active, 40% lapsed") that the
+//     Seeds & Fixtures agent in Wave 5 interprets when generating real data.
+// The LLM tends to use either; the schema accepts both.
+const distributionSchema = z.union([
+  z
+    .record(z.string().min(1), z.number().int().nonnegative())
+    .refine((d) => Object.keys(d).length > 0, "distribution must have at least one bucket"),
+  z.string().min(1),
+]);
 
 const demoUserSchema = z
   .object({

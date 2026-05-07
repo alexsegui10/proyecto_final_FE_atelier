@@ -16,6 +16,10 @@ const fieldKindSchema = z.enum([
   "foreign-key",
   "soft-delete",
   "timestamp",
+  // `secret` flags fields that must NEVER cross the DTO boundary
+  // (e.g. passwordHash). The LLM produced this kind voluntarily and it's
+  // useful downstream (Persistence + Mappers can omit secrets from DTOs).
+  "secret",
 ]);
 
 const fieldSchema = z
@@ -48,6 +52,9 @@ const entitySchema = z
   })
   .strict();
 
+// passthrough so the LLM can attach domain-flavored metadata like `scope`
+// (where the error fires from), `feature` (which feature owns it), `description`,
+// etc. without rejecting the whole artifact. Required keys stay load-bearing.
 const domainErrorSchema = z
   .object({
     name: z.string().regex(/^[A-Z][A-Za-z0-9]*Error$/, "domain error must be PascalCase + 'Error'"),
@@ -55,7 +62,7 @@ const domainErrorSchema = z
     httpStatus: z.number().int().min(400).max(599),
     message: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const domainModelSchema = z
   .object({
