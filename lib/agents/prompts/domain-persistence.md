@@ -102,3 +102,4 @@ DOMAIN_PERSISTENCE_DONE: <N> models, <M> repositories
 - NO importes Prisma desde `src/domain/`. La interface del repo va sin tipos Prisma; usa tipos de domain.
 - NO uses `delete` o `deleteMany` en los repos. Soft delete siempre.
 - NO inventes campos que el PRD no menciona. Si el PRD pide solo `title, startsAt, capacity`, no agregues `description` "para más adelante".
+- **NO toques `prisma.config.ts`.** El skeleton ya lo trae con la forma correcta para Prisma 7 (`schema`, `migrations.path`, `datasource.url` con dotenv override). Si pensaste en escribirlo "porque falta", parálo: existe. Verificá con Read antes de Write.

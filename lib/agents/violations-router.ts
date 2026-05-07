@@ -33,6 +33,7 @@ export function routeFilePath(rawPath: string): GeneratorAgentName | null {
   // Schema + Prisma client + mappers + infra repos — owned by domain-persistence.
   if (
     norm === "prisma/schema.prisma" ||
+    norm === "prisma.config.ts" ||
     norm.startsWith("prisma/") ||
     norm.startsWith("src/domain/") ||
     norm.startsWith("src/infrastructure/db/") ||

@@ -24,6 +24,8 @@ describe("routeViolation", () => {
 
   it("routes prisma schema and infra repos to domain-persistence", () => {
     expect(routeViolation(v("prisma/schema.prisma"))).toBe("domain-persistence");
+    expect(routeViolation(v("prisma.config.ts"))).toBe("domain-persistence");
+    expect(routeViolation(v("prisma.config.ts:7"))).toBe("domain-persistence");
     expect(routeViolation(v("src/infrastructure/bookings/repository.ts:42"))).toBe("domain-persistence");
     expect(routeViolation(v("src/infrastructure/classes/mapper.ts:1"))).toBe("domain-persistence");
     expect(routeViolation(v("src/infrastructure/db/client.ts:11"))).toBe("domain-persistence");
