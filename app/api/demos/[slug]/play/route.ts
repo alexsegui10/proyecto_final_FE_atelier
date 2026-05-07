@@ -84,12 +84,18 @@ export async function POST(
       prd: { __replayed_from: slug, summary: cached.summary ?? "" },
     },
   });
+  // Persist the path to the cached workDir so the /files endpoint can serve
+  // the snapshot — these Generations don't have a real temp dir created by
+  // the orchestrator. The path is absolute on disk; downstream readers
+  // already check existence + path-traversal safety.
+  const cachedWorkDir = join(process.cwd(), "out", "demo-cache", slug, "workDir");
   const generation = await prisma.generation.create({
     data: {
       projectId: project.id,
       status: "running",
       result: {
         replay: { slug, speed },
+        workDir: cachedWorkDir,
         summary: cached.summary ?? "",
         decision: cached.decision ?? "go",
         durationMs: cached.totalDurationMs ?? null,
