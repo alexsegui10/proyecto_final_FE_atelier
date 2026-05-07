@@ -108,14 +108,52 @@ export function mergePRDState(current: PRDState, partial: PartialPRDState): PRDS
 /**
  * Decide whether the PRD is rich enough to start building.
  * Mirrors the `READY_TO_BUILD` thresholds documented in discovery.md.
+ *
+ * Phase 3 sprint 2B raised the bar:
+ *   - 4+ entities (was 3)
+ *   - 2+ roles (unchanged)
+ *   - 8+ useCases (was 6)
+ *   - every entity has ≥3 documented fields (new)
+ *   - objective non-empty
  */
 export function isPRDReady(state: PRDState): boolean {
-  return (
-    state.objective.trim().length > 0 &&
-    state.roles.length >= 2 &&
-    state.entities.length >= 3 &&
-    state.useCases.length >= 6
-  );
+  if (state.objective.trim().length === 0) return false;
+  if (state.roles.length < 2) return false;
+  if (state.entities.length < 4) return false;
+  if (state.useCases.length < 8) return false;
+  if (state.entities.some((e) => e.fields.length < 3)) return false;
+  return true;
+}
+
+/**
+ * 0-100% measure of how filled-in the PRD is, used by the Discover UI to
+ * show the "PRD madurez" bar. Hits 100% only when `isPRDReady` is true and
+ * notes have at least one entry — that final 10% nudges the user to
+ * articulate business rules.
+ *
+ * Component breakdown:
+ *   objective non-empty         → 10pts
+ *   roles (proportional, cap 2) → 15pts
+ *   entities (proportional, cap 4) → 25pts
+ *   3+ fields per entity (proportional) → 20pts
+ *   useCases (proportional, cap 8) → 20pts
+ *   notes (≥1) → 10pts
+ *   total = 100
+ */
+export function prdMaturity(state: PRDState): number {
+  let score = 0;
+  if (state.objective.trim().length > 0) score += 10;
+  score += Math.min(2, state.roles.length) * 7.5;
+  score += Math.min(4, state.entities.length) * 6.25;
+  if (state.entities.length > 0) {
+    const avgFields =
+      state.entities.reduce((sum, e) => sum + Math.min(3, e.fields.length), 0) /
+      state.entities.length;
+    score += (avgFields / 3) * 20;
+  }
+  score += Math.min(8, state.useCases.length) * 2.5;
+  if (state.notes.length > 0) score += 10;
+  return Math.round(score);
 }
 
 /**

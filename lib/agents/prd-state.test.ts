@@ -6,6 +6,7 @@ import {
   extractStateBlock,
   isPRDReady,
   mergePRDState,
+  prdMaturity,
 } from "./prd-state";
 
 describe("mergePRDState", () => {
@@ -92,27 +93,95 @@ describe("isPRDReady", () => {
       objective: "yoga",
       roles: ["a", "b"],
       entities: [
-        { name: "X", fields: [] },
-        { name: "Y", fields: [] },
-        { name: "Z", fields: [] },
+        { name: "X", fields: ["f1", "f2", "f3"] },
+        { name: "Y", fields: ["f1", "f2", "f3"] },
+        { name: "Z", fields: ["f1", "f2", "f3"] },
       ],
       useCases: ["u1", "u2", "u3", "u4", "u5"],
     });
     expect(isPRDReady(partial)).toBe(false);
   });
 
-  it("returns true when objective, 2 roles, 3 entities, 6 useCases are present", () => {
+  it("returns true when objective, 2 roles, 4 entities (3+ fields each), 8 useCases", () => {
     const ready = mergePRDState(EMPTY_PRD_STATE, {
       objective: "yoga",
       roles: ["admin", "alumno"],
       entities: [
-        { name: "User", fields: [] },
-        { name: "Class", fields: [] },
-        { name: "Booking", fields: [] },
+        { name: "User", fields: ["email", "name", "role"] },
+        { name: "Class", fields: ["title", "startsAt", "capacity"] },
+        { name: "Booking", fields: ["userId", "classId", "status"] },
+        { name: "Membership", fields: ["userId", "tier", "validUntil"] },
       ],
-      useCases: ["u1", "u2", "u3", "u4", "u5", "u6"],
+      useCases: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"],
     });
     expect(isPRDReady(ready)).toBe(true);
+  });
+
+  it("returns false when an entity has fewer than 3 fields documented", () => {
+    const stillIncomplete = mergePRDState(EMPTY_PRD_STATE, {
+      objective: "yoga",
+      roles: ["admin", "alumno"],
+      entities: [
+        { name: "User", fields: ["email", "name", "role"] },
+        { name: "Class", fields: ["title", "startsAt"] }, // only 2 fields
+        { name: "Booking", fields: ["userId", "classId", "status"] },
+        { name: "Membership", fields: ["userId", "tier", "validUntil"] },
+      ],
+      useCases: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"],
+    });
+    expect(isPRDReady(stillIncomplete)).toBe(false);
+  });
+});
+
+describe("prdMaturity", () => {
+  it("starts at 0 with an empty PRD", () => {
+    expect(prdMaturity(EMPTY_PRD_STATE)).toBe(0);
+  });
+
+  it("hits 100 when every component is filled", () => {
+    const full = mergePRDState(EMPTY_PRD_STATE, {
+      objective: "yoga",
+      roles: ["admin", "alumno", "profesor"],
+      entities: [
+        { name: "User", fields: ["a", "b", "c"] },
+        { name: "Class", fields: ["a", "b", "c"] },
+        { name: "Booking", fields: ["a", "b", "c"] },
+        { name: "Membership", fields: ["a", "b", "c"] },
+      ],
+      useCases: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"],
+      notes: ["regla de cancelación"],
+    });
+    expect(prdMaturity(full)).toBe(100);
+  });
+
+  it("scales smoothly between 0 and 100 with partial inputs", () => {
+    const half = mergePRDState(EMPTY_PRD_STATE, {
+      objective: "x",
+      roles: ["a", "b"],
+      entities: [
+        { name: "E1", fields: ["a", "b"] },
+        { name: "E2", fields: ["a"] },
+      ],
+      useCases: ["u1", "u2", "u3", "u4"],
+    });
+    const score = prdMaturity(half);
+    expect(score).toBeGreaterThan(20);
+    expect(score).toBeLessThan(100);
+  });
+
+  it("missing notes blocks the last 10 points", () => {
+    const noNotes = mergePRDState(EMPTY_PRD_STATE, {
+      objective: "yoga",
+      roles: ["admin", "alumno"],
+      entities: [
+        { name: "User", fields: ["a", "b", "c"] },
+        { name: "Class", fields: ["a", "b", "c"] },
+        { name: "Booking", fields: ["a", "b", "c"] },
+        { name: "Membership", fields: ["a", "b", "c"] },
+      ],
+      useCases: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"],
+    });
+    expect(prdMaturity(noNotes)).toBe(90);
   });
 });
 

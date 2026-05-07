@@ -234,7 +234,13 @@ export function DiscoverChat() {
         state={state.prdState}
         ready={state.ready && !state.isStreaming}
         onBuild={handleBuild}
+        onContinueTalking={() =>
+          submitMessage(
+            "Quiero seguir hablando — profundicemos un poco más antes de generar.",
+          )
+        }
         building={building}
+        isStreaming={state.isStreaming}
       />
     </div>
   );
