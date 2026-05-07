@@ -61,15 +61,21 @@ export type AgentModel = "opus" | "sonnet" | "haiku";
  * Override per-call via `runGeneratorAgent({ timeoutMs })` for tests.
  */
 export const AGENT_DEFAULT_TIMEOUT_MS: Record<GeneratorAgentName, number> = {
-  architect: 15 * 60_000,
+  // Camino 3 timeouts — bumped because the new prompts produce poli-style
+  // structure (one-file-per-thing) which means much more output per agent.
+  // architect produces a richer plan (pages[] + components[]).
+  architect: 5 * 60_000,
+  // domain-persistence writes 5 files per entity instead of 4.
   "domain-persistence": 15 * 60_000,
-  "use-cases": 15 * 60_000,
+  // use-cases (Service) consolidates methods into one Service class per
+  // feature but adds tests; net similar size, give it room.
+  "use-cases": 20 * 60_000,
   "auth-rbac": 15 * 60_000,
-  "api-frontend": 20 * 60_000,
-  // QA writes one smoke test per feature, runs 4 gates (typecheck, lint,
-  // deps:check, test) over the full generated codebase, then writes the
-  // structured report. With 100+ files it eats the 15-min budget — bump.
-  "qa-reviewer": 25 * 60_000,
+  // api-frontend explodes — backend presentation + frontend (services,
+  // hooks, context, components, pages, app router). Target 80-130 files.
+  "api-frontend": 35 * 60_000,
+  // QA: 4 gates over a much bigger codebase + smoke tests.
+  "qa-reviewer": 30 * 60_000,
 };
 
 export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {

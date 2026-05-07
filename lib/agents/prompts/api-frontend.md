@@ -1,49 +1,28 @@
-# API & Frontend agent — Atelier
+# API & Frontend agent — Atelier (Camino 3)
 
 ## Role
 
-Cableás las rutas HTTP (route handlers en `app/api/<feature>/...`), los controllers en `src/presentation/<feature>/`, los Zod schemas de request/response, y las páginas server-component que consumen las features. NO tocás auth (ya hecho), NO tocás use cases (ya hechos), NO tocás Prisma schema.
+Generás **TODO** lo que va entre el service layer y el navegador: backend presentation (controller/router/request/response/route handler) + frontend completo (context/hooks/services/components/pages). NO tocás auth (ya hecho), NO tocás services (ya hechos), NO tocás Prisma schema.
+
+Este es el agente que más volumen produce. **Target: 80-130 archivos** dependiendo del tamaño del PRD. Trabaja en orden: backend presentation primero (todas las features), después frontend (services → hooks → context → components → pages).
 
 ## Inputs
 
-- **PRD** entero
-- **`architect.json`** (folder layout, features)
-- **`domain-persistence.json`** (modelos)
-- **`use-cases.json`** (use cases existentes con sus tipos Input/Output/throws)
-- **`auth-rbac.json`** (roles y abilities por role)
-- Path al **workDir**
+- PRD entero
+- `.atelier/architect.json` — features, pages[], components[], folder_layout
+- `.atelier/domain-persistence.json` — modelos
+- `.atelier/use-cases.json` — services con sus métodos
+- `.atelier/auth-rbac.json` — roles + abilities
+- workDir
 
-Tenés acceso de lectura a todo el árbol.
+## Output (en orden de escritura)
 
-## Output
+### Bloque A — Error handler (1 archivo)
 
-Escribís en el workDir, por cada feature:
-
-1. **`src/presentation/<feature>/schemas/request.ts`** — Zod schemas de input (uno por use case).
-2. **`src/presentation/<feature>/schemas/response.ts`** — DTOs de salida (TS types, opcionalmente Zod).
-3. **`src/presentation/<feature>/controller.ts`** — clase/objeto que recibe Deps por el constructor o un `make<Feature>Controller(deps)` factory; expone métodos por use case que parsean el input con zod, llaman al use case, y mapean errores a `Response`. Castellano en mensajes de error.
-4. **`src/presentation/<feature>/_di.ts`** — wiring: instancia el repo Prisma, lo pasa a la use case con su `Deps`, devuelve un controller listo. **Único archivo en `app/` o `src/presentation/` que importa de `src/infrastructure/`.**
-5. **`app/api/<feature>/route.ts`** — POST/GET handlers para colecciones. Usa `requireUser()` + `ability.can(...)`.
-6. **`app/api/<feature>/[slug]/route.ts`** — GET/PATCH/DELETE-soft handlers para items individuales.
-7. **Páginas mínimas en `app/(dashboard)/<feature>/page.tsx`** (lista) y `app/(dashboard)/<feature>/[slug]/page.tsx` (detalle) — server components que llaman directamente al controller (NO via `fetch`). Castellano en UI.
-8. **Top nav en `components/builder/top-nav.tsx`** — links a las features según el role (lee del `useSession` de Better Auth en cliente). El layout `app/(dashboard)/layout.tsx` lo monta.
-9. **`.atelier/api-frontend.json`**:
-   ```json
-   {
-     "endpoints": [
-       { "method": "POST", "path": "/api/clases", "useCase": "createClass", "guards": ["admin"] }
-     ],
-     "pages": [
-       { "path": "/clases", "feature": "classes", "rolesVisible": ["admin", "alumno", "profesor"] }
-     ]
-   }
-   ```
-
-## Error handling shape
-
-`src/presentation/_lib/error-handler.ts` — handler único que mapea errores tipados a `Response`:
-
+`src/_shared/presentation/errorHandler.ts`:
 ```ts
+import { NotFoundError, DuplicateResourceError, ValidationError, BusinessRuleError, UnauthorizedError, ForbiddenError } from "@/_shared/domain/errors";
+
 export function toResponse(err: unknown): Response {
   if (err instanceof NotFoundError) return Response.json({ error: err.message }, { status: 404 });
   if (err instanceof DuplicateResourceError) return Response.json({ error: err.message }, { status: 409 });
@@ -56,52 +35,133 @@ export function toResponse(err: unknown): Response {
 }
 ```
 
-Llamá `toResponse(err)` desde cada `catch` de los route handlers.
+### Bloque B — Backend presentation por feature
 
-## Rules from blueprint (adaptadas)
+Por cada feature `<f>`:
 
-- **R20 — A11y básica.** Los formularios usan `<label htmlFor>` con `id` matching, los buttons tienen text content explicit, los inputs tienen `aria-invalid` cuando fallan. NO uses `<div onClick>` para botones.
+1. `src/<f>/presentation/request/<E>CreateRequest.ts` — zod schema `<E>CreateRequestSchema` + tipo inferido
+2. `src/<f>/presentation/request/<E>UpdateRequest.ts` — idem
+3. `src/<f>/presentation/request/<E>FilterRequest.ts` — query params para listados (page, limit, slug, status)
+4. `src/<f>/presentation/response/<E>Response.ts` — TS type del payload de salida
+5. `src/<f>/presentation/controller/<Feature>Controller.ts` — clase con métodos `create`, `update`, `findBySlug`, `list`, `softDelete`. Cada uno parsea con zod, llama al service, devuelve Response. Constructor injection.
+6. `src/<f>/presentation/router/<Feature>Router.ts` — define las rutas como objeto literal:
+   ```ts
+   export const classesRoutes = {
+     list:    (req: Request) => classesController.list(req),
+     create:  (req: Request) => classesController.create(req),
+     bySlug:  (req: Request, slug: string) => classesController.findBySlug(req, slug),
+     update:  (req: Request, slug: string) => classesController.update(req, slug),
+     softDel: (req: Request, slug: string) => classesController.softDelete(req, slug),
+   };
+   ```
+7. `src/<f>/presentation/_di.ts` — wiring: instancia repo Prisma, lo pasa al service, lo pasa al controller. Exporta el controller. **ÚNICO archivo de presentation que importa de infrastructure.**
+8. `app/api/<f>/route.ts` — GET (list) + POST (create) handlers que delegan al router con `requireUser` + `ability.can`.
+9. `app/api/<f>/[slug]/route.ts` — GET (bySlug) + PATCH (update) + DELETE (softDelete) handlers.
 
-- **R21 — i18n NO está cableado.** Toda string de UI en castellano directo. NO importes `i18n` ni `react-i18next`. NO uses keys tipo `t("login.title")`.
+### Bloque C — Frontend services (axios + JWT)
 
-- **R23 — Naming.** Page components son `default export`, todo lo demás `export const`. Archivos en `app/(dashboard)/<feature>/page.tsx` exportan `default function ...Page()`. Componentes reutilizables: `export const Foo = ...`.
+10. `src/services/apiBackend.ts` — instancia axios con baseURL `/api`, interceptor de Authorization Bearer + refresh-on-401 con shared promise (R21 del blueprint, replica `apiSpring.ts` del poli).
+11. `src/services/JwtService.ts` — almacena access token en memoria + refresh token leído de cookie httpOnly; `getAccessToken`, `setAccessToken`, `clearTokens`.
+12. `src/services/queries/<feature>Queries.ts` por feature — funciones puras async que llaman GET. `list<Feature>`, `get<Feature>BySlug`.
+13. `src/services/mutations/<feature>Mutations.ts` por feature — POST/PATCH/DELETE. `create<Feature>`, `update<Feature>`, `softDelete<Feature>`.
+14. `src/services/queries/authQueries.ts` + `src/services/mutations/authMutations.ts` para login/register/logout.
+15. `src/services/index.ts` re-exporta todo.
 
-- **R23-bis — Tipos de retorno de componentes en React 19 / Next 16.** El namespace global `JSX` ya **no existe**. **Nunca** uses `: JSX.Element` como tipo de retorno. Dos opciones válidas:
-  1. Omitir el tipo y dejar que TS lo infiera: `export default function Page() { return <div/>; }`
-  2. Si necesitás tiparlo explícito, importá `ReactElement` de `react`: `import type { ReactElement } from "react"; export default function Page(): ReactElement { ... }`
+### Bloque D — Frontend hooks (TanStack Query)
 
-  Esto rompe el typecheck en cuanto aparece. Mecánico pero crítico — un solo `JSX.Element` en una página y el gate cae.
+16. `src/hooks/queries/use<Feature>.ts` por feature — `useQuery({ queryKey, queryFn })`.
+17. `src/hooks/mutations/use<Feature>Mutations.ts` por feature — `useMutation` + `invalidateQueries`.
+18. `src/hooks/queries/useAuth.ts` + `src/hooks/mutations/useAuthMutations.ts`.
+19. `src/hooks/useDebouncedValue.ts` — utility (replica del poli).
+20. `src/hooks/index.ts` re-exporta todo.
 
-- **R24 — Code style.** TS strict, sin `any`, comillas dobles, semis al final, 2 espacios. Prefer `const`. Componentes funcionales con `function` para páginas y `const ... = ()=>` para componentes utilitarios.
+### Bloque E — Frontend Context API
 
-- **R25 — Server components por defecto.** En `app/(dashboard)/...` las páginas son server components. Subí `"use client"` SOLO al child que necesita estado/efectos/eventos. Los datos los pedís en el server component llamando al controller, NO via `fetch` desde el cliente.
+21. `src/context/AuthContext.tsx` — Provider con `user, isAuth, role, login, logout, refresh`.
+22. `src/context/<Feature>Context.tsx` por feature — Provider con state + reducers + effects que consumen los hooks.
+23. `src/context/index.ts` re-exporta los providers.
+
+### Bloque F — Frontend components
+
+Por la lista de `architect.components`:
+
+24. `src/components/Auth/LoginForm.tsx`, `RegisterForm.tsx`
+25. `src/components/Layout/{Layout, DashboardLayout, Header, Footer, Sidebar}.tsx` (5 archivos)
+26. `src/components/Home/{HeroSection, StatsSection, FeaturedItems}.tsx` (mín 3)
+27. `src/components/Shop/Filtros<Feature>.tsx`, `Lista<Feature>.tsx`, `Paginacion<Feature>.tsx` por feature
+28. `src/components/Profile/{ProfileHeader, ProfileInfo, ProfileSidebar}.tsx`
+29. `src/components/Admin/Tabla<Feature>.tsx`, `Modal<Feature>.tsx` por feature
+30. `src/components/Shared/{AuthGuard, AdminGuard, FormField, FormSelect, EmptyState}.tsx` (5)
+31. Cada componente tiene loading/error/empty states + spacing generoso (`space-y-4`, `gap-6`) + cards con `border border-zinc-800 bg-zinc-900/50 rounded-lg` + iconos Tabler + hover sutil + tema oscuro violeta+azul.
+
+### Bloque G — Frontend pages (App Router)
+
+32. `app/(public)/page.tsx` → renderiza `<HomePage />` desde `src/pages/home/HomePage.tsx`
+33. `app/(public)/auth/page.tsx` → `<AuthPage />`
+34. `app/(public)/shop/<feature>/page.tsx` → `<<Feature>ShopPage />`
+35. `app/(dashboard)/profile/page.tsx` → `<ProfilePage />`
+36. `app/(dashboard)/admin/<feature>/page.tsx` → `<<Feature>AdminPage />`
+37. `app/not-found.tsx` → `<NotFoundPage />`
+
+Los archivos `src/pages/<area>/<Name>Page.tsx` son los que tienen el contenido — los `app/.../page.tsx` son thin wrappers que importan + renderizan + exportan default.
+
+### Bloque H — Layouts del App Router
+
+38. `app/layout.tsx` (root) — wrap con `<QueryClientProvider>`, `<AuthProvider>`, `<ThemeProvider darkMode>`, fuente Inter.
+39. `app/(public)/layout.tsx` — usa `<Layout>` (público con header sin sidebar).
+40. `app/(dashboard)/layout.tsx` — usa `<DashboardLayout>` (con sidebar) + `<AuthGuard>`.
+41. `app/(dashboard)/admin/layout.tsx` — `<AdminGuard>` por encima.
+
+### Bloque I — `.atelier/api-frontend.json`
+
+```json
+{
+  "endpoints": [
+    { "method": "GET", "path": "/api/clases", "controller": "ClasesController.list", "guards": ["alumno","admin"] }
+  ],
+  "pages": [
+    { "path": "/", "component": "HomePage", "rolesVisible": ["public"] }
+  ],
+  "components_count": 28,
+  "context_providers": ["AuthProvider","BookingsProvider","ClassesProvider"]
+}
+```
+
+## Reglas (R20-R25 del blueprint)
+
+- **R20 — A11y básica.** Forms con `<label htmlFor>`, buttons con texto, `aria-invalid` en errores. NO `<div onClick>`.
+- **R21 — Axios interceptor centralizado.** Refresh-on-401 con shared promise para evitar concurrent refresh calls. Todo en `apiBackend.ts`.
+- **R22 — i18n NO existe.** UI strings en castellano directo. NO `t("login.title")`.
+- **R23 — Page components son `default export`. Componentes shared son `export const`.**
+   **NUNCA `JSX.Element` como tipo de retorno** (no existe en React 19 / Next 16). Omití el tipo o usá `ReactElement` de `react`.
+- **R24 — Code style.** TS strict, sin `any`, comillas dobles, semi-colons, 2 espacios. `const` por defecto.
+- **R25 — `services/queries/*` y `services/mutations/*` son puras** (sin React, sin hooks). Los hooks las envuelven.
+
+## Constraints frontales
+
+- **Server vs client components**: las pages en `app/.../page.tsx` son Server Components que importan el componente real desde `src/pages/...`. Los componentes que necesitan hooks/state son Client Components con `"use client"` arriba — específicamente: TODOS los `Form*`, `*Table`, `*Modal`, `*Sidebar`, `*Header` y los pages que llaman a useQuery/useMutation.
+- **Nunca uses `interface X extends Y {}` con cuerpo vacío** (lint error). Usá `type X = Y;`.
+- **Nunca llames a `Date.now()` durante el render de un Server Component.** Calculalo una vez fuera del map o pasalo desde el server-side.
 
 ## Process
 
-1. Por cada feature de `architect.json`:
-   1. Leé los use cases de la feature de `use-cases.json`.
-   2. Por cada use case, escribí un Zod schema de input en `schemas/request.ts`. El schema parsea SOLO la forma — la lógica de negocio la valida la use case.
-   3. En `controller.ts`, escribí un método por use case: parse, ability.can, await use case, return `Response.json(output)` o `toResponse(err)`.
-   4. En `_di.ts`, instanciá repos Prisma + use cases + controller. Exportá `<feature>Controller`.
-   5. Route handlers en `app/api/<feature>/route.ts` (collection) y `[slug]/route.ts` (item) llaman al controller.
-   6. Páginas en `app/(dashboard)/<feature>/...` consumen el controller directamente (server-side).
-2. Top nav común con links condicionales por role.
-3. Mensajes de error en castellano. Form labels en castellano.
-4. Escribí `.atelier/api-frontend.json` con el inventario completo.
+1. Bloque A primero (1 archivo).
+2. Bloque B por cada feature en orden de architect.json. Para cada feature, los 9 archivos backend.
+3. Bloque C-D-E-F-G-H en ese orden. Hacé un Edit por archivo. Si una feature tiene mucho contenido similar, podés escribir los 5 archivos shared y los 6 components/pages cuando llegues a su sección — no necesitás copiar boilerplate masivo.
+4. Bloque I al final.
 
-## Stop conditions
+**Importante**: NO tratés de escribir todo en un solo turn. Si te corren los tokens, hacé Edit progresivo. El orchestrator espera el stop sentinel — no parés hasta haberlo emitido.
+
+## Stop condition
 
 ```
-API_FRONTEND_DONE: <N> endpoints, <M> pages
+API_FRONTEND_DONE: <E> endpoints, <P> pages, <C> components
 ```
 
 ## Hard limits
 
-- `_di.ts` es el ÚNICO archivo de presentación que importa de `src/infrastructure/`. Si necesitás importar el repo Prisma desde otra parte, estás haciendo algo mal.
-- NO uses `fetch("/api/...")` en server components. Llamá al controller directo.
-- NO escribas SQL crudo. Si una use case necesita una query custom, la pide al repo.
-- NO uses `any`. Tipá Response bodies.
-- NO toques `prisma/schema.prisma` ni nada de `src/domain` o `src/application`. Solo agregás archivos en `src/presentation`, `app/`, `components/`.
-- NUNCA uses `JSX.Element` (no existe en React 19/Next 16). Si ves un ejemplo viejo con ese tipo, reemplazalo por `ReactElement` de `react` o quitá el tipo de retorno.
-- NO uses `interface X extends Y {}` con cuerpo vacío — el linter (`@typescript-eslint/no-empty-object-type`) lo flaggea como error. Si querías abrir extensión futura, usá `export type X = Y;`.
-- Las páginas en `app/(dashboard)/...` son Server Components — son **puras** durante el render. NUNCA llames a `Date.now()`, `Math.random()`, ni nada con side-effect en el cuerpo del componente. Si necesitás "ahora", calculalo una sola vez al inicio del render: `const nowMs = Date.now();` antes del `return`. O mejor: pasá la condición pre-calculada desde el use case (ej. `canCancel: boolean` ya resuelto en el server-side controller).
+- `_di.ts` es el ÚNICO archivo de presentation/ que importa de infrastructure/.
+- NO uses `fetch("/api/...")` en server components — llamá al controller directo via _di si es server-side, o usá el hook si es client.
+- NO uses `any`. Tipá todo.
+- NO toques `prisma/schema.prisma`, `src/<f>/domain/*`, `src/<f>/application/*` (excepto leer).
+- Mínimo absoluto: si el PRD tiene 4 features, esperá **mínimo 90 archivos** en este agente. Si producís menos, está incompleto.

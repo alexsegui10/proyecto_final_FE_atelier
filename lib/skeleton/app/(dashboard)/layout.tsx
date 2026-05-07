@@ -1,8 +1,7 @@
 /**
- * Dashboard layout — wrap any (dashboard)/* route with auth + chrome.
- * Auth & RBAC agent fills in the auth gating; API & Frontend agent fills in
- * the visual shell (top nav, sidebar, etc.).
+ * Dashboard layout — pages behind auth (Profile, Admin pages).
+ * api-frontend agent wraps with <DashboardLayout /> + <AuthGuard />.
  */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-dvh flex-col">{children}</div>;
+  return <div className="min-h-dvh flex flex-col">{children}</div>;
 }
