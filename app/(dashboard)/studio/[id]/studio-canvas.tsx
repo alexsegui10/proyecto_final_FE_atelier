@@ -2,65 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Background,
   BackgroundVariant,
   Controls,
-  Handle,
-  Position,
   ReactFlow,
   type Edge,
   type Node,
-  type NodeProps,
 } from "@xyflow/react";
-import {
-  IconCheck,
-  IconCircleDashed,
-  IconCompass,
-  IconDatabase,
-  IconCpu,
-  IconLock,
-  IconLayoutDashboard,
-  IconChecks,
-  IconAlertTriangle,
-  IconLoader2,
-} from "@tabler/icons-react";
 import "@xyflow/react/dist/style.css";
 
-type AgentKey =
-  | "architect"
-  | "domain-persistence"
-  | "use-cases"
-  | "auth-rbac"
-  | "api-frontend"
-  | "qa-reviewer";
+import { studioColors, studioEasings } from "@/lib/styles/studio-tokens";
 
-type AgentStatus = "idle" | "working" | "done" | "failed";
-
-type AgentNodeData = {
-  label: string;
-  agent: AgentKey;
-  status: AgentStatus;
-  fileCount: number;
-};
-
-const ICONS: Record<AgentKey, typeof IconCompass> = {
-  architect: IconCompass,
-  "domain-persistence": IconDatabase,
-  "use-cases": IconCpu,
-  "auth-rbac": IconLock,
-  "api-frontend": IconLayoutDashboard,
-  "qa-reviewer": IconChecks,
-};
-
-const LABELS: Record<AgentKey, string> = {
-  architect: "Architect",
-  "domain-persistence": "Domain & Persistence",
-  "use-cases": "Use Cases",
-  "auth-rbac": "Auth & RBAC",
-  "api-frontend": "API & Frontend",
-  "qa-reviewer": "QA Reviewer",
-};
+import { StudioHud } from "@/components/builder/studio/hud";
+import {
+  AgentNode,
+  type AgentKey,
+  type AgentNodeData,
+} from "@/components/builder/studio/agent-node";
+import { FlowEdge } from "@/components/builder/studio/flow-edge";
 
 const AGENT_ORDER: readonly AgentKey[] = [
   "architect",
@@ -71,68 +32,23 @@ const AGENT_ORDER: readonly AgentKey[] = [
   "qa-reviewer",
 ] as const;
 
+const LABELS: Record<AgentKey, string> = {
+  architect: "Architect",
+  "domain-persistence": "Domain & Persistence",
+  "use-cases": "Use Cases",
+  "auth-rbac": "Auth & RBAC",
+  "api-frontend": "API & Frontend",
+  "qa-reviewer": "QA Reviewer",
+};
+
 const POSITIONS: Record<AgentKey, { x: number; y: number }> = {
-  architect: { x: 0, y: 0 },
-  "domain-persistence": { x: 280, y: 0 },
-  "use-cases": { x: 560, y: 0 },
-  "auth-rbac": { x: 140, y: 180 },
-  "api-frontend": { x: 420, y: 180 },
-  "qa-reviewer": { x: 700, y: 180 },
+  architect: { x: 0, y: 80 },
+  "domain-persistence": { x: 320, y: 0 },
+  "use-cases": { x: 640, y: -60 },
+  "auth-rbac": { x: 640, y: 100 },
+  "api-frontend": { x: 960, y: 20 },
+  "qa-reviewer": { x: 1240, y: 80 },
 };
-
-const STATUS_BADGE: Record<AgentStatus, { color: string; label: string; icon: typeof IconCircleDashed }> = {
-  idle: { color: "text-zinc-500", label: "IDLE", icon: IconCircleDashed },
-  working: { color: "text-violet-400", label: "WORKING", icon: IconLoader2 },
-  done: { color: "text-emerald-400", label: "DONE", icon: IconCheck },
-  failed: { color: "text-red-400", label: "FAILED", icon: IconAlertTriangle },
-};
-
-const STATUS_BORDER: Record<AgentStatus, string> = {
-  idle: "border-zinc-800/80",
-  working: "border-violet-500/60 ring-1 ring-violet-500/30",
-  done: "border-emerald-700/60",
-  failed: "border-red-800/60",
-};
-
-function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
-  const Icon = ICONS[data.agent];
-  const badge = STATUS_BADGE[data.status];
-  const BadgeIcon = badge.icon;
-  return (
-    <div
-      className={`group flex w-56 flex-col gap-2 rounded-lg border bg-zinc-900/70 px-4 py-3 shadow-sm transition-colors duration-300 ${STATUS_BORDER[data.status]}`}
-    >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-zinc-700 !bg-zinc-800" />
-      <div className="flex items-center gap-2 text-zinc-300">
-        <Icon size={16} className="text-zinc-500" />
-        <span className="text-sm font-medium">{data.label}</span>
-      </div>
-      <div className={`flex items-center gap-1.5 text-[11px] ${badge.color}`}>
-        <BadgeIcon
-          size={12}
-          className={data.status === "working" ? "animate-spin" : undefined}
-        />
-        <span className="uppercase tracking-wide">{badge.label}</span>
-        {data.fileCount > 0 ? (
-          <span className="ml-auto rounded-sm bg-zinc-800 px-1 font-mono text-[10px] text-zinc-300">
-            {data.fileCount} files
-          </span>
-        ) : null}
-      </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-zinc-700 !bg-zinc-800" />
-    </div>
-  );
-}
-
-const nodeTypes = { agent: AgentNode };
-
-const edges: Edge[] = [
-  { id: "e1", source: "architect", target: "domain-persistence" },
-  { id: "e2", source: "domain-persistence", target: "use-cases" },
-  { id: "e3", source: "use-cases", target: "auth-rbac" },
-  { id: "e4", source: "auth-rbac", target: "api-frontend" },
-  { id: "e5", source: "api-frontend", target: "qa-reviewer" },
-];
 
 type EventPayload = {
   type: string;
@@ -140,35 +56,52 @@ type EventPayload = {
   ts: string;
 };
 
-type AgentState = {
-  status: AgentStatus;
-  fileCount: number;
-};
+type AgentState = AgentNodeData;
 
-type Hud = {
+type StudioState = {
+  agents: Record<AgentKey, AgentState>;
   startedAt: number | null;
   totalFiles: number;
+  totalLines: number;
+  totalTests: number;
   failureReason: string | null;
+  phase: "DESIGN" | "BUILD" | "VALIDATE" | "FIX" | "DONE" | "FAILED";
+  fixRound: number | undefined;
+  activeHandoff: { from: AgentKey; to: AgentKey } | null;
+  bigBang: boolean;
 };
+
+const nodeTypes = { agent: AgentNode };
+const edgeTypes = { flow: FlowEdge };
+
+const initialAgents: Record<AgentKey, AgentState> = Object.fromEntries(
+  AGENT_ORDER.map((a) => [
+    a,
+    { label: LABELS[a], agent: a, status: "idle", fileCount: 0 },
+  ]),
+) as Record<AgentKey, AgentState>;
+
+function phaseFromAgent(agent: AgentKey): StudioState["phase"] {
+  if (agent === "architect") return "DESIGN";
+  if (agent === "qa-reviewer") return "VALIDATE";
+  return "BUILD";
+}
 
 export function StudioCanvas({ generationId }: { generationId: string }) {
   const router = useRouter();
-  const [agentStates, setAgentStates] = useState<Record<AgentKey, AgentState>>(
-    () =>
-      Object.fromEntries(
-        AGENT_ORDER.map((a) => [a, { status: "idle" as AgentStatus, fileCount: 0 }]),
-      ) as Record<AgentKey, AgentState>,
-  );
-  const [hud, setHud] = useState<Hud>({ startedAt: null, totalFiles: 0, failureReason: null });
-  const [now, setNow] = useState(Date.now());
+  const [state, setState] = useState<StudioState>({
+    agents: initialAgents,
+    startedAt: null,
+    totalFiles: 0,
+    totalLines: 0,
+    totalTests: 0,
+    failureReason: null,
+    phase: "DESIGN",
+    fixRound: undefined,
+    activeHandoff: null,
+    bigBang: false,
+  });
   const eventSourceRef = useRef<EventSource | null>(null);
-
-  // Tick the clock every second when a generation is running.
-  useEffect(() => {
-    if (hud.startedAt === null || hud.failureReason !== null) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [hud.startedAt, hud.failureReason]);
 
   useEffect(() => {
     const es = new EventSource(`/api/generate/stream/${generationId}`);
@@ -180,36 +113,117 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
       } catch {
         return;
       }
-      const payload = event.payload as { agent?: AgentKey; reason?: string; lines?: number };
+      const payload = event.payload as {
+        agent?: AgentKey;
+        from?: AgentKey;
+        to?: AgentKey;
+        reason?: string;
+        round?: number;
+        lines?: number;
+        path?: string;
+      };
 
-      if (event.type === "generation.started") {
-        setHud((h) => ({ ...h, startedAt: new Date(event.ts).getTime() }));
-      } else if (event.type === "agent.started" && payload.agent) {
-        setAgentStates((s) => ({ ...s, [payload.agent!]: { ...s[payload.agent!], status: "working" } }));
-      } else if (event.type === "agent.completed" && payload.agent) {
-        setAgentStates((s) => ({ ...s, [payload.agent!]: { ...s[payload.agent!], status: "done" } }));
-      } else if (event.type === "agent.failed" && payload.agent) {
-        setAgentStates((s) => ({ ...s, [payload.agent!]: { ...s[payload.agent!], status: "failed" } }));
-      } else if (event.type === "agent.file_created" && payload.agent) {
-        setAgentStates((s) => ({
-          ...s,
-          [payload.agent!]: {
-            ...s[payload.agent!],
-            fileCount: s[payload.agent!].fileCount + 1,
-          },
-        }));
-        setHud((h) => ({ ...h, totalFiles: h.totalFiles + 1 }));
-      } else if (event.type === "generation.completed") {
-        es.close();
-        setTimeout(() => router.push(`/reveal/${generationId}`), 800);
-      } else if (event.type === "generation.failed") {
-        const reason = typeof payload.reason === "string" ? payload.reason : "(unknown)";
-        setHud((h) => ({ ...h, failureReason: reason }));
-        es.close();
-      }
+      setState((s) => {
+        switch (event.type) {
+          case "generation.started":
+            return { ...s, startedAt: new Date(event.ts).getTime() };
+          case "agent.started":
+            if (!payload.agent) return s;
+            return {
+              ...s,
+              activeHandoff: null,
+              phase: phaseFromAgent(payload.agent),
+              agents: {
+                ...s.agents,
+                [payload.agent]: { ...s.agents[payload.agent], status: "working" },
+              },
+            };
+          case "agent.completed":
+            if (!payload.agent) return s;
+            return {
+              ...s,
+              agents: {
+                ...s.agents,
+                [payload.agent]: { ...s.agents[payload.agent], status: "done" },
+              },
+            };
+          case "agent.failed":
+            if (!payload.agent) return s;
+            return {
+              ...s,
+              phase: "FAILED",
+              agents: {
+                ...s.agents,
+                [payload.agent]: { ...s.agents[payload.agent], status: "failed" },
+              },
+            };
+          case "agent.handoff":
+            if (!payload.from || !payload.to) return s;
+            return { ...s, activeHandoff: { from: payload.from, to: payload.to } };
+          case "agent.file_created": {
+            if (!payload.agent) return s;
+            const lines = typeof payload.lines === "number" ? payload.lines : 0;
+            const path = typeof payload.path === "string" ? payload.path : "";
+            const isTest = /\.test\.[tj]sx?$/.test(path) || /(^|\/)tests?\//.test(path);
+            return {
+              ...s,
+              totalFiles: s.totalFiles + 1,
+              totalLines: s.totalLines + lines,
+              totalTests: isTest ? s.totalTests + 1 : s.totalTests,
+              agents: {
+                ...s.agents,
+                [payload.agent]: {
+                  ...s.agents[payload.agent],
+                  fileCount: s.agents[payload.agent].fileCount + 1,
+                },
+              },
+            };
+          }
+          case "qa.fix_round":
+            return {
+              ...s,
+              phase: "FIX",
+              fixRound: typeof payload.round === "number" ? payload.round : undefined,
+            };
+          case "agent.fix_started":
+            if (!payload.agent) return s;
+            return {
+              ...s,
+              agents: {
+                ...s.agents,
+                [payload.agent]: { ...s.agents[payload.agent], status: "fixing" },
+              },
+            };
+          case "agent.fix_completed":
+            if (!payload.agent) return s;
+            return {
+              ...s,
+              agents: {
+                ...s.agents,
+                [payload.agent]: { ...s.agents[payload.agent], status: "done" },
+              },
+            };
+          case "generation.completed": {
+            es.close();
+            // Trigger big-bang fade then redirect.
+            setTimeout(() => {
+              setState((cs) => ({ ...cs, bigBang: true }));
+            }, 400);
+            setTimeout(() => router.push(`/reveal/${generationId}`), 1600);
+            return { ...s, phase: "DONE" };
+          }
+          case "generation.failed": {
+            const reason = typeof payload.reason === "string" ? payload.reason : "(unknown)";
+            es.close();
+            return { ...s, phase: "FAILED", failureReason: reason };
+          }
+          default:
+            return s;
+        }
+      });
     };
     es.onerror = () => {
-      // EventSource auto-reconnects; we don't need to do anything.
+      // EventSource auto-reconnects; we don't need to do anything here.
     };
     return () => {
       es.close();
@@ -222,61 +236,100 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
         id: agent,
         type: "agent",
         position: POSITIONS[agent],
-        data: {
-          label: LABELS[agent],
-          agent,
-          status: agentStates[agent].status,
-          fileCount: agentStates[agent].fileCount,
-        },
+        data: state.agents[agent],
       })),
-    [agentStates],
+    [state.agents],
   );
 
-  const elapsedSec =
-    hud.startedAt === null ? 0 : Math.max(0, Math.floor((now - hud.startedAt) / 1000));
+  const edges = useMemo<Edge[]>(() => {
+    const base: Array<{ id: string; source: AgentKey; target: AgentKey }> = [
+      { id: "e1", source: "architect", target: "domain-persistence" },
+      { id: "e2-uc", source: "domain-persistence", target: "use-cases" },
+      { id: "e2-ar", source: "domain-persistence", target: "auth-rbac" },
+      { id: "e3-uc", source: "use-cases", target: "api-frontend" },
+      { id: "e3-ar", source: "auth-rbac", target: "api-frontend" },
+      { id: "e4", source: "api-frontend", target: "qa-reviewer" },
+    ];
+    return base.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: "flow",
+      data: {
+        active:
+          state.activeHandoff?.from === e.source &&
+          state.activeHandoff?.to === e.target,
+      },
+    }));
+  }, [state.activeHandoff]);
 
   return (
-    <div className="relative h-[calc(100dvh-3.5rem)] w-full bg-zinc-950">
-      {/* HUD */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-zinc-900/80 bg-zinc-950/60 px-6 py-2 text-xs text-zinc-400 backdrop-blur">
-        <div className="flex items-center gap-4 font-mono">
-          <span>generation {generationId.slice(0, 8)}…</span>
-          <span>files {hud.totalFiles}</span>
-          <span>
-            elapsed {Math.floor(elapsedSec / 60)
-              .toString()
-              .padStart(2, "0")}
-            :{(elapsedSec % 60).toString().padStart(2, "0")}
-          </span>
-        </div>
-      </div>
+    <motion.div
+      animate={{
+        scale: state.bigBang ? 0 : 1,
+        opacity: state.bigBang ? 0 : 1,
+        rotate: state.bigBang ? 6 : 0,
+      }}
+      transition={{ duration: 1.6, ease: studioEasings.contractIn }}
+      className="relative h-[calc(100dvh-3.5rem)] w-full"
+      style={{ background: studioColors.bg }}
+    >
+      <StudioHud
+        generationId={generationId}
+        startedAt={state.startedAt}
+        filesCount={state.totalFiles}
+        linesCount={state.totalLines}
+        testsCount={state.totalTests}
+        phase={state.phase}
+        fixRound={state.fixRound}
+      />
 
-      {hud.failureReason ? (
-        <div className="absolute bottom-4 left-1/2 z-20 w-[min(640px,90%)] -translate-x-1/2 rounded-md border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
-          <div className="font-medium text-red-100">La generación falló</div>
-          <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-red-300/80">
-            {hud.failureReason}
-          </pre>
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {state.failureReason ? (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-4 left-1/2 z-20 w-[min(720px,90%)] -translate-x-1/2 rounded-md border px-4 py-3 text-sm"
+            style={{
+              borderColor: "rgba(239, 68, 68, 0.5)",
+              background: "rgba(127, 29, 29, 0.3)",
+              color: "#fecaca",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <div className="font-medium">La generación falló</div>
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs opacity-80">
+              {state.failureReason}
+            </pre>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
         panOnScroll
         proOptions={{ hideAttribution: true }}
         fitView
+        fitViewOptions={{ padding: 0.25, minZoom: 0.6, maxZoom: 1.3 }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#27272a" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={28}
+          size={1}
+          color="#1f2937"
+        />
         <Controls
           showInteractive={false}
-          className="!bg-zinc-900 !text-zinc-300 [&_button]:!border-zinc-800 [&_button]:!bg-zinc-900 [&_button]:!fill-zinc-300 [&_button:hover]:!bg-zinc-800"
+          className="!bg-zinc-900/60 !text-zinc-300 [&_button]:!border-zinc-800 [&_button]:!bg-zinc-900/80 [&_button]:!fill-zinc-300 [&_button:hover]:!bg-zinc-800"
         />
       </ReactFlow>
-    </div>
+    </motion.div>
   );
 }
