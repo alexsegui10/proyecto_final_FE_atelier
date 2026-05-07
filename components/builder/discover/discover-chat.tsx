@@ -176,7 +176,7 @@ export function DiscoverChat() {
   }, [building, state.prdState, router]);
 
   return (
-    <div className="grid h-[calc(100dvh-3.5rem)] grid-cols-[3fr_2fr] gap-4 px-6 py-4">
+    <div className="grid h-full grid-cols-[3fr_2fr] gap-4 px-6 py-4">
       <section className="flex h-full flex-col overflow-hidden rounded-lg border border-zinc-900/60 bg-zinc-950/30">
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto flex max-w-2xl flex-col gap-5">

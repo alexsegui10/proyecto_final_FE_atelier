@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     // configs aren't compatible with Atelier's eslint setup.
     "lib/skeleton/**",
     "lib/db/generated/**",
+    "out/**",
   ]),
 ]);
 

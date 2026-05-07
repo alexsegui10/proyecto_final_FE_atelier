@@ -1,0 +1,44 @@
+{
+  "objective": "Plataforma de tutorías académicas: alumnos reservan sesiones 1-a-1 con profesores, los profesores publican franjas horarias, el admin gestiona materiales pedagógicos compartidos.",
+  "roles": ["admin", "profesor", "alumno"],
+  "entities": [
+    {
+      "name": "User",
+      "fields": ["email", "name", "role", "passwordHash", "department"],
+      "notes": "role: admin | profesor | alumno. Un profesor puede pertenecer a un solo department; alumnos no tienen department."
+    },
+    {
+      "name": "Slot",
+      "fields": ["teacherId", "startsAt", "durationMinutes", "subject", "level"],
+      "notes": "Franja horaria que un profesor publica. duration entre 30 y 90 min. level: bachiller | universidad | postgrado."
+    },
+    {
+      "name": "Session",
+      "fields": ["slotId", "studentId", "topic", "createdAt", "cancelledAt", "rating"],
+      "notes": "Una session por (slotId, studentId). Rating 1-5 lo deja el alumno tras la session. Cancelar ≥4h antes."
+    },
+    {
+      "name": "Material",
+      "fields": ["title", "url", "subject", "uploadedById", "visibility"],
+      "notes": "visibility: public | enrolled-only. uploaded por admin o profesor."
+    }
+  ],
+  "useCases": [
+    "alumno busca slots disponibles por subject y level",
+    "alumno reserva un slot creando una session",
+    "alumno cancela una session propia hasta 4h antes",
+    "alumno deja rating 1-5 tras la session",
+    "alumno consulta materiales públicos del subject",
+    "profesor publica un slot con subject y duration",
+    "profesor cancela un slot propio (libera reservas)",
+    "profesor sube material y elige visibility",
+    "admin gestiona usuarios y materiales (CRUD)"
+  ],
+  "notes": [
+    "Cancelaciones cierran 4 horas antes del inicio.",
+    "Una session por (slotId, studentId) — un slot lo reserva un único alumno.",
+    "Rating solo se permite tras cancelledAt = null y startsAt < now.",
+    "Materiales 'enrolled-only' requieren que el alumno haya tenido al menos una session con ese profesor.",
+    "Admin tiene acceso total."
+  ]
+}
