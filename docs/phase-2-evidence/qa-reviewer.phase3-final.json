@@ -1,0 +1,77 @@
+{
+  "checks": [
+    {
+      "name": "typecheck",
+      "status": "fail",
+      "detail": "tsc --noEmit reportó 8 errores TS2345 (down from 14 en la corrida previa). Todos en route handlers que invocan `ability.can('action', subject('Subject', { conditions }))` después del fix_round_3 documentado en api-frontend.json. El helper `subject()` de @casl/ability devuelve `{ conditions } & ForcedSubject<'Subject'>`, pero el segundo parámetro de can() exige `AppSubjects = 'Class' | 'Booking' | 'Membership' | 'User' | 'all'` (string-only). El object-with-ForcedSubject NO es asignable a un string union, por eso TS lo rechaza. Archivos: app/api/bookings/route.ts:16 ({userId}), :30 ({userId}); app/api/bookings/[slug]/route.ts:19 ({userId}); app/api/classes/[slug]/cancel/route.ts:28 ({teacherId}); app/api/classes/[slug]/route.ts:21 ({teacherId}); app/api/classes/agenda/route.ts:24 ({teacherId}); app/api/memberships/me/route.ts:14 ({userId}); app/api/users/[slug]/route.ts:20 ({id}). Causa raíz: AppSubjects está declarada como `SubjectName | 'all'` (string puro). Para que `subject('Booking', { userId })` typecheckee, AppSubjects debe ser `Subject` de CASL o ampliarse a `SubjectName | ForcedSubject<SubjectName> | 'all'`. Fix sugerido (NO aplicado): en src/application/auth/abilities.ts cambiar `export type AppSubjects = SubjectName | 'all';` a `export type AppSubjects = Subject;` (importando `Subject` desde @casl/ability) o, más conservador, `SubjectName | { __caslSubjectType__: SubjectName } & object | 'all'`. Alternativa: mantener AppSubjects como string union pero en los call sites usar el patrón `ability.can('action', 'Booking', { userId: ... })` (la firma con conditions como 3er argumento) y resolver los TS2769 internos del builder con cast — pero ese era el patrón de fix_round_2 que ya falló. Recomiendo opción A (Subject de CASL)."
+    },
+    {
+      "name": "lint",
+      "status": "pass",
+      "detail": "eslint: 0 errors, 1 warning. proxy.ts:10 — '_req' definido y nunca usado (@typescript-eslint/no-unused-vars). El prefijo `_` no excluye el parámetro porque la regla no está configurada con `argsIgnorePattern: '^_'` en eslint.config.mjs. Las violaciones previas de react-hooks/purity en server components (clases/[slug] y reservas) siguen resueltas tras fix_round_1."
+    },
+    {
+      "name": "deps:check",
+      "status": "pass",
+      "detail": "depcruise --validate src app: 115 modules, 250 dependencies cruised. 0 errores, 1 warning. Único warning: `presentation-route-handlers-only-from-application` en app/api/auth/[...all]/route.ts → src/infrastructure/auth/better-auth.ts. Es la excepción documentada por auth-rbac.json (Better Auth expone su propio Next handler). No bloqueante; conviene whitelistarla en .dependency-cruiser.cjs como allow-list específica."
+    },
+    {
+      "name": "test",
+      "status": "pass",
+      "detail": "vitest run: 4 test files, 4 tests, todos pasan en 377ms. Cubre createBooking (alumno reserva → -1 crédito, status='activo'), createClass (admin crea con teacher activo), createMembership (mensual con default 12 créditos), updateUserRole (admin asciende alumno a profesor). Repos en memoria + factories están en tests/helpers/fake-repos.ts (fakeTx/fakeClock/fakeIds incluidos). R22 satisfecho (≥1 smoke por feature de negocio, importan use case real). R32 satisfecho (solo Vitest)."
+    }
+  ],
+  "decision": "no-go",
+  "violations": [
+    {
+      "rule": "Type-correctness CASL — AppSubjects incompatible con subject() helper",
+      "where": "src/application/auth/abilities.ts:14, app/api/bookings/route.ts:16, app/api/bookings/route.ts:30, app/api/bookings/[slug]/route.ts:19, app/api/classes/[slug]/cancel/route.ts:28, app/api/classes/[slug]/route.ts:21, app/api/classes/agenda/route.ts:24, app/api/memberships/me/route.ts:14, app/api/users/[slug]/route.ts:20",
+      "issue": "El fix_round_3 de api-frontend.json migró los 8 call sites al patrón `ability.can('read', subject('Booking', { userId }))` para esquivar los TS2769 del builder. PERO `subject()` devuelve `{ userId } & ForcedSubject<'Booking'>` y `AppSubjects` está declarada como `'Class' | 'Booking' | 'Membership' | 'User' | 'all'` (string union puro), por lo que el wrapped object NO es asignable. Los 8 errores TS2345 vienen de ahí. Fix recomendado (mínimo invasivo, en abilities.ts línea 14): `import { type Subject } from '@casl/ability'; export type AppSubjects = Subject;` — Subject de CASL acepta tanto strings como ForcedSubject objects. Mantener SubjectName como string union para uso en `can(action, 'Subject', ...)` y AppSubjects como Subject para uso en el builder y los call sites. Una vez aplicado, los 8 errores desaparecen sin tocar route handlers.",
+      "severity": "error"
+    },
+    {
+      "rule": "Lint cleanliness",
+      "where": "proxy.ts:10",
+      "issue": "Parámetro `_req: NextRequest` declarado y nunca usado. El prefijo `_` debería excluirlo de @typescript-eslint/no-unused-vars pero la config no tiene `argsIgnorePattern: '^_'`. Soluciones: (a) configurar la regla en eslint.config.mjs, o (b) eliminar el parámetro. No bloqueante (warning, no error).",
+      "severity": "warn"
+    },
+    {
+      "rule": "auth-rbac.json schema_additions_required — Better Auth migration pendiente",
+      "where": "prisma/schema.prisma (User)",
+      "issue": "Better Auth requiere columnas adicionales en `users` (`emailVerified Boolean @default(false)`, `image String?`) y tablas propias (`session`, `account`, `verification`) que NO están en el schema actual. El agente auth-rbac dejó instrucción de correr `npx better-auth migrate` o aplicar el SQL antes del primer deploy. No rompe build ni typecheck; rompería en runtime al primer login. Hay que ejecutar la migración o agregar las columnas manualmente antes de release.",
+      "severity": "warn"
+    },
+    {
+      "rule": "Boundary excepción documentada (deps:check warning)",
+      "where": "app/api/auth/[...all]/route.ts → src/infrastructure/auth/better-auth.ts",
+      "issue": "El integration handler de Better Auth importa la config de infraestructura directamente, sin pasar por presentation/_di. Es la excepción esperada (Better Auth expone su propio handler de Next que no se puede mediar). Confirmado en auth-rbac.json. Conviene whitelistarla en .dependency-cruiser.cjs como allow-list específica para silenciar el warning recurrente sin debilitar la regla general.",
+      "severity": "warn"
+    }
+  ],
+  "rules_audit": {
+    "R1_clean_arch_layers": "pass — cada feature (bookings, classes, memberships, users) tiene las 4 capas en src/{domain,application,infrastructure,presentation}/<feature>/.",
+    "R2_route_handlers_thin": "pass — los handlers en app/api/**/route.ts solo hacen requireUser → ability.can → controller call → toResponse. Sin lógica de negocio embebida.",
+    "R3_public_urls_use_slug": "pass — las rutas dinámicas usan [slug] (clases/[slug], bookings/[slug], usuarios/[slug], memberships/[slug]). Ningún [id] expuesto.",
+    "R4_id_slug_isactive_status_per_model": "pass — User, Class, Booking, Membership tienen los 4 campos en domain-persistence.json y prisma/schema.prisma.",
+    "R5_no_prisma_enum_for_status": "pass — schema.prisma no declara `enum`; status es String con comentario `allowed: ...`.",
+    "R6_no_real_delete": "pass — no se encontró .delete()/.deleteMany() en src/infrastructure/{bookings,classes,memberships,users}/repository.ts. Las únicas referencias en src/infrastructure/db/generated/** son JSDoc del cliente Prisma generado, no calls reales. Los repos hacen update con isActive=false + status='eliminado'.",
+    "R7_no_db_push_or_ddl_auto": "pass — package.json scripts no expone `db push` ni `ddl-auto`.",
+    "R8_prisma_in_infrastructure": "pass — Prisma vive en src/infrastructure/<feature>/repository.ts; las interfaces (puertos) en src/domain/<feature>/repository.ts. depcruise no detectó violaciones de boundary salvo la excepción documentada de Better Auth.",
+    "R9_R12_use_cases": "pass — use-cases.json declara transactions Serializable para createBooking/cancelBooking/cancelClass/softDeleteClass/adminInvalidateBooking/consumeCredit/refundCredit; errores tipados en src/domain/<feature>/errors.ts; validation con Zod en src/presentation/<feature>/schemas/. (R11 'errores tipados' parcial — el typing CASL está roto, ver violación arriba.)",
+    "R14_R17_auth": "partial — better-auth con cookie httpOnly OK; CASL centralizada en src/application/auth/abilities.ts OK; passwordHash en User OK. PERO: typing CASL roto (typecheck rojo) y schema additions de Better Auth no aplicadas todavía.",
+    "R20_R25_ui": "pass — server components puros (Date.now removed en clases/[slug] y reservas tras fix_round_1 de api-frontend.json); UI en español sin i18n; naming kebab-case en routes; tipografía y a11y siguen el shadcn baseline.",
+    "R22_tests_exist": "pass — 4 smoke tests, uno por feature, importan el use case real con repos en memoria. Cumple el mínimo (≥1 por feature de negocio, ≥3 totales).",
+    "R32_single_test_strategy": "pass — solo Vitest en devDependencies; @playwright/test para E2E (opcional, separado en tests/e2e/** y excluido del run unit). Cero rastros de Jest/Mocha."
+  },
+  "smoke_tests": [
+    "tests/bookings.smoke.test.ts — createBooking (alumno reserva, créditos -1, status='activo')",
+    "tests/classes.smoke.test.ts — createClass (admin crea clase con profesor activo)",
+    "tests/memberships.smoke.test.ts — createMembership (mensual con default 12 créditos)",
+    "tests/users.smoke.test.ts — updateUserRole (admin asciende alumno a profesor)",
+    "tests/helpers/fake-repos.ts — repos en memoria + factories + fakeTx/fakeClock/fakeIds"
+  ],
+  "config_changes": [
+    "vitest.config.ts: ya incluye `tests/**/*.test.ts` y `tests/**/*.test.tsx` en test.include — sin cambios."
+  ],
+  "summary": "3 de 4 gates verdes (lint warn-only, deps:check warn-only, vitest 4/4). Typecheck SIGUE rojo con 8 errores TS2345 (down from 14): el fix_round_3 con `subject()` helper produjo objects `{ conditions } & ForcedSubject<...>` que NO son asignables al string-only `AppSubjects`. Fix concentrado en src/application/auth/abilities.ts línea 14: `export type AppSubjects = Subject;` (importando Subject desde @casl/ability). Una vez aplicado, los 8 errores cascada en route handlers desaparecen sin tocarlos. Bloquea el go."
+}

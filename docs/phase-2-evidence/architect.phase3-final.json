@@ -1,0 +1,50 @@
+{
+  "features": [
+    {
+      "name": "classes",
+      "domain": "Class",
+      "description": "Catálogo de clases de yoga con cupo, nivel y profesor asignado; CRUD para admin y consulta de agenda para profesor."
+    },
+    {
+      "name": "bookings",
+      "domain": "Booking",
+      "description": "Reservas de alumnos sobre clases; consumen y devuelven créditos según ventana de 2h antes del inicio."
+    },
+    {
+      "name": "memberships",
+      "domain": "Membership",
+      "description": "Membresías mensuales o trimestrales con créditos asignados; el admin las gestiona y el alumno consulta su saldo."
+    },
+    {
+      "name": "users",
+      "domain": "User",
+      "description": "Cuentas y perfiles de usuarios con rol multivalor (admin, profesor, alumno); base para auth y RBAC."
+    }
+  ],
+  "roles": ["admin", "profesor", "alumno"],
+  "decisions": {
+    "auth": "better-auth con sesiones en cookie httpOnly",
+    "rbac": "CASL — abilities por role en src/application/auth/abilities.ts",
+    "validation": "zod schemas en src/presentation/<feature>/schemas/",
+    "errors": "errores tipados en src/domain/errors/ + handler en src/presentation/_lib/error-handler.ts",
+    "soft_delete": "status='eliminado' + isActive=false (nunca DELETE)"
+  },
+  "folder_layout": {
+    "src/domain/classes/": ["entity.ts", "dto.ts", "repository.ts", "errors.ts"],
+    "src/application/classes/": ["use-cases/create-class.ts", "use-cases/update-class.ts", "use-cases/soft-delete-class.ts", "use-cases/list-classes.ts", "use-cases/get-class-by-slug.ts", "use-cases/list-teacher-agenda.ts", "use-cases/cancel-class.ts", "ports.ts"],
+    "src/infrastructure/classes/": ["repository.ts", "mapper.ts"],
+    "src/presentation/classes/": ["controller.ts", "schemas/request.ts", "schemas/response.ts"],
+    "src/domain/bookings/": ["entity.ts", "dto.ts", "repository.ts", "errors.ts"],
+    "src/application/bookings/": ["use-cases/create-booking.ts", "use-cases/cancel-booking.ts", "use-cases/list-my-bookings.ts", "use-cases/admin-invalidate-booking.ts", "ports.ts"],
+    "src/infrastructure/bookings/": ["repository.ts", "mapper.ts"],
+    "src/presentation/bookings/": ["controller.ts", "schemas/request.ts", "schemas/response.ts"],
+    "src/domain/memberships/": ["entity.ts", "dto.ts", "repository.ts", "errors.ts"],
+    "src/application/memberships/": ["use-cases/create-membership.ts", "use-cases/update-membership.ts", "use-cases/get-active-membership.ts", "use-cases/consume-credit.ts", "use-cases/refund-credit.ts", "ports.ts"],
+    "src/infrastructure/memberships/": ["repository.ts", "mapper.ts"],
+    "src/presentation/memberships/": ["controller.ts", "schemas/request.ts", "schemas/response.ts"],
+    "src/domain/users/": ["entity.ts", "dto.ts", "repository.ts", "errors.ts"],
+    "src/application/users/": ["use-cases/get-user-by-slug.ts", "use-cases/list-users.ts", "use-cases/update-user-role.ts", "ports.ts"],
+    "src/infrastructure/users/": ["repository.ts", "mapper.ts"],
+    "src/presentation/users/": ["controller.ts", "schemas/request.ts", "schemas/response.ts"]
+  }
+}
