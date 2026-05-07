@@ -61,6 +61,14 @@ export interface GeneratorAgentInput {
    * Defaults to `<workDir>/.atelier`.
    */
   artifactsDir?: string;
+  /**
+   * Override the default `<agent>.json` filename. Use when the agent's
+   * prompt writes a differently-named primary artifact (e.g. the v2
+   * Domain Modeler writes `domain-model.json`). Pass `false` to skip
+   * artifact loading entirely — useful for agents that emit multiple
+   * sibling files where the validation pass happens outside the runner.
+   */
+  artifactFile?: string | false;
   generationId?: string;
   emitEvent?: (event: AgentEvent) => Promise<void> | void;
   timeoutMs?: number;
@@ -315,29 +323,52 @@ export function buildClaudeArgs(input: {
 }
 
 /**
- * Compose the user-side prompt: a short header pointing at the workDir, the
- * Context-from-previous-agents block (artifacts JSON-serialized), and the
- * canonical "do your job + emit sentinel + write artifact" instructions.
+ * Compose the user-side prompt: a short header pointing at the workDir, a
+ * LIST of context artifact PATHS (NOT inline JSON — the agent reads them via
+ * its Read tool), and the canonical "do your job + emit sentinel + write
+ * artifact" instructions.
+ *
+ * Why path-list instead of inline JSON: Windows command-line length limit is
+ * ~8191 chars. With 4+ context artifacts inlined, the user prompt easily
+ * exceeds 30KB and `spawn` fails with ENAMETOOLONG. The agent has a Read
+ * tool — it can fetch each artifact itself.
+ *
+ * `contextArtifacts` keys map to file names in `.atelier/<key>.json`. The
+ * VALUES are unused (kept in the type for API compatibility), but if a
+ * caller wants to inline a SHORT artifact for tighter loops, the
+ * `inlineArtifactsBelowBytes` knob accepts that.
  */
 export function buildUserPrompt(input: {
   agent: AgentNameV2;
   workDir: string;
   contextArtifacts?: Record<string, unknown>;
   additionalInstructions?: string;
+  /** Inline artifacts whose serialized JSON is shorter than this threshold. Default: 0 (never inline). */
+  inlineArtifactsBelowBytes?: number;
 }): string {
   const { agent, workDir, contextArtifacts, additionalInstructions } = input;
+  const inlineThreshold = input.inlineArtifactsBelowBytes ?? 0;
   const lines: string[] = [];
   lines.push(`Estás trabajando en el directorio actual (workDir = ${workDir}).`);
   lines.push("");
   if (contextArtifacts && Object.keys(contextArtifacts).length > 0) {
     lines.push("## Context from previous agents");
     lines.push("");
+    lines.push(
+      "Read these files with your Read tool BEFORE writing anything. They contain the upstream artifacts you depend on:",
+    );
+    lines.push("");
     for (const [key, value] of Object.entries(contextArtifacts)) {
-      lines.push(`### \`.atelier/${key}.json\``);
-      lines.push("");
-      lines.push("```json");
-      lines.push(JSON.stringify(value, null, 2));
-      lines.push("```");
+      const serialized = JSON.stringify(value);
+      if (inlineThreshold > 0 && serialized.length < inlineThreshold) {
+        lines.push(`### \`.atelier/${key}.json\` (inlined for convenience)`);
+        lines.push("");
+        lines.push("```json");
+        lines.push(JSON.stringify(value, null, 2));
+        lines.push("```");
+      } else {
+        lines.push(`- \`.atelier/${key}.json\``);
+      }
       lines.push("");
     }
   } else {
@@ -389,7 +420,10 @@ export async function runGeneratorAgentV2(
   const timeoutMs = input.timeoutMs ?? config.timeoutMs;
   const model = input.model ?? config.model;
   const artifactsDir = input.artifactsDir ?? join(input.workDir, ".atelier");
-  const artifactPath = join(artifactsDir, `${input.agent}.json`);
+  const skipArtifactLoad = input.artifactFile === false;
+  const artifactFilename =
+    typeof input.artifactFile === "string" ? input.artifactFile : `${input.agent}.json`;
+  const artifactPath = join(artifactsDir, artifactFilename);
   const emit = input.emitEvent ?? (async () => {});
   const executor = input._executor ?? defaultExecutor;
   const walk = input._walkFiles ?? walkFiles;
@@ -422,12 +456,16 @@ export async function runGeneratorAgentV2(
   // Tolerant timeout: if the artifact JSON was written and parses, accept the run.
   if (exec.killedByTimeout) {
     let artifactSurvived = false;
-    try {
-      const raw = await readArt(artifactPath);
-      JSON.parse(raw);
-      artifactSurvived = true;
-    } catch {
-      artifactSurvived = false;
+    if (skipArtifactLoad) {
+      artifactSurvived = true; // we don't care about a primary artifact for this agent
+    } else {
+      try {
+        const raw = await readArt(artifactPath);
+        JSON.parse(raw);
+        artifactSurvived = true;
+      } catch {
+        artifactSurvived = false;
+      }
     }
     await emit({
       type: "timeout",
@@ -456,24 +494,26 @@ export async function runGeneratorAgentV2(
     return FAILURE_RESULT(input.agent, reason, durationMs);
   }
 
-  // Read the JSON artifact the agent wrote.
-  let artifact: unknown;
-  try {
-    const raw = await readArt(artifactPath);
-    artifact = JSON.parse(raw);
-  } catch (err) {
-    const reason = `agent ${input.agent} did not produce ${artifactPath}: ${(err as Error).message}`;
-    await emit({ type: "failed", agent: input.agent, reason });
-    return FAILURE_RESULT(input.agent, reason, durationMs);
-  }
-
-  // Optional schema validation.
-  if (input.validateArtifact) {
-    const err = input.validateArtifact(artifact);
-    if (err) {
-      const reason = `artifact failed schema validation: ${err}`;
+  // Read the JSON artifact the agent wrote (skip when artifactFile === false).
+  let artifact: unknown = null;
+  if (!skipArtifactLoad) {
+    try {
+      const raw = await readArt(artifactPath);
+      artifact = JSON.parse(raw);
+    } catch (err) {
+      const reason = `agent ${input.agent} did not produce ${artifactPath}: ${(err as Error).message}`;
       await emit({ type: "failed", agent: input.agent, reason });
       return FAILURE_RESULT(input.agent, reason, durationMs);
+    }
+
+    // Optional schema validation only when we have an artifact to validate.
+    if (input.validateArtifact) {
+      const err = input.validateArtifact(artifact);
+      if (err) {
+        const reason = `artifact failed schema validation: ${err}`;
+        await emit({ type: "failed", agent: input.agent, reason });
+        return FAILURE_RESULT(input.agent, reason, durationMs);
+      }
     }
   }
 

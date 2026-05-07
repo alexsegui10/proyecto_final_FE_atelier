@@ -20,7 +20,7 @@ DOS cosas:
    - `src/<feature>/domain/dto/<Entity>DTO.ts` — el DTO que cruza la frontera de capa
    - `src/<feature>/domain/errors.ts` — errores de dominio específicos de esa feature
    - `src/_shared/domain/errors.ts` — errores transversales (`ResourceNotFoundError`, `DuplicateResourceError`, `ValidationError`, etc.)
-2. **Artifact JSON** en `.atelier/domain-model.json` con la metadata estructurada (lista de entities, fields, invariants, value objects, domainErrors).
+2. **Artifact JSON** en `.atelier/domain-modeler.json` con la metadata estructurada (lista de entities, fields, invariants, value objects, domainErrors).
 
 ## Reglas del blueprint que aplicás (R1-R7)
 
@@ -169,7 +169,7 @@ export class ForbiddenError extends DomainError {
    - Identificá invariantes específicas de la entidad (a partir de `businessRules` del Discovery).
    - Identificá errores de dominio específicos: por ejemplo, si una regla dice "no cancelar dentro de las 2h", define `BookingTimeWindowError`.
 4. Escribí el archivo compartido `_shared/domain/errors.ts` con `DomainError` base + 5 subclases canónicas.
-5. Escribí el JSON `.atelier/domain-model.json` con la metadata. Schema:
+5. Escribí el JSON `.atelier/domain-modeler.json` con la metadata. Schema:
 
 ```jsonc
 {

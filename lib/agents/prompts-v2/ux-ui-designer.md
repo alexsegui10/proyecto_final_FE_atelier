@@ -17,9 +17,10 @@ Lees del workDir:
 
 ## Outputs
 
-DOS archivos en el workDir (crear `.atelier/` si no existe):
-1. `.atelier/design-system.json` — paleta + tipografía + espaciado + radius + sombras + motion
-2. `.atelier/screens-map.json` — `screens[]` + `componentSpecs{}`
+TRES archivos en el workDir (crear `.atelier/` si no existe):
+1. `.atelier/design-system.json` — paleta + tipografía + espaciado + radius + sombras + motion (consumido por UI Components agent en Wave 4)
+2. `.atelier/screens-map.json` — `screens[]` + `componentSpecs{}` (consumido por UI Components, Pages & Routing en Wave 4)
+3. `.atelier/ux-ui-designer.json` — manifest umbrella con la forma `{ "designSystem": {...}, "screensMap": {...} }` que combina los dos anteriores. El runner-generator-v2 valida ESTE archivo como tu artifact primario.
 
 ## Vibes predefinidos (elegí UNO)
 

@@ -33,6 +33,10 @@ const screenSchema = z
   })
   .strict();
 
+// passthrough (not strict) so the agent can add domain-flavored keys like
+// `variants`, `slots`, `accessibility`, etc. without schema rejection.
+// The required keys (anatomy, states, interactions, responsiveBehavior) stay
+// load-bearing for downstream UI Components agent consumption.
 const componentSpecSchema = z
   .object({
     anatomy: z.string().min(1),
@@ -41,7 +45,7 @@ const componentSpecSchema = z
     responsiveBehavior: z.string().min(1),
     notes: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const screensMapSchema = z
   .object({

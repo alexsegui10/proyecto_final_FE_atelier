@@ -128,16 +128,26 @@ describe("diffFiles", () => {
 });
 
 describe("buildUserPrompt", () => {
-  it("serializes context artifacts as fenced JSON blocks", () => {
+  it("lists context artifact paths (not inline JSON) by default to keep the prompt short", () => {
     const prompt = buildUserPrompt({
       agent: "domain-modeler",
       workDir: "/tmp/foo",
       contextArtifacts: { discovery: { domain: "yoga" }, architect: { features: [] } },
     });
-    expect(prompt).toContain("### `.atelier/discovery.json`");
-    expect(prompt).toContain("### `.atelier/architect.json`");
+    // Path list, not embedded JSON — Windows CLI has ~8191 char limit, ENAMETOOLONG hits ~30KB+
+    expect(prompt).toContain("`.atelier/discovery.json`");
+    expect(prompt).toContain("`.atelier/architect.json`");
+    expect(prompt).not.toContain('"domain": "yoga"');
+  });
+
+  it("inlines artifacts that are below the inlineArtifactsBelowBytes threshold", () => {
+    const prompt = buildUserPrompt({
+      agent: "domain-modeler",
+      workDir: "/tmp/foo",
+      contextArtifacts: { discovery: { domain: "yoga" } },
+      inlineArtifactsBelowBytes: 1024,
+    });
     expect(prompt).toContain('"domain": "yoga"');
-    expect(prompt).toContain('"features": []');
   });
 
   it('inserts a "no previous artifacts" note when contextArtifacts is empty', () => {
@@ -396,7 +406,7 @@ describe("runGeneratorAgentV2 — CLI args", () => {
 });
 
 describe("runGeneratorAgentV2 — context injection", () => {
-  it("serializes contextArtifacts into the user prompt argument", async () => {
+  it("lists contextArtifacts as path references in the user prompt argument (NOT inline JSON)", async () => {
     const captured: { args?: string[] } = {};
     await runGeneratorAgentV2({
       agent: "domain-modeler",
@@ -411,8 +421,10 @@ describe("runGeneratorAgentV2 — context injection", () => {
       _readArtifact: fakeRead({}),
     });
     const userPrompt = captured.args?.[captured.args.length - 1] ?? "";
-    expect(userPrompt).toContain("### `.atelier/discovery.json`");
-    expect(userPrompt).toContain('"domain": "yoga"');
-    expect(userPrompt).toContain('"name": "auth"');
+    expect(userPrompt).toContain("`.atelier/discovery.json`");
+    expect(userPrompt).toContain("`.atelier/architect.json`");
+    // Critical: NO inline JSON, otherwise Windows ENAMETOOLONG.
+    expect(userPrompt).not.toContain('"domain": "yoga"');
+    expect(userPrompt.length).toBeLessThan(2048);
   });
 });

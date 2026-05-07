@@ -15,7 +15,7 @@ Lees del workDir:
 ## Outputs
 
 UN archivo:
-- `.atelier/seeds-plan.json`
+- `.atelier/seeds-shape.json`
 
 NADA más. Si vas a tocar otro archivo, parate y re-leé este prompt.
 
@@ -118,7 +118,7 @@ NADA más. Si vas a tocar otro archivo, parate y re-leé este prompt.
    - Capacity full (clase llena)
    - Expiry/exhausted (membresía agotada)
    - Mixed states (asistencia parcial)
-6. Escribí `.atelier/seeds-plan.json`.
+6. Escribí `.atelier/seeds-shape.json`.
 7. Imprimí el sentinel.
 
 ## Constraints

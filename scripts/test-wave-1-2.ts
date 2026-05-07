@@ -47,15 +47,17 @@ interface TestArtifacts {
   validator: (a: unknown) => string | null;
 }
 
+// Filenames here are what we VALIDATE in the post-run pass. The agent-named
+// files (`<agent>.json`) are written by the runner; the granular companion
+// files (design-system.json, screens-map.json) are written voluntarily by
+// the UX/UI Designer in addition to its umbrella ux-ui-designer.json.
 const ARTIFACTS: TestArtifacts[] = [
   {
     agent: "ux-ui-designer",
-    filename: "ux-ui-designer.json",
+    filename: "design-system.json",
     fixture: "yoga-design-system.json",
     validator: validateDesignSystem,
   },
-  // The UX/UI Designer actually writes TWO artifacts. We track the second one
-  // separately so the dry-run can validate both.
   {
     agent: "ux-ui-designer",
     filename: "screens-map.json",
@@ -318,15 +320,49 @@ async function dryRun(workDir: string): Promise<void> {
 async function realRun(workDir: string): Promise<void> {
   log("real", "running 4 v2 agents against claude — this takes ~25 minutes");
 
+  // Empirical finding from --real run #2: the LLM agents tend to write
+  // `<agent>.json` (matching the runner's default convention) regardless
+  // of what the prompt asks them to name the file. So we let the runner
+  // use its default `<agent>.json` for every agent except ux-ui-designer
+  // (multi-file output: it writes design-system.json + screens-map.json
+  // PLUS ux-ui-designer.json voluntarily; we can either point the runner
+  // at any of the three or skip artifact load entirely with `false`).
   const sequence: Array<{
     agent: AgentNameV2;
     promptFile: string;
     contextKeys: string[];
+    artifactFile?: string | false;
   }> = [
-    { agent: "ux-ui-designer", promptFile: "ux-ui-designer.md", contextKeys: ["discovery", "architect"] },
-    { agent: "domain-modeler", promptFile: "domain-modeler.md", contextKeys: ["discovery", "architect"] },
-    { agent: "persistence", promptFile: "persistence.md", contextKeys: ["discovery", "architect", "domain-modeler"] },
-    { agent: "seeds-shape", promptFile: "seeds-shape.md", contextKeys: ["discovery", "domain-modeler"] },
+    {
+      agent: "ux-ui-designer",
+      promptFile: "ux-ui-designer.md",
+      contextKeys: ["discovery", "architect"],
+      // skip artifact load — the script's final pass validates the granular
+      // design-system.json + screens-map.json files directly against their
+      // dedicated schemas. The agent's umbrella ux-ui-designer.json is a
+      // manifest with both embedded; we don't need to load it twice.
+      artifactFile: false,
+    },
+    {
+      agent: "domain-modeler",
+      promptFile: "domain-modeler.md",
+      contextKeys: ["discovery", "architect"],
+      // agent writes domain-modeler.json (matches default). The content is
+      // the same shape as the old domain-model.json, validated by
+      // domainModelSchema below.
+    },
+    {
+      agent: "persistence",
+      promptFile: "persistence.md",
+      contextKeys: ["discovery", "architect", "domain-modeler"],
+    },
+    {
+      agent: "seeds-shape",
+      promptFile: "seeds-shape.md",
+      contextKeys: ["discovery", "domain-modeler"],
+      // agent writes seeds-shape.json (matches default). Content shape
+      // is what seedsPlanSchema validates.
+    },
   ];
 
   for (const step of sequence) {
@@ -345,6 +381,7 @@ async function realRun(workDir: string): Promise<void> {
       systemPrompt,
       contextArtifacts,
       workDir,
+      ...(step.artifactFile !== undefined ? { artifactFile: step.artifactFile } : {}),
       emitEvent: (e) => {
         if (e.type === "completed") log("real", `   ✓ ${step.agent} done — ${e.stopSentinel}`);
         else if (e.type === "failed") log("real", `   ✗ ${step.agent} FAILED — ${e.reason}`);
