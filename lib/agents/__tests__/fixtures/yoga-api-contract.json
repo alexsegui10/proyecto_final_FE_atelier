@@ -1,0 +1,86 @@
+{
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "handler": "AuthController.login",
+      "auth": "public",
+      "request": "LoginRequest",
+      "response": "AuthResponse",
+      "successStatus": 200,
+      "errors": [{ "code": "INVALID_CREDENTIALS", "status": 401 }]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "handler": "AuthController.register",
+      "auth": "public",
+      "request": "RegisterRequest",
+      "response": "AuthResponse",
+      "successStatus": 201,
+      "errors": [{ "code": "DUPLICATE_RESOURCE", "status": 409 }]
+    },
+    {
+      "method": "GET",
+      "path": "/api/classes",
+      "handler": "ClassesController.listFuture",
+      "auth": "public",
+      "response": "ClassResponse[]",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/classes",
+      "handler": "ClassesController.create",
+      "auth": "admin",
+      "rbac": { "action": "create", "subject": "Class" },
+      "request": "CreateClassRequest",
+      "response": "ClassResponse",
+      "successStatus": 201
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookings",
+      "handler": "BookingsController.create",
+      "auth": "authenticated",
+      "rbac": { "action": "create", "subject": "Booking" },
+      "request": "CreateBookingRequest",
+      "response": "BookingResponse",
+      "successStatus": 201,
+      "errors": [
+        { "code": "BOOKING_CAPACITY", "status": 409 },
+        { "code": "BOOKING_TOO_LATE", "status": 422 },
+        { "code": "VALIDATION_ERROR", "status": 422 }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings",
+      "handler": "BookingsController.listMine",
+      "auth": "authenticated",
+      "rbac": { "action": "read", "subject": "Booking" },
+      "response": "BookingResponse[]",
+      "successStatus": 200
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/bookings/[slug]",
+      "handler": "BookingsController.cancelBySlug",
+      "auth": "authenticated",
+      "rbac": { "action": "delete", "subject": "Booking" },
+      "response": "BookingResponse",
+      "successStatus": 200,
+      "errors": [{ "code": "BOOKING_TOO_LATE", "status": 422 }]
+    },
+    {
+      "method": "GET",
+      "path": "/api/memberships/me",
+      "handler": "MembershipsController.findMine",
+      "auth": "authenticated",
+      "rbac": { "action": "read", "subject": "Membership" },
+      "response": "MembershipResponse",
+      "successStatus": 200
+    }
+  ],
+  "openApiPath": "docs/api/openapi.yaml"
+}

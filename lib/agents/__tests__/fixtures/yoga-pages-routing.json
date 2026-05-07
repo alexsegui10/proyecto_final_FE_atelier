@@ -1,0 +1,123 @@
+{
+  "pages": [
+    {
+      "name": "HomePage",
+      "route": "/",
+      "file": "app/page.tsx",
+      "component": "server",
+      "access": "public",
+      "metadataTitle": "Yoga Studio — Reserva tu próxima clase"
+    },
+    {
+      "name": "SignInPage",
+      "route": "/sign-in",
+      "file": "app/(public)/sign-in/page.tsx",
+      "component": "client",
+      "access": "public",
+      "metadataTitle": "Iniciar sesión — Yoga Studio"
+    },
+    {
+      "name": "SignUpPage",
+      "route": "/sign-up",
+      "file": "app/(public)/sign-up/page.tsx",
+      "component": "client",
+      "access": "public",
+      "metadataTitle": "Crear cuenta — Yoga Studio"
+    },
+    {
+      "name": "ShopClassesPage",
+      "route": "/shop/classes",
+      "file": "app/(public)/shop/classes/page.tsx",
+      "component": "client",
+      "access": "public",
+      "metadataTitle": "Clases — Yoga Studio"
+    },
+    {
+      "name": "ClassDetailPage",
+      "route": "/shop/classes/[slug]",
+      "file": "app/(public)/shop/classes/[slug]/page.tsx",
+      "component": "client",
+      "access": "public",
+      "metadataTitle": "Detalle de clase — Yoga Studio"
+    },
+    {
+      "name": "MyBookingsPage",
+      "route": "/my/bookings",
+      "file": "app/(dashboard)/my/bookings/page.tsx",
+      "component": "client",
+      "access": "private",
+      "metadataTitle": "Mis reservas — Yoga Studio"
+    },
+    {
+      "name": "MyMembershipPage",
+      "route": "/my/membership",
+      "file": "app/(dashboard)/my/membership/page.tsx",
+      "component": "client",
+      "access": "private",
+      "metadataTitle": "Mi membresía — Yoga Studio"
+    },
+    {
+      "name": "ProfilePage",
+      "route": "/profile",
+      "file": "app/(dashboard)/profile/page.tsx",
+      "component": "client",
+      "access": "private",
+      "metadataTitle": "Mi perfil — Yoga Studio"
+    },
+    {
+      "name": "TeacherClassesPage",
+      "route": "/teacher/classes",
+      "file": "app/(dashboard)/teacher/classes/page.tsx",
+      "component": "client",
+      "access": "private",
+      "metadataTitle": "Mis clases (profesor) — Yoga Studio"
+    },
+    {
+      "name": "AdminDashboardPage",
+      "route": "/admin",
+      "file": "app/(dashboard)/admin/page.tsx",
+      "component": "client",
+      "access": "admin",
+      "metadataTitle": "Admin Dashboard — Yoga Studio"
+    },
+    {
+      "name": "AdminClassesPage",
+      "route": "/admin/classes",
+      "file": "app/(dashboard)/admin/classes/page.tsx",
+      "component": "client",
+      "access": "admin",
+      "metadataTitle": "Admin · Clases — Yoga Studio",
+      "errorBoundary": true
+    },
+    {
+      "name": "AdminBookingsPage",
+      "route": "/admin/bookings",
+      "file": "app/(dashboard)/admin/bookings/page.tsx",
+      "component": "client",
+      "access": "admin",
+      "metadataTitle": "Admin · Reservas — Yoga Studio"
+    },
+    {
+      "name": "AdminMembershipsPage",
+      "route": "/admin/memberships",
+      "file": "app/(dashboard)/admin/memberships/page.tsx",
+      "component": "client",
+      "access": "admin",
+      "metadataTitle": "Admin · Membresías — Yoga Studio"
+    },
+    {
+      "name": "AdminUsersPage",
+      "route": "/admin/users",
+      "file": "app/(dashboard)/admin/users/page.tsx",
+      "component": "client",
+      "access": "admin",
+      "metadataTitle": "Admin · Usuarios — Yoga Studio"
+    }
+  ],
+  "layouts": [
+    { "file": "app/layout.tsx", "wraps": "root", "component": "server" },
+    { "file": "app/(public)/layout.tsx", "wraps": "public", "component": "server" },
+    { "file": "app/(dashboard)/layout.tsx", "wraps": "private", "component": "server" }
+  ],
+  "specialFiles": ["app/not-found.tsx", "app/error.tsx", "app/loading.tsx"]
+}

@@ -1,0 +1,82 @@
+{
+  "contexts": [
+    {
+      "name": "AuthContext",
+      "state": ["user", "role", "isAuthenticated", "loading"],
+      "actions": ["login", "register", "logout", "refresh"]
+    },
+    {
+      "name": "BookingsContext",
+      "state": ["bookings", "loading", "error"],
+      "actions": ["create", "cancel", "refetch"]
+    }
+  ],
+  "queries": [
+    {
+      "name": "useFutureClasses",
+      "endpoint": "GET /api/classes",
+      "cacheKey": ["classes", "future"],
+      "staleTimeMs": 60000
+    },
+    {
+      "name": "useClassBySlug",
+      "endpoint": "GET /api/classes",
+      "cacheKey": ["classes", "by-slug"]
+    },
+    {
+      "name": "useMyBookings",
+      "endpoint": "GET /api/bookings",
+      "cacheKey": ["bookings", "mine"],
+      "staleTimeMs": 30000
+    },
+    {
+      "name": "useMyMembership",
+      "endpoint": "GET /api/memberships/me",
+      "cacheKey": ["memberships", "mine"],
+      "staleTimeMs": 60000
+    },
+    {
+      "name": "useTeacherSchedule",
+      "endpoint": "GET /api/classes",
+      "cacheKey": ["classes", "by-teacher"]
+    },
+    {
+      "name": "useAdminBookings",
+      "endpoint": "GET /api/bookings",
+      "cacheKey": ["bookings", "admin"],
+      "staleTimeMs": 30000
+    }
+  ],
+  "mutations": [
+    {
+      "name": "useCreateBooking",
+      "endpoint": "POST /api/bookings",
+      "invalidates": [["bookings"], ["classes"], ["memberships", "mine"]]
+    },
+    {
+      "name": "useCancelBooking",
+      "endpoint": "DELETE /api/bookings",
+      "invalidates": [["bookings", "mine"], ["classes"]]
+    },
+    {
+      "name": "useCreateClass",
+      "endpoint": "POST /api/classes",
+      "invalidates": [["classes"]]
+    },
+    {
+      "name": "useUpdateClass",
+      "endpoint": "PUT /api/classes",
+      "invalidates": [["classes"]]
+    },
+    {
+      "name": "useLogin",
+      "endpoint": "POST /api/auth/login",
+      "invalidates": [["auth"]]
+    },
+    {
+      "name": "useRegister",
+      "endpoint": "POST /api/auth/register",
+      "invalidates": [["auth"]]
+    }
+  ]
+}

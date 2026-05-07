@@ -1,0 +1,52 @@
+{
+  "forms": [
+    {
+      "name": "LoginForm",
+      "path": "client/components/forms/LoginForm.tsx",
+      "schemaFile": "client/lib/schemas/auth-schemas.ts",
+      "schemaName": "LoginSchema",
+      "mutation": "useLogin",
+      "fields": ["email", "password"],
+      "submitFlow": ["validate (Zod)", "mutateAsync", "redirect", "toast.success"]
+    },
+    {
+      "name": "RegisterForm",
+      "path": "client/components/forms/RegisterForm.tsx",
+      "schemaFile": "client/lib/schemas/auth-schemas.ts",
+      "schemaName": "RegisterSchema",
+      "mutation": "useRegister",
+      "fields": ["name", "email", "password"]
+    },
+    {
+      "name": "CreateBookingForm",
+      "path": "client/components/forms/CreateBookingForm.tsx",
+      "schemaFile": "client/lib/schemas/bookings-schemas.ts",
+      "schemaName": "CreateBookingSchema",
+      "mutation": "useCreateBooking",
+      "fields": ["classId", "notes"],
+      "submitFlow": ["validate (Zod)", "mutateAsync", "toast.success", "onSuccess callback", "reset"]
+    },
+    {
+      "name": "CreateClassForm",
+      "path": "client/components/forms/CreateClassForm.tsx",
+      "schemaFile": "client/lib/schemas/classes-schemas.ts",
+      "schemaName": "CreateClassSchema",
+      "mutation": "useCreateClass",
+      "fields": ["title", "description", "teacherId", "startsAt", "durationMinutes", "capacity", "level"]
+    },
+    {
+      "name": "CreateMembershipForm",
+      "path": "client/components/forms/CreateMembershipForm.tsx",
+      "schemaFile": "client/lib/schemas/memberships-schemas.ts",
+      "schemaName": "CreateMembershipSchema",
+      "mutation": "useCreateMembership",
+      "fields": ["userId", "tier", "validFrom"]
+    }
+  ],
+  "schemaFiles": [
+    "client/lib/schemas/auth-schemas.ts",
+    "client/lib/schemas/bookings-schemas.ts",
+    "client/lib/schemas/classes-schemas.ts",
+    "client/lib/schemas/memberships-schemas.ts"
+  ]
+}

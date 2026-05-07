@@ -1,0 +1,211 @@
+{
+  "primitives": [
+    "button",
+    "card",
+    "input",
+    "label",
+    "badge",
+    "dialog",
+    "dropdown-menu",
+    "form",
+    "select",
+    "table",
+    "tabs",
+    "toast",
+    "separator",
+    "sheet",
+    "skeleton",
+    "alert",
+    "avatar",
+    "popover",
+    "tooltip",
+    "command",
+    "calendar",
+    "checkbox"
+  ],
+  "components": [
+    {
+      "name": "LoginForm",
+      "path": "client/components/Auth/LoginForm.tsx",
+      "area": "Auth",
+      "states": ["default", "loading", "error"],
+      "appliesDesignTokens": true
+    },
+    {
+      "name": "RegisterForm",
+      "path": "client/components/Auth/RegisterForm.tsx",
+      "area": "Auth",
+      "states": ["default", "loading", "error"]
+    },
+    {
+      "name": "Layout",
+      "path": "client/components/Layout/Layout.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "DashboardLayout",
+      "path": "client/components/Layout/DashboardLayout.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "Header",
+      "path": "client/components/Layout/Header.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "Footer",
+      "path": "client/components/Layout/Footer.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "Sidebar",
+      "path": "client/components/Layout/Sidebar.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "MobileNav",
+      "path": "client/components/Layout/MobileNav.tsx",
+      "area": "Layout"
+    },
+    {
+      "name": "HeroSection",
+      "path": "client/components/Home/HeroSection.tsx",
+      "area": "Home"
+    },
+    {
+      "name": "FeaturesGrid",
+      "path": "client/components/Home/FeaturesGrid.tsx",
+      "area": "Home"
+    },
+    {
+      "name": "TestimonialsCarousel",
+      "path": "client/components/Home/TestimonialsCarousel.tsx",
+      "area": "Home"
+    },
+    {
+      "name": "CTASection",
+      "path": "client/components/Home/CTASection.tsx",
+      "area": "Home"
+    },
+    {
+      "name": "StatsBlock",
+      "path": "client/components/Home/StatsBlock.tsx",
+      "area": "Home"
+    },
+    {
+      "name": "FiltrosClasses",
+      "path": "client/components/Shop/FiltrosClasses.tsx",
+      "area": "Shop"
+    },
+    {
+      "name": "ListaClasses",
+      "path": "client/components/Shop/ListaClasses.tsx",
+      "area": "Shop",
+      "states": ["loading", "default", "empty", "error"]
+    },
+    {
+      "name": "ClassCard",
+      "path": "client/components/Shop/ClassCard.tsx",
+      "area": "Shop"
+    },
+    {
+      "name": "EmptyShopState",
+      "path": "client/components/Shop/EmptyShopState.tsx",
+      "area": "Shop"
+    },
+    {
+      "name": "Paginacion",
+      "path": "client/components/Shop/Paginacion.tsx",
+      "area": "Shop"
+    },
+    {
+      "name": "ProfileHeader",
+      "path": "client/components/Profile/ProfileHeader.tsx",
+      "area": "Profile"
+    },
+    {
+      "name": "ProfileTabs",
+      "path": "client/components/Profile/ProfileTabs.tsx",
+      "area": "Profile"
+    },
+    {
+      "name": "ProfileBookings",
+      "path": "client/components/Profile/ProfileBookings.tsx",
+      "area": "Profile",
+      "states": ["loading", "default", "empty"]
+    },
+    {
+      "name": "ProfileSettings",
+      "path": "client/components/Profile/ProfileSettings.tsx",
+      "area": "Profile"
+    },
+    {
+      "name": "TablaBookings",
+      "path": "client/components/Admin/TablaBookings.tsx",
+      "area": "Admin",
+      "states": ["loading", "default", "empty", "error"]
+    },
+    {
+      "name": "TablaClasses",
+      "path": "client/components/Admin/TablaClasses.tsx",
+      "area": "Admin",
+      "states": ["loading", "default", "empty", "error"]
+    },
+    {
+      "name": "TablaUsers",
+      "path": "client/components/Admin/TablaUsers.tsx",
+      "area": "Admin",
+      "states": ["loading", "default", "empty", "error"]
+    },
+    {
+      "name": "DashboardStats",
+      "path": "client/components/Admin/DashboardStats.tsx",
+      "area": "Admin"
+    },
+    {
+      "name": "AdminSidebar",
+      "path": "client/components/Admin/AdminSidebar.tsx",
+      "area": "Admin"
+    },
+    {
+      "name": "AuthGuard",
+      "path": "client/components/Shared/AuthGuard.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "RoleGuard",
+      "path": "client/components/Shared/RoleGuard.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "EmptyState",
+      "path": "client/components/Shared/EmptyState.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "ErrorState",
+      "path": "client/components/Shared/ErrorState.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "LoadingSpinner",
+      "path": "client/components/Shared/LoadingSpinner.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "ConfirmDialog",
+      "path": "client/components/Shared/ConfirmDialog.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "BackButton",
+      "path": "client/components/Shared/BackButton.tsx",
+      "area": "Shared"
+    },
+    {
+      "name": "Breadcrumbs",
+      "path": "client/components/Shared/Breadcrumbs.tsx",
+      "area": "Shared"
+    }
+  ]
+}
