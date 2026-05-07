@@ -65,7 +65,7 @@ export async function runGeneratorAgent<T = unknown>(
   opts: RunGeneratorAgentOptions,
 ): Promise<AgentArtifact<T>> {
   const { agent, systemPrompt, userPrompt, workDir, onEvent } = opts;
-  const timeoutMs = opts.timeoutMs ?? 6 * 60_000;
+  const timeoutMs = opts.timeoutMs ?? 15 * 60_000;
   const startedAt = Date.now();
 
   await onEvent({ type: "agent.started", agent });
