@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { GeneratorAgentName } from "./shared-state";
+import type { AgentModel, GeneratorAgentName } from "./shared-state";
 
 export type GeneratorEvent =
   | { type: "agent.started"; agent: GeneratorAgentName }
@@ -18,6 +18,12 @@ export interface RunGeneratorAgentOptions {
   onEvent: (event: GeneratorEvent) => void | Promise<void>;
   /** Per-agent timeout in ms. Default 6 minutes. */
   timeoutMs?: number;
+  /**
+   * Model alias to pass to `claude --model`. Sonnet is ~5x faster than Opus
+   * at lower quality; use it for mechanical agents. Omit to use the user's
+   * default (typically Opus).
+   */
+  model?: AgentModel;
 }
 
 export interface AgentArtifact<T = unknown> {
@@ -80,8 +86,11 @@ export async function runGeneratorAgent<T = unknown>(
     systemPrompt,
     "--permission-mode",
     "bypassPermissions",
-    userPrompt,
   ];
+  if (opts.model) {
+    args.push("--model", opts.model);
+  }
+  args.push(userPrompt);
 
   const child = spawn(executable, args, {
     cwd: workDir,

@@ -35,21 +35,55 @@ Escribís en el workDir:
    import { toNextJsHandler } from "better-auth/next-js";
    export const { GET, POST } = toNextJsHandler(auth.handler);
    ```
-3. **`src/application/auth/abilities.ts`** — CASL ability builder por role:
+3. **`src/application/auth/abilities.ts`** — CASL ability builder por role.
+
+   **CRÍTICO — tipado de subjects.** Para que las condiciones objeto (`{ userId: user.id }`, `{ teacherId: user.id }`) compilen, los subjects tienen que ser **discriminated unions con `kind`**, no strings sueltos. Plantilla exacta:
+
    ```ts
-   import { AbilityBuilder, createMongoAbility, type MongoAbility } from "@casl/ability";
+   import {
+     AbilityBuilder,
+     createMongoAbility,
+     type MongoAbility,
+   } from "@casl/ability";
 
-   export type AppAbility = MongoAbility<[Action, Subject]>;
    export type Action = "create" | "read" | "update" | "delete" | "manage";
-   export type Subject = "<Feature>" | "all" | { ... };
 
+   // Un type per feature. El campo `kind` es el discriminador que CASL usa
+   // para enrutar reglas. Las propiedades adicionales son las que pueden
+   // aparecer en condiciones de `can(...)`.
+   type ClassSubject = { kind: "Class"; teacherId?: string };
+   type BookingSubject = { kind: "Booking"; userId?: string };
+   type MembershipSubject = { kind: "Membership"; userId?: string };
+   type UserSubject = { kind: "User"; id?: string };
+
+   export type AppSubjects =
+     | ClassSubject
+     | BookingSubject
+     | MembershipSubject
+     | UserSubject
+     | "all";
+
+   export type AppAbility = MongoAbility<[Action, AppSubjects]>;
+
+   // En cada `can(...)` el segundo argumento es el `kind` (string), y el
+   // tercero las condiciones contra las propiedades adicionales.
    export function abilityFor(user: { id: string; role: string }): AppAbility {
-     const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
-     if (user.role === "admin") { can("manage", "all"); }
-     // …role-specific rules per feature
+     const { can, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
+     if (user.role === "admin") {
+       can("manage", "all");
+     } else if (user.role === "alumno") {
+       can("read", "Class");
+       can("create", "Booking");
+       can(["read", "update"], "Booking", { userId: user.id });
+     } else if (user.role === "profesor") {
+       can("read", "Class", { teacherId: user.id });
+       can("update", "Class", { teacherId: user.id });
+     }
      return build();
    }
    ```
+
+   En el call site usás el discriminador como string: `ability.can("read", "Booking", { kind: "Booking", userId: targetBooking.userId })`. El `kind` repetido en runtime evita problemas de inferencia en MongoQuery.
 4. **`src/presentation/auth/with-auth.ts`** — helper para route handlers:
    ```ts
    import { auth } from "@/src/infrastructure/auth/better-auth";

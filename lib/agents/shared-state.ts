@@ -23,6 +23,45 @@ export const GENERATOR_AGENT_ORDER: readonly GeneratorAgentName[] = [
   "qa-reviewer",
 ] as const;
 
+/**
+ * Execution phases for `runGeneration`. Each entry is a list of agents that
+ * run together in parallel. Single-agent entries run serially. The DAG is:
+ *
+ *   architect → domain-persistence → [use-cases || auth-rbac] → api-frontend → qa-reviewer
+ *
+ * `use-cases` and `auth-rbac` both consume domain-persistence output but
+ * write to disjoint paths (auth-rbac owns src/{application,infrastructure,
+ * presentation}/auth/ + app/api/auth/ + proxy.ts; use-cases owns the rest of
+ * src/application/). Running them concurrently saves ~3 minutes per
+ * generation.
+ */
+export const GENERATOR_PHASES: ReadonlyArray<readonly GeneratorAgentName[]> = [
+  ["architect"],
+  ["domain-persistence"],
+  ["use-cases", "auth-rbac"],
+  ["api-frontend"],
+  ["qa-reviewer"],
+] as const;
+
+/**
+ * Per-agent default model. Reasoning-heavy agents (architecture, business
+ * logic, validation) get Opus; mechanical / high-volume code-translation
+ * agents (Prisma schema, auth wiring, route handlers) get Sonnet for ~5x
+ * speed at acceptable quality.
+ *
+ * Override via `runGeneratorAgent({ model })` when needed.
+ */
+export type AgentModel = "opus" | "sonnet" | "haiku";
+
+export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {
+  architect: "opus",
+  "domain-persistence": "sonnet",
+  "use-cases": "opus",
+  "auth-rbac": "sonnet",
+  "api-frontend": "sonnet",
+  "qa-reviewer": "opus",
+};
+
 /** PRD reuses the Discovery state shape. */
 export type PRD = PRDState;
 

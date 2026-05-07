@@ -66,6 +66,12 @@ Llamá `toResponse(err)` desde cada `catch` de los route handlers.
 
 - **R23 — Naming.** Page components son `default export`, todo lo demás `export const`. Archivos en `app/(dashboard)/<feature>/page.tsx` exportan `default function ...Page()`. Componentes reutilizables: `export const Foo = ...`.
 
+- **R23-bis — Tipos de retorno de componentes en React 19 / Next 16.** El namespace global `JSX` ya **no existe**. **Nunca** uses `: JSX.Element` como tipo de retorno. Dos opciones válidas:
+  1. Omitir el tipo y dejar que TS lo infiera: `export default function Page() { return <div/>; }`
+  2. Si necesitás tiparlo explícito, importá `ReactElement` de `react`: `import type { ReactElement } from "react"; export default function Page(): ReactElement { ... }`
+
+  Esto rompe el typecheck en cuanto aparece. Mecánico pero crítico — un solo `JSX.Element` en una página y el gate cae.
+
 - **R24 — Code style.** TS strict, sin `any`, comillas dobles, semis al final, 2 espacios. Prefer `const`. Componentes funcionales con `function` para páginas y `const ... = ()=>` para componentes utilitarios.
 
 - **R25 — Server components por defecto.** En `app/(dashboard)/...` las páginas son server components. Subí `"use client"` SOLO al child que necesita estado/efectos/eventos. Los datos los pedís en el server component llamando al controller, NO via `fetch` desde el cliente.
@@ -96,3 +102,6 @@ API_FRONTEND_DONE: <N> endpoints, <M> pages
 - NO escribas SQL crudo. Si una use case necesita una query custom, la pide al repo.
 - NO uses `any`. Tipá Response bodies.
 - NO toques `prisma/schema.prisma` ni nada de `src/domain` o `src/application`. Solo agregás archivos en `src/presentation`, `app/`, `components/`.
+- NUNCA uses `JSX.Element` (no existe en React 19/Next 16). Si ves un ejemplo viejo con ese tipo, reemplazalo por `ReactElement` de `react` o quitá el tipo de retorno.
+- NO uses `interface X extends Y {}` con cuerpo vacío — el linter (`@typescript-eslint/no-empty-object-type`) lo flaggea como error. Si querías abrir extensión futura, usá `export type X = Y;`.
+- Las páginas en `app/(dashboard)/...` son Server Components — son **puras** durante el render. NUNCA llames a `Date.now()`, `Math.random()`, ni nada con side-effect en el cuerpo del componente. Si necesitás "ahora", calculalo una sola vez al inicio del render: `const nowMs = Date.now();` antes del `return`. O mejor: pasá la condición pre-calculada desde el use case (ej. `canCancel: boolean` ya resuelto en el server-side controller).

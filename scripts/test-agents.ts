@@ -67,6 +67,12 @@ function fmtEvent(event: OrchestratorEvent): string {
       return `[${ts}]   handoff: ${event.from} → ${event.to}`;
     case "agent.file_created":
       return `[${ts}]     + ${event.path} (${event.lines} lines)`;
+    case "qa.fix_round":
+      return `[${ts}] >>> FIX ROUND ${event.round}/${event.maxRounds} — ${event.violations} violations to address`;
+    case "agent.fix_started":
+      return `[${ts}]   ${event.agent} FIX-START round=${event.round} (${event.violations} violations)`;
+    case "agent.fix_completed":
+      return `[${ts}]   ${event.agent} FIX-DONE round=${event.round}`;
   }
 }
 
