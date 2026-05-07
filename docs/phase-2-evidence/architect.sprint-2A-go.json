@@ -1,0 +1,50 @@
+{
+  "features": [
+    {
+      "name": "auth",
+      "domain": "Auth",
+      "description": "Login, sesión y registro de usuarios con roles admin/profesor/alumno."
+    },
+    {
+      "name": "classes",
+      "domain": "Class",
+      "description": "Catálogo de clases del estudio: alta, edición y baja por admin; consulta por profesor y alumno."
+    },
+    {
+      "name": "bookings",
+      "domain": "Booking",
+      "description": "Reservas de clases por alumnos con consumo y devolución de créditos, y cancelación hasta 2h antes."
+    },
+    {
+      "name": "memberships",
+      "domain": "Membership",
+      "description": "Membresías mensuales y trimestrales con créditos, gestionadas por admin y consultadas por el alumno."
+    }
+  ],
+  "roles": ["admin", "profesor", "alumno"],
+  "decisions": {
+    "auth": "better-auth con sesiones en cookie httpOnly",
+    "rbac": "CASL — abilities por role en src/application/auth/abilities.ts",
+    "validation": "zod schemas en src/presentation/<feature>/schemas/",
+    "errors": "errores tipados en src/domain/errors/ + handler en src/presentation/_lib/error-handler.ts",
+    "soft_delete": "status='eliminado' + isActive=false (nunca DELETE)"
+  },
+  "folder_layout": {
+    "src/domain/auth/": ["entity.ts", "dto.ts", "repository.ts (interface)", "errors.ts"],
+    "src/application/auth/": ["use-cases/*.ts", "ports.ts", "abilities.ts"],
+    "src/infrastructure/auth/": ["repository.ts (Prisma impl)", "mapper.ts", "better-auth.ts"],
+    "src/presentation/auth/": ["controller.ts", "schemas/{request,response}.ts"],
+    "src/domain/classes/": ["entity.ts", "dto.ts", "repository.ts (interface)", "errors.ts"],
+    "src/application/classes/": ["use-cases/*.ts", "ports.ts"],
+    "src/infrastructure/classes/": ["repository.ts (Prisma impl)", "mapper.ts"],
+    "src/presentation/classes/": ["controller.ts", "schemas/{request,response}.ts"],
+    "src/domain/bookings/": ["entity.ts", "dto.ts", "repository.ts (interface)", "errors.ts"],
+    "src/application/bookings/": ["use-cases/*.ts", "ports.ts"],
+    "src/infrastructure/bookings/": ["repository.ts (Prisma impl)", "mapper.ts"],
+    "src/presentation/bookings/": ["controller.ts", "schemas/{request,response}.ts"],
+    "src/domain/memberships/": ["entity.ts", "dto.ts", "repository.ts (interface)", "errors.ts"],
+    "src/application/memberships/": ["use-cases/*.ts", "ports.ts"],
+    "src/infrastructure/memberships/": ["repository.ts (Prisma impl)", "mapper.ts"],
+    "src/presentation/memberships/": ["controller.ts", "schemas/{request,response}.ts"]
+  }
+}

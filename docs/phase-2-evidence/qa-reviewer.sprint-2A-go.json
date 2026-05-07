@@ -1,0 +1,27 @@
+{
+  "checks": [
+    {
+      "name": "typecheck",
+      "status": "pass",
+      "detail": "tsc --noEmit termina sin errores tras el fix round 1 (datasource db sin `url` + `pnpm prisma generate` regenerado en src/infrastructure/db/generated). Los 4 modelos (User, Class, Booking, Membership) están exportados y los tipos del PrismaClient coinciden con los repos en src/infrastructure/{auth,bookings,classes,memberships}/repository.ts."
+    },
+    {
+      "name": "lint",
+      "status": "pass",
+      "detail": "eslint pasa con 0 errores. 4 warnings menores no bloqueantes: 2 unused vars con prefijo `_` (proxy.ts:3 `_req`, src/domain/auth/entity.ts:32 `_omit`) y 2 directivas eslint-disable sin uso (src/infrastructure/db/client.ts:11, src/presentation/_lib/error-handler.ts:47)."
+    },
+    {
+      "name": "deps:check",
+      "status": "pass",
+      "detail": "depcruise --validate src app reporta 0 errores y 1 warning conocido: app/api/auth/[...all]/route.ts → src/infrastructure/auth/better-auth.ts (Better Auth requiere importar el handler directo desde infrastructure; documentado como excepción aceptada en api-frontend.json). 107 módulos, 203 dependencias inspeccionadas — boundaries de Clean Architecture respetados."
+    },
+    {
+      "name": "test",
+      "status": "pass",
+      "detail": "vitest run: 3 archivos / 6 tests pasados en 378ms (tests/bookings.smoke.test.ts, tests/classes.smoke.test.ts, tests/memberships.smoke.test.ts). Cubren: createBooking happy path con consumo de crédito (verifica que tras el fix de adjustCredits creditsUsed sube correctamente), createClass happy path + rechazo de capacidad fuera de rango, createMembership mensual + trimestral + rechazo de validFrom>=validUntil. Helpers en tests/helpers/fake-repos.ts."
+    }
+  ],
+  "decision": "go",
+  "violations": [],
+  "summary": "4/4 gates pasan tras el fix round 1. Los 6 smoke tests cubren las 3 features de negocio (bookings/classes/memberships) importando use cases reales con repos en memoria. Boundaries de Clean Architecture respetados (R1, R8), soft delete en lugar de DELETE (R6), URLs públicas con [slug] (R3), sin enums Prisma para status (R5), sin db push (R7), tests con Vitest única estrategia (R32). Listo para Phase 3+."
+}
