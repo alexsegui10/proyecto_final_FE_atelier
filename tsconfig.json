@@ -32,5 +32,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "lib/skeleton", "out"]
+  "exclude": ["node_modules", "lib/skeleton", "lib/skeleton-v2", "out"]
 }

@@ -7,9 +7,9 @@
  *   pnpm tsx scripts/rebuild-demo-cache.ts <sourceWorkDir> <demoSlug>
  *   pnpm tsx scripts/rebuild-demo-cache.ts /c/Users/alexs/AppData/Local/Temp/atelier-gen-GeSa5I yoga
  */
-import { readFile, writeFile, mkdir, rm, readdir, stat, cp } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm, readdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 type EventOut = { offsetMs: number; type: string; payload: Record<string, unknown> };
 
