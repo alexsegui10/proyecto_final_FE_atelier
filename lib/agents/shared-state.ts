@@ -66,7 +66,10 @@ export const AGENT_DEFAULT_TIMEOUT_MS: Record<GeneratorAgentName, number> = {
   "use-cases": 15 * 60_000,
   "auth-rbac": 15 * 60_000,
   "api-frontend": 20 * 60_000,
-  "qa-reviewer": 15 * 60_000,
+  // QA writes one smoke test per feature, runs 4 gates (typecheck, lint,
+  // deps:check, test) over the full generated codebase, then writes the
+  // structured report. With 100+ files it eats the 15-min budget — bump.
+  "qa-reviewer": 25 * 60_000,
 };
 
 export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {
