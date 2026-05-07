@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+build
+coverage
+.turbo
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+prisma/migrations
+*.min.js
+*.min.css

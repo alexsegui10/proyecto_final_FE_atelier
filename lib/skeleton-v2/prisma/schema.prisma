@@ -1,0 +1,26 @@
+// Atelier v2 — generated Prisma schema. The Persistence agent fills in models
+// per feature. Output goes to a SHARED location so multiple features can
+// import from the same generated client.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/_shared/infrastructure/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Anchor model so `prisma generate` succeeds against an empty schema.
+// The Persistence agent will add per-feature models alongside.
+model User {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  email     String   @unique
+  role      String
+  isActive  Boolean  @default(true)
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
