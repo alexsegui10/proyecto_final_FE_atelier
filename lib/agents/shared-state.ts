@@ -55,8 +55,12 @@ export type AgentModel = "opus" | "sonnet" | "haiku";
 
 export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {
   architect: "opus",
-  "domain-persistence": "sonnet",
+  // domain-persistence: empirical run with Sonnet was 4 min slower than
+  // Opus on the yoga fixture (10m31s vs 6m22s). The "mechanical" heuristic
+  // didn't pay off — Sonnet second-guesses Prisma syntax across many turns.
+  "domain-persistence": "opus",
   "use-cases": "opus",
+  // auth-rbac is short (~2 min either way); Sonnet is fine here.
   "auth-rbac": "sonnet",
   // api-frontend stays on Opus: empirical run shows Sonnet exceeds the
   // 15-min per-agent timeout on this volume of files (Opus completes in
@@ -130,6 +134,13 @@ export interface QaArtifact {
     where?: string;
     issue: string;
     severity: "error" | "warn";
+    /**
+     * Optional one-line patch the QA agent recommends. When present, the
+     * fix loop surfaces this VERBATIM at the top of the violation context
+     * sent to the responsible agent — they should apply it as-is rather
+     * than reinventing the pattern.
+     */
+    recommendedFix?: string;
   }>;
   summary: string;
 }

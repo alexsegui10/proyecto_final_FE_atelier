@@ -6,6 +6,7 @@ import {
   AGENT_DEFAULT_MODEL,
   AGENT_INPUT_DEPENDENCIES,
   GENERATOR_AGENT_ORDER,
+  GENERATOR_PHASES,
   type GeneratorAgentName,
   type PRD,
   type QaArtifact,
@@ -16,6 +17,7 @@ import {
   type GeneratorEvent,
 } from "./runner-generator";
 import {
+  routeFilePath,
   routeViolationsToAgents,
   type Violation,
 } from "./violations-router";
@@ -153,6 +155,36 @@ const SCHEMA_TOUCHING_AGENTS: ReadonlySet<GeneratorAgentName> = new Set([
   "domain-persistence",
 ]);
 
+/**
+ * Compute the execution phases for a (possibly custom) set of agents.
+ * - If `customAgents` is undefined, returns `GENERATOR_PHASES` verbatim
+ *   (parallel use-cases || auth-rbac).
+ * - If a custom subset is provided, falls back to single-agent phases in
+ *   the canonical order so the caller stays in control. Parallelization
+ *   only kicks in for the default full-pipeline run.
+ */
+export function phasesFor(
+  customAgents?: readonly GeneratorAgentName[],
+): ReadonlyArray<readonly GeneratorAgentName[]> {
+  if (!customAgents) return GENERATOR_PHASES;
+  const set = new Set(customAgents);
+  return GENERATOR_AGENT_ORDER.filter((a) => set.has(a)).map((a) => [a]);
+}
+
+/**
+ * Pick the canonical owner of a path within a parallel phase. Falls back
+ * to the first agent of the phase when no rule matches (e.g. a config file
+ * or generated artifact that's not in any agent's territory).
+ */
+function attributePathToPhaseAgent(
+  path: string,
+  phase: readonly GeneratorAgentName[],
+): GeneratorAgentName {
+  const routed = routeFilePath(path);
+  if (routed && phase.includes(routed)) return routed;
+  return phase[0];
+}
+
 function buildUserPrompt(
   agent: GeneratorAgentName,
   prd: PRD,
@@ -216,9 +248,25 @@ function buildFixUserPrompt(
   lines.push("");
   lines.push("## Violaciones que te tocan a vos");
   lines.push("");
-  lines.push("```json");
-  lines.push(JSON.stringify(violations, null, 2));
-  lines.push("```");
+
+  // Surface each violation with its recommended_fix at the TOP, before the
+  // rest of the metadata. The QA agent put it there because it knows the
+  // exact patch — apply it verbatim instead of reinventing the pattern.
+  violations.forEach((violation, idx) => {
+    lines.push(`### Violación ${idx + 1}: ${violation.rule}`);
+    if (violation.recommendedFix) {
+      lines.push("");
+      lines.push("**Recommended fix (aplicá esto literal — el QA ya lo razonó):**");
+      lines.push("");
+      lines.push(violation.recommendedFix);
+      lines.push("");
+    }
+    lines.push("**Detalle:**");
+    lines.push(
+      "```json\n" + JSON.stringify(violation, null, 2) + "\n```",
+    );
+    lines.push("");
+  });
   lines.push("");
   lines.push("## Artifacts existentes (lee solo lo que necesites)");
   lines.push("");
@@ -245,9 +293,40 @@ function buildFixUserPrompt(
   return lines.join("\n");
 }
 
+function assignArtifact(
+  state: SharedState,
+  agent: GeneratorAgentName,
+  artifact: unknown,
+): void {
+  switch (agent) {
+    case "architect":
+      state.architect = artifact as SharedState["architect"];
+      break;
+    case "domain-persistence":
+      state.domainPersistence = artifact as SharedState["domainPersistence"];
+      break;
+    case "use-cases":
+      state.useCases = artifact as SharedState["useCases"];
+      break;
+    case "auth-rbac":
+      state.authRbac = artifact as SharedState["authRbac"];
+      break;
+    case "api-frontend":
+      state.apiFrontend = artifact as SharedState["apiFrontend"];
+      break;
+    case "qa-reviewer":
+      state.qa = artifact as SharedState["qa"];
+      break;
+  }
+}
+
+type AgentRunResult =
+  | { ok: true; agent: GeneratorAgentName; artifact: unknown }
+  | { ok: false; agent: GeneratorAgentName; reason: string };
+
 export async function runGeneration(opts: RunGenerationOptions): Promise<GenerationResult> {
   const { generationId, prd, workDir, promptsDir, onEvent } = opts;
-  const agentsToRun = opts.agents ?? GENERATOR_AGENT_ORDER;
+  const phases = phasesFor(opts.agents);
   const startedAt = Date.now();
   const state: SharedState = { prd };
   const filesCreated: GenerationResult["filesCreated"] = [];
@@ -255,102 +334,103 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<Generat
   await onEvent({ type: "generation.started", generationId });
 
   let prevAgent: GeneratorAgentName | undefined;
-  for (let i = 0; i < agentsToRun.length; i++) {
-    const agent = agentsToRun[i];
-
+  for (const phase of phases) {
     if (prevAgent !== undefined) {
-      await onEvent({ type: "agent.handoff", from: prevAgent, to: agent });
+      await onEvent({ type: "agent.handoff", from: prevAgent, to: phase[0] });
     }
-
-    let systemPrompt: string;
-    try {
-      systemPrompt = await readFile(join(promptsDir, `${agent}.md`), "utf-8");
-    } catch (err) {
-      const reason = `cannot read system prompt for ${agent}: ${(err as Error).message}`;
-      await onEvent({ type: "generation.failed", generationId, reason });
-      return {
-        state,
-        durationMs: Date.now() - startedAt,
-        filesCreated,
-        failedAt: agent,
-      };
-    }
-
-    const userPrompt = buildUserPrompt(agent, prd, workDir);
 
     const before = await listFiles(workDir);
 
-    let artifact;
-    try {
-      artifact = await runGeneratorAgent({
-        agent,
-        systemPrompt,
-        userPrompt,
-        workDir,
-        onEvent,
-        model: AGENT_DEFAULT_MODEL[agent],
-      });
-    } catch (err) {
-      const reason = (err as Error).message;
-      await onEvent({ type: "generation.failed", generationId, reason });
+    // Run all agents in this phase concurrently. Promise.all preserves the
+    // input order in `results`, so we can iterate `phase` and `results` in
+    // lockstep when assigning to state.
+    const results: AgentRunResult[] = await Promise.all(
+      phase.map(async (agent): Promise<AgentRunResult> => {
+        let systemPrompt: string;
+        try {
+          systemPrompt = await readFile(join(promptsDir, `${agent}.md`), "utf-8");
+        } catch (err) {
+          return {
+            ok: false,
+            agent,
+            reason: `cannot read system prompt for ${agent}: ${(err as Error).message}`,
+          };
+        }
+        const userPrompt = buildUserPrompt(agent, prd, workDir);
+        try {
+          const result = await runGeneratorAgent({
+            agent,
+            systemPrompt,
+            userPrompt,
+            workDir,
+            onEvent,
+            model: AGENT_DEFAULT_MODEL[agent],
+          });
+          return { ok: true, agent, artifact: result.artifact };
+        } catch (err) {
+          return { ok: false, agent, reason: (err as Error).message };
+        }
+      }),
+    );
+
+    // Fail fast: if any agent in the phase failed, abort the whole generation.
+    const failed = results.find((r): r is Extract<AgentRunResult, { ok: false }> => !r.ok);
+    if (failed) {
+      await onEvent({ type: "generation.failed", generationId, reason: failed.reason });
       return {
         state,
         durationMs: Date.now() - startedAt,
         filesCreated,
-        failedAt: agent,
+        failedAt: failed.agent,
       };
     }
 
+    // File events: ONE pass over the phase-level diff. Path-based attribution
+    // routes each file to the responsible agent (or the first agent in the
+    // phase as a fallback). This naturally dedupes — a path appears once in
+    // `after` regardless of how many agents in the phase touched it.
     const after = await listFiles(workDir);
     for (const [path, mtime] of after.entries()) {
       const beforeMtime = before.get(path);
       if (beforeMtime === undefined || mtime > beforeMtime + 50) {
         const lines = await countLines(join(workDir, path));
-        filesCreated.push({ agent, path, lines });
-        await onEvent({ type: "agent.file_created", agent, path, lines });
+        const ownerAgent = attributePathToPhaseAgent(path, phase);
+        filesCreated.push({ agent: ownerAgent, path, lines });
+        await onEvent({
+          type: "agent.file_created",
+          agent: ownerAgent,
+          path,
+          lines,
+        });
       }
     }
 
-    // After agents that mutate prisma/schema.prisma, regenerate the Prisma
-    // client so downstream agents see all models. Without this, agents like
-    // use-cases and api-frontend hit "Property X does not exist on type
-    // PrismaClient" because the generated client only knows about the
-    // skeleton placeholder User model.
-    if (SCHEMA_TOUCHING_AGENTS.has(agent)) {
+    // Regenerate Prisma client if any agent in this phase mutated the schema.
+    if (phase.some((a) => SCHEMA_TOUCHING_AGENTS.has(a))) {
       await runPrismaGenerate(workDir);
     }
 
-    switch (agent) {
-      case "architect":
-        state.architect = artifact.artifact as SharedState["architect"];
-        break;
-      case "domain-persistence":
-        state.domainPersistence = artifact.artifact as SharedState["domainPersistence"];
-        break;
-      case "use-cases":
-        state.useCases = artifact.artifact as SharedState["useCases"];
-        break;
-      case "auth-rbac":
-        state.authRbac = artifact.artifact as SharedState["authRbac"];
-        break;
-      case "api-frontend":
-        state.apiFrontend = artifact.artifact as SharedState["apiFrontend"];
-        break;
-      case "qa-reviewer":
-        state.qa = artifact.artifact as SharedState["qa"];
-        break;
+    // Assign artifacts to state. Walk in canonical order so the assignments
+    // are deterministic regardless of which parallel branch finished first.
+    for (const agent of GENERATOR_AGENT_ORDER) {
+      const r = results.find((x) => x.ok && x.agent === agent);
+      if (r && r.ok) assignArtifact(state, agent, r.artifact);
     }
 
-    prevAgent = agent;
+    // Last agent of the phase (in canonical order) is the "from" of the next handoff.
+    prevAgent = [...phase].sort(
+      (a, b) => GENERATOR_AGENT_ORDER.indexOf(a) - GENERATOR_AGENT_ORDER.indexOf(b),
+    )[phase.length - 1];
   }
 
   // QA fix loop — only if QA gave no-go and maxFixRounds > 0.
+  const qaRanThisGeneration = phases.some((phase) => phase.includes("qa-reviewer"));
   const maxFixRounds = opts.maxFixRounds ?? 3;
   if (
     state.qa &&
     state.qa.decision === "no-go" &&
     maxFixRounds > 0 &&
-    !agentsToRun.includes("qa-reviewer") === false
+    qaRanThisGeneration
   ) {
     let qaRound = state.qa;
     for (let round = 1; round <= maxFixRounds; round++) {

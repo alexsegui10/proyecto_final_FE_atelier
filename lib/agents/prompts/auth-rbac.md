@@ -37,36 +37,32 @@ Escribís en el workDir:
    ```
 3. **`src/application/auth/abilities.ts`** — CASL ability builder por role.
 
-   **CRÍTICO — tipado de subjects.** Para que las condiciones objeto (`{ userId: user.id }`, `{ teacherId: user.id }`) compilen, los subjects tienen que ser **discriminated unions con `kind`**, no strings sueltos. Plantilla exacta:
+   **CRÍTICO — tipado de subjects.** Tipá `AppSubjects` como `Subject` de CASL directamente. Eso permite usar tanto strings (`"Booking"`) en el builder como objetos envueltos con `subject('Booking', { userId })` en los call sites del route handler — los dos sin TS errors. **NO declares discriminated unions**: complican la API y obligan a repetir el `kind` en cada llamada. Plantilla exacta:
 
    ```ts
    import {
      AbilityBuilder,
      createMongoAbility,
      type MongoAbility,
+     type Subject,
    } from "@casl/ability";
 
    export type Action = "create" | "read" | "update" | "delete" | "manage";
 
-   // Un type per feature. El campo `kind` es el discriminador que CASL usa
-   // para enrutar reglas. Las propiedades adicionales son las que pueden
-   // aparecer en condiciones de `can(...)`.
-   type ClassSubject = { kind: "Class"; teacherId?: string };
-   type BookingSubject = { kind: "Booking"; userId?: string };
-   type MembershipSubject = { kind: "Membership"; userId?: string };
-   type UserSubject = { kind: "User"; id?: string };
-
-   export type AppSubjects =
-     | ClassSubject
-     | BookingSubject
-     | MembershipSubject
-     | UserSubject
+   // SubjectName es la lista cerrada de strings que el builder acepta como
+   // segundo argumento de `can(...)`. AppSubjects es lo que termina viviendo
+   // en `MongoAbility<[Action, AppSubjects]>` — Subject de CASL acepta
+   // strings literales O objetos envueltos con el helper `subject()`.
+   export type SubjectName =
+     | "Class"
+     | "Booking"
+     | "Membership"
+     | "User"
      | "all";
+   export type AppSubjects = Subject;
 
    export type AppAbility = MongoAbility<[Action, AppSubjects]>;
 
-   // En cada `can(...)` el segundo argumento es el `kind` (string), y el
-   // tercero las condiciones contra las propiedades adicionales.
    export function abilityFor(user: { id: string; role: string }): AppAbility {
      const { can, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
      if (user.role === "admin") {
@@ -83,7 +79,17 @@ Escribís en el workDir:
    }
    ```
 
-   En el call site usás el discriminador como string: `ability.can("read", "Booking", { kind: "Booking", userId: targetBooking.userId })`. El `kind` repetido en runtime evita problemas de inferencia en MongoQuery.
+   En el route handler, cuando necesités checkear contra una instancia concreta de la entidad (ej. para confirmar que la booking pertenece al user que la quiere modificar), usá el helper `subject()`:
+
+   ```ts
+   import { subject } from "@casl/ability";
+   // ...
+   if (!ability.can("update", subject("Booking", { userId: booking.userId }))) {
+     throw new ForbiddenError("no podés modificar reservas ajenas");
+   }
+   ```
+
+   `subject()` devuelve un objeto `{ ... } & ForcedSubject<"Booking">`, y como `AppSubjects = Subject`, TypeScript acepta tanto el string `"Booking"` como el wrap del helper. Esa simetría es la razón por la que evitamos el discriminated union — daba TS2345 en cuanto el agente migraba a `subject()`, que es el patrón recomendado por la doc oficial de CASL.
 4. **`src/presentation/auth/with-auth.ts`** — helper para route handlers:
    ```ts
    import { auth } from "@/src/infrastructure/auth/better-auth";

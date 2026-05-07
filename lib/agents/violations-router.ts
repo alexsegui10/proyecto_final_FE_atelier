@@ -6,18 +6,16 @@ import type {
 export type Violation = QaArtifact["violations"][number];
 
 /**
- * Map a QA violation to the agent responsible for fixing it, based on the
- * `where` field (file path). The mapping mirrors the architectural layers
- * each agent owns, plus a few special cases (auth/proxy/schema) where the
- * file's path doesn't follow the standard `src/<layer>/<feature>/` pattern.
+ * Map a workspace file path to the agent that owns it. Used to:
+ *   1. Attribute `agent.file_created` events when multiple agents run in
+ *      parallel within a single phase.
+ *   2. Route QA violations to the responsible agent for the fix loop
+ *      (via `routeViolation`).
  *
- * If a violation has no `where` field or no rule matches, returns null.
- * Caller decides what to do with unrouteable violations (default: surface
- * them as "manual fix needed" and skip the fix loop for that one).
+ * Returns null if the path doesn't match any agent's territory.
  */
-export function routeViolation(violation: Violation): GeneratorAgentName | null {
-  const where = violation.where ?? "";
-  const path = where.split(":")[0]; // strip line numbers
+export function routeFilePath(rawPath: string): GeneratorAgentName | null {
+  const path = rawPath.split(":")[0]; // strip line:col suffixes from violations
   const norm = path.replace(/\\/g, "/").trim();
   if (norm.length === 0) return null;
 
@@ -65,6 +63,14 @@ export function routeViolation(violation: Violation): GeneratorAgentName | null 
   }
 
   return null;
+}
+
+/**
+ * Map a QA violation to the agent responsible for fixing it.
+ * Thin wrapper over `routeFilePath`.
+ */
+export function routeViolation(violation: Violation): GeneratorAgentName | null {
+  return routeFilePath(violation.where ?? "");
 }
 
 export interface RoutingResult {

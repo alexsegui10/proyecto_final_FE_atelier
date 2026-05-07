@@ -31,11 +31,19 @@ Validás que el output de los 5 agentes anteriores compile, lintée, respete los
      ],
      "decision": "go" | "no-go",
      "violations": [
-       { "rule": "R6 (soft delete)", "where": "src/infrastructure/.../repository.ts:42", "issue": "...", "severity": "error" | "warn" }
+       {
+         "rule": "R6 (soft delete)",
+         "where": "src/infrastructure/.../repository.ts:42",
+         "issue": "El repo expone delete() real en vez de softDelete()",
+         "severity": "error" | "warn",
+         "recommendedFix": "Reemplazar `await prisma.X.delete({ where: { id } })` por `await prisma.X.update({ where: { id }, data: { status: 'eliminado', isActive: false } })`."
+       }
      ],
      "summary": "<una frase resumiendo el estado>"
    }
    ```
+
+   **`recommendedFix` es CRÍTICO.** Cuando el problema tiene un patch obvio de 1-3 líneas, escribilo literalmente en este campo (con el código `monospaced` si querés). El orchestrator lo va a re-inyectar verbatim al agente responsable cuando arranque la ronda de fix, así evitamos que el agente reinvente otro patrón. Si no hay un fix mecánico claro (ej. requiere rediseño), omití el campo o explicá brevemente por qué no podés sugerir un patch.
 
 4. Si una validación falla, **NO arregles el código**. Documentá el fallo en `violations` y dejá `decision: "no-go"`. El loop de fix es trabajo de fases posteriores.
 
