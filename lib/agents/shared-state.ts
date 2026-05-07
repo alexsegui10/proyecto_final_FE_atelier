@@ -53,6 +53,22 @@ export const GENERATOR_PHASES: ReadonlyArray<readonly GeneratorAgentName[]> = [
  */
 export type AgentModel = "opus" | "sonnet" | "haiku";
 
+/**
+ * Per-agent timeout in milliseconds. api-frontend writes the most files
+ * (~30+) and empirically can run up to ~16-18 min including trailing tokens
+ * after the artifact is already on disk. Bumped to 20 min specifically.
+ *
+ * Override per-call via `runGeneratorAgent({ timeoutMs })` for tests.
+ */
+export const AGENT_DEFAULT_TIMEOUT_MS: Record<GeneratorAgentName, number> = {
+  architect: 15 * 60_000,
+  "domain-persistence": 15 * 60_000,
+  "use-cases": 15 * 60_000,
+  "auth-rbac": 15 * 60_000,
+  "api-frontend": 20 * 60_000,
+  "qa-reviewer": 15 * 60_000,
+};
+
 export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {
   architect: "opus",
   // domain-persistence: empirical run with Sonnet was 4 min slower than

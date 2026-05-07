@@ -126,12 +126,33 @@ export async function runGeneratorAgent<T = unknown>(
   });
   clearTimeout(timeout);
 
+  // Tolerant timeout: if the artifact JSON exists and parses, the agent
+  // finished its work — claude was just slow to print trailing tokens or
+  // exit cleanly. Treat as success-with-warning rather than failing the
+  // whole generation. Empirically this catches api-frontend at ~15-18 min
+  // when the work itself is done by minute 13-14.
   if (killedByTimeout) {
-    const reason = `agent ${agent} timed out after ${timeoutMs}ms`;
-    await onEvent({ type: "agent.failed", agent, reason });
-    throw new Error(reason);
+    const artifactPath = join(workDir, ".atelier", `${agent}.json`);
+    let artifactSurvived = false;
+    try {
+      const raw = await readFile(artifactPath, "utf-8");
+      JSON.parse(raw);
+      artifactSurvived = true;
+    } catch {
+      artifactSurvived = false;
+    }
+    if (!artifactSurvived) {
+      const reason = `agent ${agent} timed out after ${timeoutMs}ms (no artifact written)`;
+      await onEvent({ type: "agent.failed", agent, reason });
+      throw new Error(reason);
+    }
+    await onEvent({
+      type: "agent.stdout",
+      agent,
+      chunk: `[atelier] ${agent} timed out after ${timeoutMs}ms but artifact JSON is on disk and parseable; accepting as success.\n`,
+    });
   }
-  if (exitCode !== 0) {
+  if (!killedByTimeout && exitCode !== 0) {
     const reason = `agent ${agent} exited with code ${exitCode}: ${stderrBuf.slice(0, 600)}`;
     await onEvent({ type: "agent.failed", agent, reason });
     throw new Error(reason);

@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 
 import {
   AGENT_DEFAULT_MODEL,
+  AGENT_DEFAULT_TIMEOUT_MS,
   AGENT_INPUT_DEPENDENCIES,
   GENERATOR_AGENT_ORDER,
   GENERATOR_PHASES,
@@ -365,6 +366,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<Generat
             workDir,
             onEvent,
             model: AGENT_DEFAULT_MODEL[agent],
+            timeoutMs: AGENT_DEFAULT_TIMEOUT_MS[agent],
           });
           return { ok: true, agent, artifact: result.artifact };
         } catch (err) {
@@ -485,6 +487,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<Generat
             workDir,
             onEvent,
             model: AGENT_DEFAULT_MODEL[agent],
+            timeoutMs: AGENT_DEFAULT_TIMEOUT_MS[agent],
           });
         } catch (err) {
           // Don't abort the whole fix loop on one agent failure — log and
@@ -534,6 +537,7 @@ export async function runGeneration(opts: RunGenerationOptions): Promise<Generat
           workDir,
           onEvent,
           model: AGENT_DEFAULT_MODEL["qa-reviewer"],
+          timeoutMs: AGENT_DEFAULT_TIMEOUT_MS["qa-reviewer"],
         });
         qaRound = qaArtifact.artifact;
         state.qa = qaRound;
