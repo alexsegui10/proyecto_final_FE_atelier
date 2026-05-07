@@ -1,0 +1,51 @@
+{
+  "tokens": {
+    "access": {
+      "lifetime": "15m",
+      "algorithm": "HS256",
+      "claims": ["sub", "email", "role"]
+    },
+    "refresh": {
+      "lifetime": "30d",
+      "algorithm": "HS256",
+      "claims": ["sub", "family"],
+      "rotation": true,
+      "familyDetection": true
+    }
+  },
+  "passwordPolicy": {
+    "backend": "argon2id",
+    "backendForPlatform": {
+      "win32": "bcrypt",
+      "linux": "argon2id",
+      "darwin": "argon2id"
+    },
+    "params": {
+      "memoryCost": 65536,
+      "timeCost": 3,
+      "parallelism": 1,
+      "bcryptCost": 12
+    },
+    "minLength": 8
+  },
+  "rateLimit": {
+    "/api/auth/login": "5 requests / 15 min per IP",
+    "/api/auth/register": "3 requests / hour per IP",
+    "/api/auth/refresh": "30 requests / 15 min per IP"
+  },
+  "sessions": {
+    "storage": "DB",
+    "deviceTracking": true,
+    "globalLogoutSupport": true
+  },
+  "services": [
+    "AuthService",
+    "TokenService",
+    "RefreshTokenService",
+    "JwtBlacklistService"
+  ],
+  "repositories": [
+    "RefreshSessionRepository",
+    "JwtBlacklistRepository"
+  ]
+}

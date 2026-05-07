@@ -1,0 +1,40 @@
+{
+  "services": [
+    {
+      "feature": "classes",
+      "className": "ClassesService",
+      "constructorDeps": ["ClassRepository", "UserRepository"],
+      "methods": [
+        { "name": "create", "inputType": "CreateClassDTO", "outputType": "ClassDTO" },
+        { "name": "update", "inputType": "{ slug: string, patch: UpdateClassDTO }", "outputType": "ClassDTO" },
+        { "name": "softDelete", "inputType": "string", "outputType": "void" },
+        { "name": "findFuture", "inputType": "{ limit?: number }", "outputType": "ClassDTO[]" },
+        { "name": "findBySlug", "inputType": "string", "outputType": "ClassDTO | null" }
+      ],
+      "testFile": "src/classes/application/service/ClassesService.test.ts"
+    },
+    {
+      "feature": "bookings",
+      "className": "BookingsService",
+      "constructorDeps": ["BookingRepository", "ClassRepository", "MembershipRepository"],
+      "methods": [
+        { "name": "create", "inputType": "CreateBookingDTO", "outputType": "BookingDTO", "transactional": true, "isolation": "SERIALIZABLE" },
+        { "name": "cancelByUser", "inputType": "{ slug: string, userId: string }", "outputType": "BookingDTO", "transactional": true },
+        { "name": "listMine", "inputType": "string", "outputType": "BookingDTO[]" },
+        { "name": "findBySlug", "inputType": "string", "outputType": "BookingDTO | null" }
+      ],
+      "testFile": "src/bookings/application/service/BookingsService.test.ts"
+    },
+    {
+      "feature": "memberships",
+      "className": "MembershipsService",
+      "constructorDeps": ["MembershipRepository", "UserRepository"],
+      "methods": [
+        { "name": "grant", "inputType": "CreateMembershipDTO", "outputType": "MembershipDTO" },
+        { "name": "findActiveByUser", "inputType": "string", "outputType": "MembershipDTO | null" },
+        { "name": "softDelete", "inputType": "string", "outputType": "void" }
+      ],
+      "testFile": "src/memberships/application/service/MembershipsService.test.ts"
+    }
+  ]
+}

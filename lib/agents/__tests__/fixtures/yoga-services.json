@@ -1,0 +1,126 @@
+{
+  "services": [
+    {
+      "feature": "classes",
+      "className": "ClassesService",
+      "constructorDeps": ["ClassRepository", "UserRepository"],
+      "methods": [
+        {
+          "name": "create",
+          "inputType": "CreateClassDTO",
+          "outputType": "ClassDTO",
+          "transactional": false,
+          "businessRules": [
+            "startsAt must be in the future",
+            "capacity between 1 and 30",
+            "durationMinutes between 15 and 240",
+            "teacher must exist and have role=teacher"
+          ],
+          "throws": ["ValidationError", "ResourceNotFoundError"]
+        },
+        {
+          "name": "update",
+          "inputType": "{ slug: string, patch: UpdateClassDTO }",
+          "outputType": "ClassDTO",
+          "throws": ["ResourceNotFoundError", "ValidationError"]
+        },
+        {
+          "name": "softDelete",
+          "inputType": "string",
+          "outputType": "void",
+          "throws": ["ResourceNotFoundError"]
+        },
+        {
+          "name": "findFuture",
+          "inputType": "{ limit?: number }",
+          "outputType": "ClassDTO[]"
+        },
+        { "name": "findBySlug", "inputType": "string", "outputType": "ClassDTO | null" },
+        { "name": "findByTeacher", "inputType": "string", "outputType": "ClassDTO[]" }
+      ],
+      "testFile": "src/classes/application/service/ClassesService.test.ts"
+    },
+    {
+      "feature": "bookings",
+      "className": "BookingsService",
+      "constructorDeps": ["BookingRepository", "ClassRepository", "MembershipRepository"],
+      "methods": [
+        {
+          "name": "create",
+          "inputType": "CreateBookingDTO",
+          "outputType": "BookingDTO",
+          "transactional": true,
+          "isolation": "SERIALIZABLE",
+          "businessRules": [
+            "class exists and is future",
+            "capacity available",
+            "user has active membership with credits",
+            "decrement credits atomically with booking creation"
+          ],
+          "throws": ["ResourceNotFoundError", "ValidationError", "BookingCapacityError"]
+        },
+        {
+          "name": "cancelByUser",
+          "inputType": "{ slug: string, userId: string }",
+          "outputType": "BookingDTO",
+          "transactional": true,
+          "businessRules": [
+            "ownership: booking.userId === userId",
+            "minutesToStart >= 120",
+            "refund membership credit"
+          ],
+          "throws": ["ResourceNotFoundError", "BookingTimeWindowError"]
+        },
+        { "name": "listMine", "inputType": "string", "outputType": "BookingDTO[]" },
+        { "name": "findBySlug", "inputType": "string", "outputType": "BookingDTO | null" },
+        { "name": "listAll", "inputType": "void", "outputType": "BookingDTO[]" },
+        {
+          "name": "markAttendance",
+          "inputType": "{ slug: string, status: 'completed' | 'no_show' }",
+          "outputType": "BookingDTO",
+          "throws": ["ResourceNotFoundError"]
+        }
+      ],
+      "testFile": "src/bookings/application/service/BookingsService.test.ts"
+    },
+    {
+      "feature": "memberships",
+      "className": "MembershipsService",
+      "constructorDeps": ["MembershipRepository", "UserRepository"],
+      "methods": [
+        {
+          "name": "grant",
+          "inputType": "CreateMembershipDTO",
+          "outputType": "MembershipDTO",
+          "businessRules": [
+            "user exists",
+            "no active membership for that user already",
+            "tier maps to creditsTotal: mensual=12, trimestral=36",
+            "validUntil = validFrom + (mensual?30days:90days)"
+          ],
+          "throws": ["ResourceNotFoundError", "ValidationError", "DuplicateResourceError"]
+        },
+        {
+          "name": "update",
+          "inputType": "{ slug: string, patch: UpdateMembershipDTO }",
+          "outputType": "MembershipDTO",
+          "throws": ["ResourceNotFoundError"]
+        },
+        {
+          "name": "softDelete",
+          "inputType": "string",
+          "outputType": "void",
+          "throws": ["ResourceNotFoundError"]
+        },
+        {
+          "name": "findActiveByUser",
+          "inputType": "string",
+          "outputType": "MembershipDTO | null"
+        },
+        { "name": "findBySlug", "inputType": "string", "outputType": "MembershipDTO | null" },
+        { "name": "listAll", "inputType": "void", "outputType": "MembershipDTO[]" }
+      ],
+      "testFile": "src/memberships/application/service/MembershipsService.test.ts"
+    }
+  ]
+}

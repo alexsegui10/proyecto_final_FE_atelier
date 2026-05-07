@@ -1,0 +1,91 @@
+{
+  "roles": ["admin", "teacher", "student"],
+  "abilities": [
+    {
+      "role": "admin",
+      "rules": [{ "action": "manage", "subject": "all" }]
+    },
+    {
+      "role": "teacher",
+      "rules": [
+        { "action": "read", "subject": "Class" },
+        {
+          "action": "update",
+          "subject": "Class",
+          "conditions": { "teacherId": "${user.id}" }
+        },
+        {
+          "action": "read",
+          "subject": "Booking",
+          "conditions": { "class.teacherId": "${user.id}" }
+        },
+        {
+          "action": "update",
+          "subject": "Booking",
+          "conditions": { "class.teacherId": "${user.id}" },
+          "fields": ["status"]
+        },
+        { "action": "read", "subject": "User" }
+      ]
+    },
+    {
+      "role": "student",
+      "rules": [
+        { "action": "read", "subject": "Class" },
+        {
+          "action": "create",
+          "subject": "Booking",
+          "conditions": { "userId": "${user.id}" }
+        },
+        {
+          "action": "read",
+          "subject": "Booking",
+          "conditions": { "userId": "${user.id}" }
+        },
+        {
+          "action": "delete",
+          "subject": "Booking",
+          "conditions": { "userId": "${user.id}" }
+        },
+        {
+          "action": "read",
+          "subject": "Membership",
+          "conditions": { "userId": "${user.id}" }
+        },
+        {
+          "action": "update",
+          "subject": "User",
+          "conditions": { "id": "${user.id}" },
+          "fields": ["name", "email"]
+        },
+        {
+          "action": "manage",
+          "subject": "User",
+          "inverted": true,
+          "reason": "Students can only manage their own profile"
+        }
+      ]
+    }
+  ],
+  "ownershipRules": [
+    {
+      "entity": "Booking",
+      "ownerField": "userId",
+      "enforceAt": ["controller-level", "row-level"]
+    },
+    {
+      "entity": "Membership",
+      "ownerField": "userId",
+      "enforceAt": ["controller-level", "row-level"]
+    },
+    {
+      "entity": "Class",
+      "ownerField": "teacherId",
+      "enforceAt": ["controller-level"]
+    }
+  ],
+  "rowLevelSecurity": {
+    "enabled": false,
+    "reason": "Single-tenant MVP. Si v3 multi-tenant, activar Postgres RLS para defensa en profundidad."
+  }
+}
