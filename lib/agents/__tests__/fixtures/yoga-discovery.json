@@ -1,0 +1,113 @@
+{
+  "objective": "Plataforma para gestionar un estudio de yoga: alumnos reservan clases, profesores consultan agenda, admin gestiona membresías y usuarios.",
+  "domain": "yoga",
+  "designVibe": "Calm",
+  "roles": ["admin", "teacher", "student"],
+  "entities": [
+    {
+      "name": "User",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "notes": "cuid" },
+        { "name": "email", "type": "string", "required": true, "notes": "unique" },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "passwordHash", "type": "string", "required": true },
+        { "name": "role", "type": "enum", "required": true, "notes": "admin|teacher|student" },
+        { "name": "isActive", "type": "boolean", "required": true }
+      ],
+      "businessRules": [
+        "Email único por usuario",
+        "Password mínimo 8 chars",
+        "Solo admin puede crear otros admin"
+      ]
+    },
+    {
+      "name": "Class",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "slug", "type": "string", "required": true, "notes": "unique" },
+        { "name": "title", "type": "string", "required": true },
+        { "name": "description", "type": "string", "required": true },
+        { "name": "teacherId", "type": "reference", "required": true, "notes": "FK User" },
+        { "name": "startsAt", "type": "date", "required": true },
+        { "name": "durationMinutes", "type": "number", "required": true },
+        { "name": "capacity", "type": "number", "required": true },
+        { "name": "level", "type": "enum", "required": true, "notes": "principiante|intermedio|avanzado" }
+      ],
+      "businessRules": [
+        "startsAt debe ser futuro al crear",
+        "capacity entre 1 y 30",
+        "duración entre 15 y 240 minutos",
+        "Solo profesor o admin puede modificar"
+      ]
+    },
+    {
+      "name": "Booking",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "userId", "type": "reference", "required": true, "notes": "FK User" },
+        { "name": "classId", "type": "reference", "required": true, "notes": "FK Class" },
+        { "name": "status", "type": "enum", "required": true, "notes": "pending|confirmed|cancelled|completed|no_show" },
+        { "name": "createdAt", "type": "date", "required": true }
+      ],
+      "businessRules": [
+        "No reservar si la clase ya está llena",
+        "No cancelar dentro de las 2h del inicio de la clase",
+        "Crear booking decrementa créditos de membresía atomicamente",
+        "Cancelar refund de créditos"
+      ]
+    },
+    {
+      "name": "Membership",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "userId", "type": "reference", "required": true },
+        { "name": "tier", "type": "enum", "required": true, "notes": "mensual|trimestral" },
+        { "name": "validFrom", "type": "date", "required": true },
+        { "name": "validUntil", "type": "date", "required": true },
+        { "name": "creditsTotal", "type": "number", "required": true },
+        { "name": "creditsUsed", "type": "number", "required": true }
+      ],
+      "businessRules": [
+        "mensual = 12 créditos / 30 días, trimestral = 36 créditos / 90 días",
+        "creditsUsed nunca supera creditsTotal",
+        "Una sola membresía activa por usuario"
+      ]
+    }
+  ],
+  "useCases": [
+    {
+      "actor": "student",
+      "action": "Reservar una clase",
+      "constraints": ["clase futura", "membresía activa con créditos", "no reservar 2 veces la misma"]
+    },
+    {
+      "actor": "student",
+      "action": "Cancelar una reserva",
+      "constraints": ["mínimo 2h antes del inicio", "ownership"]
+    },
+    { "actor": "student", "action": "Listar mis reservas activas" },
+    { "actor": "student", "action": "Ver mi membresía y créditos restantes" },
+    { "actor": "teacher", "action": "Ver agenda de clases asignadas" },
+    { "actor": "teacher", "action": "Marcar asistencia post-clase" },
+    {
+      "actor": "admin",
+      "action": "CRUD clases (crear, editar, soft-delete)",
+      "constraints": ["validar capacidad y duración"]
+    },
+    {
+      "actor": "admin",
+      "action": "CRUD membresías",
+      "constraints": ["solo una activa por usuario", "fechas coherentes"]
+    },
+    { "actor": "admin", "action": "CRUD usuarios" },
+    {
+      "actor": "admin",
+      "action": "Ver dashboard con stats (clases hoy, reservas pendientes, ingresos mes)"
+    }
+  ],
+  "specialRequirements": [
+    "Notificaciones email al confirmar reserva (post-MVP, hoy console.log)",
+    "Soft-delete en todas las entidades de negocio",
+    "Audit log mínimo en bookings (quién canceló, cuándo)"
+  ]
+}

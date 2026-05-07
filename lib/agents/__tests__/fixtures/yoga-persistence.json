@@ -1,0 +1,80 @@
+{
+  "schema": {
+    "models": [
+      { "name": "User", "feature": "auth", "softDelete": true },
+      { "name": "Class", "feature": "classes", "softDelete": true },
+      { "name": "Booking", "feature": "bookings", "softDelete": true },
+      { "name": "Membership", "feature": "memberships", "softDelete": true }
+    ],
+    "indices": [
+      { "model": "User", "fields": ["email"], "type": "unique" },
+      { "model": "User", "fields": ["slug"], "type": "unique" },
+      { "model": "Class", "fields": ["slug"], "type": "unique" },
+      { "model": "Class", "fields": ["startsAt"], "type": "btree" },
+      { "model": "Class", "fields": ["teacherId"], "type": "btree" },
+      { "model": "Booking", "fields": ["slug"], "type": "unique" },
+      { "model": "Booking", "fields": ["userId"], "type": "btree" },
+      { "model": "Booking", "fields": ["classId"], "type": "btree" },
+      { "model": "Membership", "fields": ["slug"], "type": "unique" },
+      { "model": "Membership", "fields": ["userId"], "type": "btree" }
+    ],
+    "checks": []
+  },
+  "repositories": [
+    {
+      "feature": "auth",
+      "interface": "UserRepository",
+      "impl": "UserRepositoryImpl",
+      "methods": [
+        { "name": "findById", "params": "id: string", "returns": "User | null" },
+        { "name": "findBySlug", "params": "slug: string", "returns": "User | null" },
+        { "name": "findByEmail", "params": "email: string", "returns": "User | null" },
+        { "name": "create", "params": "input: CreateUserPayload", "returns": "User" },
+        { "name": "update", "params": "id: string, patch: UpdateUserPayload", "returns": "User" },
+        { "name": "softDelete", "params": "id: string", "returns": "void" }
+      ]
+    },
+    {
+      "feature": "classes",
+      "interface": "ClassRepository",
+      "impl": "ClassRepositoryImpl",
+      "methods": [
+        { "name": "findById", "params": "id: string", "returns": "Class | null" },
+        { "name": "findBySlug", "params": "slug: string", "returns": "Class | null" },
+        { "name": "findFuture", "params": "limit?: number", "returns": "Class[]" },
+        { "name": "findByTeacher", "params": "teacherId: string", "returns": "Class[]" },
+        { "name": "create", "params": "input: CreateClassPayload", "returns": "Class" },
+        { "name": "update", "params": "id: string, patch: UpdateClassPayload", "returns": "Class" },
+        { "name": "softDelete", "params": "id: string", "returns": "void" }
+      ]
+    },
+    {
+      "feature": "bookings",
+      "interface": "BookingRepository",
+      "impl": "BookingRepositoryImpl",
+      "methods": [
+        { "name": "findById", "params": "id: string", "returns": "Booking | null" },
+        { "name": "findBySlug", "params": "slug: string", "returns": "Booking | null" },
+        { "name": "findActiveByUser", "params": "userId: string", "returns": "Booking[]" },
+        { "name": "countByClass", "params": "classId: string", "returns": "number" },
+        { "name": "create", "params": "input: CreateBookingPayload", "returns": "Booking" },
+        { "name": "update", "params": "id: string, patch: UpdateBookingPayload", "returns": "Booking" },
+        { "name": "softDelete", "params": "id: string", "returns": "void" }
+      ]
+    },
+    {
+      "feature": "memberships",
+      "interface": "MembershipRepository",
+      "impl": "MembershipRepositoryImpl",
+      "methods": [
+        { "name": "findById", "params": "id: string", "returns": "Membership | null" },
+        { "name": "findBySlug", "params": "slug: string", "returns": "Membership | null" },
+        { "name": "findActiveByUser", "params": "userId: string", "returns": "Membership | null" },
+        { "name": "create", "params": "input: CreateMembershipPayload", "returns": "Membership" },
+        { "name": "decrementCredits", "params": "id: string", "returns": "Membership" },
+        { "name": "incrementCredits", "params": "id: string", "returns": "Membership" },
+        { "name": "softDelete", "params": "id: string", "returns": "void" }
+      ]
+    }
+  ]
+}

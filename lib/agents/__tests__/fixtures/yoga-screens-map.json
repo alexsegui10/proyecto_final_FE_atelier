@@ -1,0 +1,230 @@
+{
+  "screens": [
+    {
+      "name": "HomePage",
+      "route": "/",
+      "access": "public",
+      "purpose": "Landing principal — convertir visitantes a sign-up",
+      "sections": [
+        { "type": "hero", "content": "headline + subhead + CTA principal" },
+        { "type": "features", "items": 3, "layout": "grid-3-cols" },
+        { "type": "testimonials", "items": 2 },
+        { "type": "cta-final" },
+        { "type": "footer" }
+      ],
+      "components": ["Hero", "FeatureCard", "TestimonialCard", "CallToAction", "Footer"],
+      "interactions": ["scroll reveal sections", "hover en CTA"],
+      "states": ["default"]
+    },
+    {
+      "name": "AuthPage",
+      "route": "/sign-in",
+      "access": "public",
+      "purpose": "Formulario de sign-in y sign-up con tabs",
+      "sections": [
+        { "type": "auth-tabs", "items": 2 },
+        { "type": "auth-form" },
+        { "type": "footer-mini" }
+      ],
+      "components": ["AuthTabs", "LoginForm", "RegisterForm", "FormField"],
+      "interactions": ["switch tabs", "submit con loading", "link forgot-password"],
+      "states": ["default", "loading", "error"]
+    },
+    {
+      "name": "ShopClassesPage",
+      "route": "/shop/classes",
+      "access": "public",
+      "purpose": "Listado público de clases futuras con filtros",
+      "sections": [
+        { "type": "filter-bar" },
+        { "type": "list", "layout": "grid-3-cols" },
+        { "type": "pagination" }
+      ],
+      "components": ["FilterBar", "ClassCard", "Pagination", "EmptyState"],
+      "interactions": ["filter by level/teacher/date", "click card → detail"],
+      "states": ["loading skeleton", "default", "empty", "error"]
+    },
+    {
+      "name": "DashboardPage",
+      "route": "/my/bookings",
+      "access": "private",
+      "purpose": "Vista del alumno con sus reservas activas",
+      "sections": [
+        { "type": "header" },
+        { "type": "list", "items": 5 },
+        { "type": "membership-card" }
+      ],
+      "components": ["BookingItem", "MembershipCard", "EmptyState", "QuickActionButton"],
+      "interactions": ["click reserva → detail", "cancelar reserva con confirmación"],
+      "states": ["loading", "default", "empty"]
+    },
+    {
+      "name": "TeacherSchedulePage",
+      "route": "/teacher/classes",
+      "access": "private",
+      "purpose": "Agenda del profesor con sus clases asignadas",
+      "sections": [
+        { "type": "calendar-view" },
+        { "type": "today-list" }
+      ],
+      "components": ["CalendarView", "ClassItem", "AttendanceButton"],
+      "interactions": ["marcar asistencia", "ver lista de alumnos"],
+      "states": ["default", "loading"]
+    },
+    {
+      "name": "AdminClassesPage",
+      "route": "/admin/classes",
+      "access": "admin",
+      "purpose": "CRUD de clases con tabla, filtros y modal de edición",
+      "sections": [
+        { "type": "header-with-cta" },
+        { "type": "filter-bar" },
+        { "type": "table" },
+        { "type": "pagination" }
+      ],
+      "components": ["TablaClasses", "ModalClass", "FilterBar", "Pagination", "ConfirmDialog"],
+      "interactions": ["abrir modal create/edit", "soft-delete con confirmación", "filtrar"],
+      "states": ["loading", "default", "empty", "error"]
+    },
+    {
+      "name": "AdminUsersPage",
+      "route": "/admin/users",
+      "access": "admin",
+      "purpose": "CRUD de usuarios con tabla y modal de edición",
+      "sections": [
+        { "type": "header-with-cta" },
+        { "type": "filter-bar" },
+        { "type": "table" }
+      ],
+      "components": ["TablaUsers", "ModalUser", "FilterBar", "Pagination"],
+      "interactions": ["crear usuario", "editar rol", "soft-delete"],
+      "states": ["loading", "default", "empty"]
+    },
+    {
+      "name": "NotFoundPage",
+      "route": "/404",
+      "access": "public",
+      "purpose": "Pantalla 404 con CTA de volver al inicio",
+      "sections": [{ "type": "centered-message" }],
+      "components": ["NotFoundIllustration", "Button"],
+      "interactions": ["click volver al inicio"],
+      "states": ["default"]
+    }
+  ],
+  "componentSpecs": {
+    "Card": {
+      "anatomy": "container with optional header, content, footer",
+      "states": ["default", "hover", "pressed", "disabled"],
+      "interactions": "hover sutil eleva sombra + brightness +5%",
+      "responsiveBehavior": "full-width en mobile, max-width 480 en desktop"
+    },
+    "Button": {
+      "anatomy": "label + optional icon (left or right) + loading spinner",
+      "states": ["default", "hover", "active", "loading", "disabled"],
+      "interactions": "hover scale 1.02 + brightness; active scale 0.98",
+      "responsiveBehavior": "full-width en mobile, fit-content en desktop"
+    },
+    "Input": {
+      "anatomy": "label + input + helper text + error message",
+      "states": ["default", "focus", "filled", "error", "disabled"],
+      "interactions": "ring on focus, shake animation on error",
+      "responsiveBehavior": "always full-width within its container"
+    },
+    "Table": {
+      "anatomy": "header row + sortable cols + body rows + pagination footer",
+      "states": ["loading skeleton", "default", "empty", "error"],
+      "interactions": "click header to sort, row hover highlights",
+      "responsiveBehavior": "horizontal scroll en mobile; sticky header"
+    },
+    "Modal": {
+      "anatomy": "overlay backdrop + centered panel with header, body, footer",
+      "states": ["closed", "opening", "open", "closing"],
+      "interactions": "fade backdrop + scale panel; ESC + click-outside cierran",
+      "responsiveBehavior": "full-screen sheet en mobile, centered en desktop"
+    },
+    "Header": {
+      "anatomy": "logo + nav links + user menu + theme toggle",
+      "states": ["default", "scrolled (compact)"],
+      "interactions": "scroll past 80px → compact con shadow",
+      "responsiveBehavior": "hamburger menu en mobile"
+    },
+    "Sidebar": {
+      "anatomy": "logo + nav groups + active indicator + collapse toggle",
+      "states": ["expanded", "collapsed"],
+      "interactions": "click toggle, active route highlighted",
+      "responsiveBehavior": "drawer en mobile, fixed en desktop"
+    },
+    "Footer": {
+      "anatomy": "copyright + links + social icons",
+      "states": ["default"],
+      "interactions": "hover on links underlines",
+      "responsiveBehavior": "stacked en mobile, 3-col grid en desktop"
+    },
+    "EmptyState": {
+      "anatomy": "icon/illustration + title + description + optional CTA",
+      "states": ["default"],
+      "interactions": "CTA opens flow para crear primer registro",
+      "responsiveBehavior": "centered, max 480px"
+    },
+    "ErrorState": {
+      "anatomy": "icon + title + description + retry button",
+      "states": ["default", "retrying"],
+      "interactions": "click retry → loading; error_count tracked en analytics",
+      "responsiveBehavior": "centered, max 480px"
+    },
+    "LoadingSpinner": {
+      "anatomy": "circular spinner sized via prop (sm/md/lg)",
+      "states": ["spinning"],
+      "interactions": "no interactions",
+      "responsiveBehavior": "stays sized regardless of viewport"
+    },
+    "Avatar": {
+      "anatomy": "circular image OR initials fallback + optional status dot",
+      "states": ["default", "online", "offline"],
+      "interactions": "click → user menu (cuando aplica)",
+      "responsiveBehavior": "size prop respected; no responsive scale"
+    },
+    "Badge": {
+      "anatomy": "small pill with label + optional icon",
+      "states": ["default", "success", "warning", "error", "info"],
+      "interactions": "no interactions; semantic only",
+      "responsiveBehavior": "always inline, no responsive change"
+    },
+    "Toast": {
+      "anatomy": "icon + message + optional action button + close",
+      "states": ["entering", "visible", "leaving"],
+      "interactions": "auto-dismiss after 4s; click X cierra",
+      "responsiveBehavior": "stacked en bottom-right desktop, top-center mobile"
+    },
+    "Form": {
+      "anatomy": "vertical stack of FormFields + submit button + error banner",
+      "states": ["default", "submitting", "error", "success"],
+      "interactions": "validate onBlur, submit button disabled hasta valid",
+      "responsiveBehavior": "always single column"
+    },
+    "ClassCard": {
+      "anatomy": "image + title + teacher avatar + level badge + datetime + capacity",
+      "states": ["default", "hover", "full (capacity reached)"],
+      "interactions": "hover slight elevate; click → detail",
+      "responsiveBehavior": "stacked en mobile; horizontal en desktop"
+    },
+    "FilterBar": {
+      "anatomy": "search input + select dropdowns + clear-all button",
+      "states": ["default", "active filters"],
+      "interactions": "filter changes update URL params; debounced search",
+      "responsiveBehavior": "scroll horizontal en mobile; inline desktop"
+    },
+    "MembershipCard": {
+      "anatomy": "tier label + créditos progress bar + valid-until date + CTA renovar",
+      "states": ["active", "expiring soon", "expired"],
+      "interactions": "click renovar → checkout flow",
+      "responsiveBehavior": "full-width siempre"
+    },
+    "BookingItem": {
+      "anatomy": "class title + datetime + status badge + actions (cancel)",
+      "states": ["pending", "confirmed", "cancelled"],
+      "interactions": "click cancelar → ConfirmDialog si dentro de ventana",
+      "responsiveBehavior": "stacked en mobile, horizontal en desktop"
+    }
+  }
+}

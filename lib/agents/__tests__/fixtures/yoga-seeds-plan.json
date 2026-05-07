@@ -1,0 +1,68 @@
+{
+  "demoUsers": [
+    {
+      "role": "admin",
+      "count": 1,
+      "fixed": true,
+      "credentials": { "email": "admin@demo.yoga", "password": "demo1234" },
+      "name": "Admin Demo",
+      "description": "Admin principal con permisos plenos para presentar la app"
+    },
+    {
+      "role": "teacher",
+      "count": 3,
+      "fixed": false,
+      "personasHints": [
+        "Nombres reales españoles",
+        "Especialidades distintas: hatha yoga, vinyasa flow, yin yoga",
+        "Bio de 2-3 frases con tono profesional cálido"
+      ]
+    },
+    {
+      "role": "student",
+      "count": 12,
+      "fixed": false,
+      "distribution": {
+        "active": 8,
+        "newcomers": 2,
+        "lapsed": 2
+      }
+    }
+  ],
+  "domainData": [
+    {
+      "entity": "Class",
+      "count": 25,
+      "distribution": "5 por semana en horarios variados (mañana, mediodía, tarde, noche)",
+      "constraints": [
+        "80% futuras (próximas 5 semanas)",
+        "20% pasadas con status='completed'",
+        "Repartidas entre los 3 profesores"
+      ]
+    },
+    {
+      "entity": "Booking",
+      "count": 80,
+      "distribution": "Distribuir entre los 12 alumnos con varianza",
+      "constraints": [
+        "Cubrir: clases llenas, clases con 1 hueco, clases vacías",
+        "20% con status='cancelled' para mostrar histórico"
+      ]
+    },
+    {
+      "entity": "Membership",
+      "count": 12,
+      "distribution": "1 por alumno, 60% mensual + 40% trimestral",
+      "constraints": [
+        "2 expirando en próximos 7 días (showcase de upsell)",
+        "1 membresía exhausta para empty-state"
+      ]
+    }
+  ],
+  "edgeCases": [
+    "Un alumno con 15+ reservas para probar paginación",
+    "Una clase llena al 100% para probar mensaje de capacidad",
+    "Un alumno nuevo sin actividad para probar empty states del dashboard",
+    "Una clase pasada con asistencia mixta (algunos no_show, algunos completed)"
+  ]
+}

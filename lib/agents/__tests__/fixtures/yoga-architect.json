@@ -1,0 +1,74 @@
+{
+  "stackDecisions": {
+    "framework": "Next.js 16 App Router",
+    "database": "PostgreSQL + Prisma 7",
+    "auth": "Better Auth + custom RefreshToken rotation",
+    "validation": "Zod",
+    "styling": "Tailwind 4 + shadcn/ui",
+    "stateManagement": "Context + TanStack Query",
+    "forms": "react-hook-form + Zod",
+    "tests": "Vitest + Playwright"
+  },
+  "features": [
+    {
+      "name": "auth",
+      "entities": ["User"],
+      "useCases": [
+        "Sign-up nuevo alumno",
+        "Sign-in con email + password",
+        "Logout",
+        "Refresh token rotation"
+      ],
+      "publicRoutes": ["/sign-in", "/sign-up"],
+      "privateRoutes": [],
+      "adminRoutes": []
+    },
+    {
+      "name": "classes",
+      "entities": ["Class"],
+      "useCases": [
+        "Listar clases futuras (público)",
+        "Ver detalle de clase",
+        "CRUD clases (admin)",
+        "Ver agenda de teacher"
+      ],
+      "publicRoutes": ["/", "/shop/classes", "/shop/classes/[slug]"],
+      "privateRoutes": ["/teacher/classes"],
+      "adminRoutes": ["/admin/classes"]
+    },
+    {
+      "name": "bookings",
+      "entities": ["Booking"],
+      "useCases": [
+        "Crear reserva (student)",
+        "Cancelar reserva (student, ownership)",
+        "Listar mis reservas activas",
+        "Marcar asistencia (teacher)",
+        "Vista admin de todas las reservas"
+      ],
+      "publicRoutes": [],
+      "privateRoutes": ["/my/bookings"],
+      "adminRoutes": ["/admin/bookings"]
+    },
+    {
+      "name": "memberships",
+      "entities": ["Membership"],
+      "useCases": [
+        "Ver mi membresía + créditos restantes",
+        "CRUD membresías (admin)",
+        "Validar membresía activa al reservar"
+      ],
+      "publicRoutes": [],
+      "privateRoutes": ["/my/membership"],
+      "adminRoutes": ["/admin/memberships"]
+    }
+  ],
+  "crossCuttingConcerns": {
+    "logging": "structured JSON",
+    "rateLimit": ["/api/auth/*", "/api/bookings/*"],
+    "auditLog": ["create", "update", "delete on Booking", "create on Membership"],
+    "i18n": false,
+    "darkMode": "system + toggle"
+  },
+  "deploymentNotes": "Single Next.js app, single-tenant. Vercel + Neon Postgres."
+}

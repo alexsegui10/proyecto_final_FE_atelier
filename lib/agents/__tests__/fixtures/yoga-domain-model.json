@@ -1,0 +1,143 @@
+{
+  "entities": [
+    {
+      "name": "User",
+      "feature": "auth",
+      "fields": [
+        { "name": "id", "type": "string", "kind": "id", "required": true, "notes": "cuid" },
+        { "name": "slug", "type": "string", "kind": "slug", "required": true, "notes": "unique" },
+        { "name": "email", "type": "string", "kind": "scalar", "required": true, "notes": "unique" },
+        { "name": "name", "type": "string", "kind": "scalar", "required": true },
+        { "name": "passwordHash", "type": "string", "kind": "scalar", "required": true },
+        {
+          "name": "role",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["admin", "teacher", "student"],
+          "required": true
+        },
+        { "name": "isActive", "type": "boolean", "kind": "soft-delete", "required": true },
+        {
+          "name": "status",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["active", "inactive", "pending_email_verification"],
+          "required": true
+        },
+        { "name": "createdAt", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "updatedAt", "type": "Date", "kind": "timestamp", "required": true }
+      ],
+      "invariants": [
+        "Email must be unique across all users",
+        "passwordHash never leaves the backend (DTO omits it)",
+        "Only admin can promote another user to admin"
+      ]
+    },
+    {
+      "name": "Class",
+      "feature": "classes",
+      "fields": [
+        { "name": "id", "type": "string", "kind": "id", "required": true },
+        { "name": "slug", "type": "string", "kind": "slug", "required": true },
+        { "name": "title", "type": "string", "kind": "scalar", "required": true },
+        { "name": "description", "type": "string", "kind": "scalar", "required": true },
+        { "name": "teacherId", "type": "string", "kind": "foreign-key", "references": "User", "required": true },
+        { "name": "startsAt", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "durationMinutes", "type": "number", "kind": "scalar", "required": true },
+        { "name": "capacity", "type": "number", "kind": "scalar", "required": true },
+        {
+          "name": "level",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["principiante", "intermedio", "avanzado"],
+          "required": true
+        },
+        { "name": "isActive", "type": "boolean", "kind": "soft-delete", "required": true },
+        {
+          "name": "status",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["scheduled", "completed", "cancelled"],
+          "required": true
+        },
+        { "name": "createdAt", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "updatedAt", "type": "Date", "kind": "timestamp", "required": true }
+      ],
+      "invariants": [
+        "startsAt must be in the future at creation",
+        "capacity between 1 and 30",
+        "durationMinutes between 15 and 240"
+      ]
+    },
+    {
+      "name": "Booking",
+      "feature": "bookings",
+      "fields": [
+        { "name": "id", "type": "string", "kind": "id", "required": true },
+        { "name": "slug", "type": "string", "kind": "slug", "required": true },
+        { "name": "userId", "type": "string", "kind": "foreign-key", "references": "User", "required": true },
+        { "name": "classId", "type": "string", "kind": "foreign-key", "references": "Class", "required": true },
+        {
+          "name": "status",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["pending", "confirmed", "cancelled", "completed", "no_show"],
+          "required": true
+        },
+        { "name": "isActive", "type": "boolean", "kind": "soft-delete", "required": true },
+        { "name": "createdAt", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "updatedAt", "type": "Date", "kind": "timestamp", "required": true }
+      ],
+      "invariants": [
+        "Cannot reserve a class already at full capacity",
+        "Cannot cancel within 2 hours of class start",
+        "status transition: pending → confirmed → completed | cancelled | no_show"
+      ]
+    },
+    {
+      "name": "Membership",
+      "feature": "memberships",
+      "fields": [
+        { "name": "id", "type": "string", "kind": "id", "required": true },
+        { "name": "slug", "type": "string", "kind": "slug", "required": true },
+        { "name": "userId", "type": "string", "kind": "foreign-key", "references": "User", "required": true },
+        {
+          "name": "tier",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["mensual", "trimestral"],
+          "required": true
+        },
+        { "name": "validFrom", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "validUntil", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "creditsTotal", "type": "number", "kind": "scalar", "required": true },
+        { "name": "creditsUsed", "type": "number", "kind": "scalar", "required": true },
+        { "name": "isActive", "type": "boolean", "kind": "soft-delete", "required": true },
+        {
+          "name": "status",
+          "type": "string",
+          "kind": "enum-string",
+          "values": ["active", "expired", "cancelled"],
+          "required": true
+        },
+        { "name": "createdAt", "type": "Date", "kind": "timestamp", "required": true },
+        { "name": "updatedAt", "type": "Date", "kind": "timestamp", "required": true }
+      ],
+      "invariants": [
+        "creditsUsed never exceeds creditsTotal",
+        "Only one active membership per user",
+        "validFrom < validUntil"
+      ]
+    }
+  ],
+  "domainErrors": [
+    { "name": "ResourceNotFoundError", "code": "RESOURCE_NOT_FOUND", "httpStatus": 404 },
+    { "name": "DuplicateResourceError", "code": "DUPLICATE_RESOURCE", "httpStatus": 409 },
+    { "name": "ValidationError", "code": "VALIDATION_ERROR", "httpStatus": 422 },
+    { "name": "UnauthorizedError", "code": "UNAUTHORIZED", "httpStatus": 401 },
+    { "name": "ForbiddenError", "code": "FORBIDDEN", "httpStatus": 403 },
+    { "name": "BookingCapacityError", "code": "BOOKING_CAPACITY", "httpStatus": 409 },
+    { "name": "BookingTimeWindowError", "code": "BOOKING_TOO_LATE", "httpStatus": 422 },
+    { "name": "MembershipExhaustedError", "code": "MEMBERSHIP_EXHAUSTED", "httpStatus": 409 }
+  ]
+}
