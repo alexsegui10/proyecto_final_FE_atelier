@@ -58,7 +58,10 @@ export const AGENT_DEFAULT_MODEL: Record<GeneratorAgentName, AgentModel> = {
   "domain-persistence": "sonnet",
   "use-cases": "opus",
   "auth-rbac": "sonnet",
-  "api-frontend": "sonnet",
+  // api-frontend stays on Opus: empirical run shows Sonnet exceeds the
+  // 15-min per-agent timeout on this volume of files (Opus completes in
+  // ~12-13 min). Mechanical heuristic doesn't apply when output is large.
+  "api-frontend": "opus",
   "qa-reviewer": "opus",
 };
 
