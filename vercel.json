@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["fra1"],
+  "functions": {
+    "app/api/discovery/stream/route.ts": { "maxDuration": 60 },
+    "app/api/generate/start/route.ts": { "maxDuration": 60 },
+    "app/api/generate/stream/[id]/route.ts": { "maxDuration": 60 },
+    "app/api/demos/[slug]/play/route.ts": { "maxDuration": 30 }
+  },
+  "env": {
+    "ATELIER_AGENT_BACKEND": "cli"
+  }
+}

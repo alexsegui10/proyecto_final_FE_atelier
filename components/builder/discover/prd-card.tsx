@@ -11,7 +11,7 @@ import {
   IconRocket,
 } from "@tabler/icons-react";
 
-import type { PRDState } from "@/lib/agents/prd-state";
+import { prdMaturity, type PRDState } from "@/lib/agents/prd-state";
 
 const ACCENT = "#8b5cf6";
 const PULSE_BG = "rgba(139, 92, 246, 0.18)";
@@ -67,10 +67,39 @@ type PRDCardProps = {
   state: PRDState;
   ready: boolean;
   onBuild: () => void;
+  onContinueTalking: () => void;
   building: boolean;
+  isStreaming: boolean;
 };
 
-export function PRDCard({ state, ready, onBuild, building }: PRDCardProps) {
+function MaturityBar({ value }: { value: number }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between text-[10px] uppercase tracking-widest text-zinc-500">
+        <span>PRD madurez</span>
+        <span className="font-mono text-zinc-300">{value}%</span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-zinc-900">
+        <motion.div
+          className="h-full"
+          style={{ background: ACCENT }}
+          initial={false}
+          animate={{ width: `${value}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function PRDCard({
+  state,
+  ready,
+  onBuild,
+  onContinueTalking,
+  building,
+  isStreaming,
+}: PRDCardProps) {
   const objectiveKey = useChangeKey(state.objective);
   const rolesKey = useChangeKey(JSON.stringify(state.roles));
   const entitiesKey = useChangeKey(JSON.stringify(state.entities));
@@ -186,27 +215,56 @@ export function PRDCard({ state, ready, onBuild, building }: PRDCardProps) {
         </Section>
       </div>
 
-      <AnimatePresence>
-        {ready ? (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            className="border-t border-zinc-900/80 p-4"
-          >
-            <button
-              type="button"
-              onClick={onBuild}
-              disabled={building}
-              className="w-full rounded-md py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: ACCENT }}
+      <div className="border-t border-zinc-900/80 p-4 space-y-3">
+        <MaturityBar value={prdMaturity(state)} />
+        <AnimatePresence mode="wait">
+          {ready ? (
+            <motion.div
+              key="ready"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col gap-2"
             >
-              {building ? "Creando…" : "Build it"}
-            </button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+              <button
+                type="button"
+                onClick={onBuild}
+                disabled={building}
+                className="w-full rounded-md py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: ACCENT }}
+              >
+                {building ? "Creando…" : "Build it"}
+              </button>
+              <button
+                type="button"
+                onClick={onContinueTalking}
+                disabled={isStreaming || building}
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900/40 py-2 text-xs text-zinc-300 transition-colors hover:bg-zinc-900 disabled:opacity-50"
+              >
+                Quiero seguir hablando
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="not-ready"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-1"
+            >
+              <button
+                type="button"
+                disabled
+                className="w-full cursor-not-allowed rounded-md border border-zinc-800 bg-zinc-900/40 py-2 text-xs text-zinc-500"
+              >
+                El agente sigue analizando tu idea…
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </aside>
   );
 }
