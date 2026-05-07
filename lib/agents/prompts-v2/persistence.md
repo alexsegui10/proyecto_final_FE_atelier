@@ -21,7 +21,7 @@ Lees del workDir:
 
 ## Outputs
 
-1. **`prisma/schema.prisma`** — schema completo con `generator client` apuntando a `src/_shared/infrastructure/db/generated`, `datasource db` con `provider = "postgresql"` + `url = env("DATABASE_URL")`, y un `model` por entidad.
+1. **`prisma/schema.prisma`** — schema completo con `generator client` apuntando a `src/_shared/infrastructure/db/generated`, `datasource db` SOLO con `provider = "postgresql"` (la URL la pasa `prisma.config.ts`, ver nota de Prisma 7 abajo), y un `model` por entidad.
 2. **`src/<feature>/infrastructure/repository/<Entity>Repository.ts`** (interface)
 3. **`src/<feature>/infrastructure/repository/<Entity>RepositoryImpl.ts`** (implementación con Prisma)
 4. **`src/<feature>/application/mapper/<Entity>Mapper.ts`** — `toEntity(row) → Entity`, `toDTO(entity) → EntityDTO`, `fromCreateDTO(dto) → CreateInput`
@@ -49,9 +49,11 @@ generator client {
   output   = "../src/_shared/infrastructure/db/generated"
 }
 
+// Prisma 7: la connection URL ya NO va en schema.prisma. La pasa
+// `prisma.config.ts` (campo `datasource.url`). Si dejás `url = env(...)`
+// acá, `prisma format` y `prisma generate` fallan con P1012.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {

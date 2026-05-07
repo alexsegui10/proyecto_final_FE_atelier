@@ -7,9 +7,10 @@ generator client {
   output   = "../src/_shared/infrastructure/db/generated"
 }
 
+// Prisma 7: the connection URL lives in prisma.config.ts (datasource.url),
+// NOT here. Schema-level `url = env(...)` was removed in Prisma 7.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // Anchor model so `prisma generate` succeeds against an empty schema.
