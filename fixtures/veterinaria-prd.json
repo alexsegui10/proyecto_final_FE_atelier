@@ -1,0 +1,188 @@
+{
+  "objective": "Sistema de gestión integral para una clínica veterinaria. Los dueños registran sus mascotas y solicitan citas; los veterinarios consultan el historial médico y registran tratamientos, vacunas y diagnósticos; el admin gestiona la clínica completa.",
+  "domain": "veterinaria",
+  "designVibe": "Stripe",
+  "roles": ["admin", "veterinario", "cliente"],
+  "entities": [
+    {
+      "name": "User",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "email", "type": "string", "required": true },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "role", "type": "enum", "required": true, "values": ["admin", "veterinario", "cliente"] },
+        { "name": "phone", "type": "string", "required": false },
+        { "name": "address", "type": "string", "required": false, "notes": "necesario para visitas a domicilio" },
+        { "name": "passwordHash", "type": "string", "required": true },
+        { "name": "specialty", "type": "string", "required": false, "notes": "solo veterinarios: pequeños animales, exóticos, equinos" }
+      ],
+      "businessRules": [
+        "email único",
+        "soft delete vía isActive",
+        "veterinario debe tener specialty",
+        "cliente puede tener address opcional pero recomendado para visitas a domicilio"
+      ]
+    },
+    {
+      "name": "Pet",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "name", "type": "string", "required": true, "notes": "Luna, Toby, Mochi, Pelusa..." },
+        { "name": "ownerId", "type": "reference", "required": true, "references": "User" },
+        { "name": "species", "type": "enum", "required": true, "values": ["perro", "gato", "ave", "reptil", "roedor", "otro"] },
+        { "name": "breed", "type": "string", "required": false, "notes": "Golden Retriever, Siamés, Mestizo..." },
+        { "name": "birthDate", "type": "date", "required": false, "notes": "puede ser estimada para adoptados" },
+        { "name": "weightKg", "type": "number", "required": false },
+        { "name": "microchipId", "type": "string", "required": false },
+        { "name": "notes", "type": "string", "required": false, "notes": "alergias, comportamiento especial" }
+      ],
+      "businessRules": [
+        "máximo 10 mascotas por cliente",
+        "ownerId debe ser cliente activo",
+        "weightKg > 0 si presente",
+        "soft delete: si la mascota fallece, se marca como isActive=false con status='deceased'"
+      ]
+    },
+    {
+      "name": "Appointment",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "petId", "type": "reference", "required": true, "references": "Pet" },
+        { "name": "vetId", "type": "reference", "required": true, "references": "User" },
+        { "name": "scheduledAt", "type": "date", "required": true },
+        { "name": "durationMinutes", "type": "number", "required": true, "notes": "default 30" },
+        { "name": "reason", "type": "enum", "required": true, "values": ["vacuna", "revision", "urgencia", "cirugia", "consulta_general", "control_postoperatorio"] },
+        { "name": "status", "type": "enum", "required": true, "values": ["scheduled", "in_progress", "completed", "cancelled", "no_show"] },
+        { "name": "clientNotes", "type": "string", "required": false, "notes": "lo que reporta el dueño antes de la visita" },
+        { "name": "vetNotes", "type": "string", "required": false, "notes": "anotaciones internas pre-consulta" }
+      ],
+      "businessRules": [
+        "scheduledAt debe estar en horario de clínica (9:00 - 19:00, lunes a sábado)",
+        "no solapa con otras citas del mismo veterinario",
+        "duración entre 15 y 120 minutos",
+        "cliente puede cancelar mínimo 4h antes",
+        "veterinario puede cancelar pero queda registro y se notifica al cliente",
+        "transición de estado: scheduled → in_progress → completed | cancelled | no_show"
+      ]
+    },
+    {
+      "name": "MedicalRecord",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "petId", "type": "reference", "required": true, "references": "Pet" },
+        { "name": "appointmentId", "type": "reference", "required": true, "references": "Appointment" },
+        { "name": "vetId", "type": "reference", "required": true, "references": "User" },
+        { "name": "diagnosis", "type": "string", "required": true },
+        { "name": "treatment", "type": "string", "required": false },
+        { "name": "medications", "type": "string", "required": false, "notes": "dosis y duración del tratamiento" },
+        { "name": "followUpDate", "type": "date", "required": false, "notes": "para revisión posterior" },
+        { "name": "vitalsTemperature", "type": "number", "required": false, "notes": "temperatura en °C" },
+        { "name": "vitalsHeartRate", "type": "number", "required": false, "notes": "latidos por minuto" },
+        { "name": "weightKg", "type": "number", "required": false, "notes": "peso al momento de la consulta" }
+      ],
+      "businessRules": [
+        "solo el veterinario que atendió la cita puede crear el record",
+        "record es INMUTABLE una vez creado (audit trail médico — críticamente importante)",
+        "solo accesible por: dueño de la mascota, veterinario que lo creó, otros veterinarios autorizados, admin",
+        "diagnosis es texto requerido, mínimo 5 caracteres",
+        "appointmentId debe estar en status='completed' al crear el record"
+      ]
+    },
+    {
+      "name": "Vaccination",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "petId", "type": "reference", "required": true, "references": "Pet" },
+        { "name": "vaccineName", "type": "string", "required": true, "notes": "Rabia, Parvovirus, Triple felina..." },
+        { "name": "administeredAt", "type": "date", "required": true },
+        { "name": "nextDueDate", "type": "date", "required": true, "notes": "calculada según vaccineName + species" },
+        { "name": "vetId", "type": "reference", "required": true, "references": "User" },
+        { "name": "batchNumber", "type": "string", "required": false, "notes": "número de lote del vacuno para trazabilidad" }
+      ],
+      "businessRules": [
+        "nextDueDate calculada automáticamente según vaccineName y species",
+        "administeredAt no puede ser futuro",
+        "trazabilidad por batchNumber (auditable)"
+      ]
+    }
+  ],
+  "useCases": [
+    {
+      "actor": "cliente",
+      "action": "Registrar una mascota nueva con sus datos básicos",
+      "constraints": ["máximo 10 mascotas por cliente"]
+    },
+    {
+      "actor": "cliente",
+      "action": "Solicitar cita para una mascota con un veterinario disponible",
+      "constraints": [
+        "validar disponibilidad del vet en la franja horaria",
+        "scheduledAt debe ser en horario de clínica"
+      ]
+    },
+    {
+      "actor": "cliente",
+      "action": "Ver historial médico completo de mi mascota",
+      "constraints": ["solo de mis propias mascotas"]
+    },
+    {
+      "actor": "cliente",
+      "action": "Ver calendario de vacunas pendientes con notificaciones",
+      "constraints": []
+    },
+    {
+      "actor": "cliente",
+      "action": "Cancelar cita programada",
+      "constraints": ["mínimo 4h antes del scheduledAt"]
+    },
+    {
+      "actor": "cliente",
+      "action": "Editar datos de mi mascota (peso, notas, microchipId)",
+      "constraints": ["solo de mis propias mascotas"]
+    },
+    {
+      "actor": "veterinario",
+      "action": "Ver agenda diaria de citas asignadas",
+      "constraints": ["solo las propias"]
+    },
+    {
+      "actor": "veterinario",
+      "action": "Marcar cita como en_progreso, completada o no_show",
+      "constraints": ["solo citas asignadas a mí", "transición de estado válida"]
+    },
+    {
+      "actor": "veterinario",
+      "action": "Crear MedicalRecord tras consulta completada",
+      "constraints": [
+        "appointmentId debe estar en status='completed'",
+        "solo durante o inmediatamente después del appointment"
+      ]
+    },
+    {
+      "actor": "veterinario",
+      "action": "Registrar vacuna administrada con batchNumber",
+      "constraints": ["administeredAt no puede ser futuro"]
+    },
+    {
+      "actor": "veterinario",
+      "action": "Consultar historial médico completo de cualquier mascota (con permiso)",
+      "constraints": ["por seguridad, audit log de quién consulta qué record"]
+    },
+    {
+      "actor": "admin",
+      "action": "Gestionar usuarios y veterinarios (CRUD completo)",
+      "constraints": ["no puede eliminar veterinarios con citas activas o records abiertos"]
+    },
+    {
+      "actor": "admin",
+      "action": "Ver dashboard de la clínica: citas totales del mes, vacunas pendientes, distribución por especie",
+      "constraints": []
+    }
+  ],
+  "specialRequirements": [
+    "historial médico INMUTABLE (audit log estricto, GDPR-compliant)",
+    "alertas automáticas de vacunas próximas a vencer (email + dashboard)",
+    "notificaciones de recordatorio 24h antes de cita programada",
+    "audit trail completo en MedicalRecord (creación + accesos)"
+  ]
+}

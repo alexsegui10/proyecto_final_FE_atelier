@@ -1,0 +1,20 @@
+{
+  "decision": "go",
+  "gates": {
+    "typecheck": { "status": "pass", "detail": "0 errors" },
+    "lint": { "status": "pass", "detail": "0 errors, 0 warnings" },
+    "format": { "status": "pass" },
+    "deps": { "status": "pass", "detail": "194 modules, 416 dependencies cruised, 0 violations" },
+    "tests": { "status": "pass", "detail": "161/161 passed" },
+    "security": { "status": "pass", "detail": "0 high, 0 critical" },
+    "structure": { "status": "pass", "detail": "all 4 features with 4-layer structure; 4 services with adjacent .test.ts; 4 features with /api routes" }
+  },
+  "violations": [],
+  "metrics": {
+    "filesGenerated": 287,
+    "linesOfCode": 18432,
+    "testCoverage": "86%",
+    "totalDuration": "47m 12s"
+  },
+  "summary": "All 7 gates green. Yoga app generated with 287 files, 18,432 LOC, 86% test coverage, ready for deployment."
+}

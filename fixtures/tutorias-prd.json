@@ -1,44 +1,192 @@
 {
-  "objective": "Plataforma de tutorías académicas: alumnos reservan sesiones 1-a-1 con profesores, los profesores publican franjas horarias, el admin gestiona materiales pedagógicos compartidos.",
-  "roles": ["admin", "profesor", "alumno"],
+  "objective": "Plataforma para conectar profesores particulares con estudiantes universitarios. Los profesores publican su disponibilidad y especialidades, los estudiantes reservan sesiones individuales o de grupo, y el sistema gestiona pagos por sesión y reseñas post-sesión.",
+  "domain": "tutorias-academicas",
+  "designVibe": "Notion",
+  "roles": ["admin", "tutor", "estudiante"],
   "entities": [
     {
       "name": "User",
-      "fields": ["email", "name", "role", "passwordHash", "department"],
-      "notes": "role: admin | profesor | alumno. Un profesor puede pertenecer a un solo department; alumnos no tienen department."
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "email", "type": "string", "required": true },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "role", "type": "enum", "required": true, "values": ["admin", "tutor", "estudiante"] },
+        { "name": "bio", "type": "string", "required": false },
+        { "name": "avatarUrl", "type": "string", "required": false },
+        { "name": "passwordHash", "type": "string", "required": true }
+      ],
+      "businessRules": [
+        "email único por usuario",
+        "soft delete vía isActive",
+        "solo admin puede promover a otro admin"
+      ]
     },
     {
-      "name": "Slot",
-      "fields": ["teacherId", "startsAt", "durationMinutes", "subject", "level"],
-      "notes": "Franja horaria que un profesor publica. duration entre 30 y 90 min. level: bachiller | universidad | postgrado."
+      "name": "Subject",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "name", "type": "string", "required": true, "notes": "Cálculo I, Programación Web, Filosofía Antigua, etc." },
+        { "name": "level", "type": "enum", "required": true, "values": ["bachillerato", "universidad", "master"] },
+        { "name": "description", "type": "string", "required": false },
+        { "name": "department", "type": "string", "required": false, "notes": "Ingeniería, Humanidades, Ciencias..." }
+      ],
+      "businessRules": [
+        "nombre único por nivel (no puede haber dos 'Cálculo I' a nivel universidad)",
+        "soft delete vía isActive: si se archiva, las TutorProfiles quedan referencia pero ocultan el subject"
+      ]
+    },
+    {
+      "name": "TutorProfile",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "userId", "type": "reference", "required": true, "references": "User" },
+        { "name": "subjects", "type": "array<reference>", "required": true, "references": "Subject" },
+        { "name": "hourlyRate", "type": "number", "required": true, "notes": "EUR por hora" },
+        { "name": "yearsExperience", "type": "number", "required": true },
+        { "name": "rating", "type": "number", "required": false, "notes": "calculado desde reseñas, 1-5" },
+        { "name": "totalSessions", "type": "number", "required": false, "notes": "calculado, sesiones completed" },
+        { "name": "verified", "type": "boolean", "required": true, "notes": "admin verifica credenciales del tutor" }
+      ],
+      "businessRules": [
+        "un tutor solo puede tener 1 TutorProfile",
+        "hourlyRate >= 5 EUR/h",
+        "máximo 8 subjects por TutorProfile",
+        "yearsExperience >= 0",
+        "solo TutorProfiles con verified=true son listados públicamente"
+      ]
     },
     {
       "name": "Session",
-      "fields": ["slotId", "studentId", "topic", "createdAt", "cancelledAt", "rating"],
-      "notes": "Una session por (slotId, studentId). Rating 1-5 lo deja el alumno tras la session. Cancelar ≥4h antes."
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "tutorId", "type": "reference", "required": true, "references": "User" },
+        { "name": "studentId", "type": "reference", "required": true, "references": "User" },
+        { "name": "subjectId", "type": "reference", "required": true, "references": "Subject" },
+        { "name": "scheduledAt", "type": "date", "required": true },
+        { "name": "durationMinutes", "type": "number", "required": true },
+        { "name": "format", "type": "enum", "required": true, "values": ["online", "presencial"] },
+        { "name": "status", "type": "enum", "required": true, "values": ["pending", "confirmed", "completed", "cancelled", "no_show"] },
+        { "name": "price", "type": "number", "required": true, "notes": "calculado: hourlyRate * (durationMinutes/60)" },
+        { "name": "notes", "type": "string", "required": false, "notes": "tema concreto o referencia" },
+        { "name": "meetingUrl", "type": "string", "required": false, "notes": "para format=online, generado al confirmar" }
+      ],
+      "businessRules": [
+        "scheduledAt debe ser futuro al crear",
+        "duración entre 30 y 240 minutos",
+        "no se puede cancelar dentro de 12h del comienzo (refund parcial 50%)",
+        "cancelar con >24h de antelación: refund completo",
+        "transición de estado: pending → confirmed → completed | cancelled | no_show",
+        "tutor debe confirmar dentro de 24h de la creación, si no se auto-cancela",
+        "no se pueden solapar sesiones del mismo tutor o del mismo estudiante"
+      ]
     },
     {
-      "name": "Material",
-      "fields": ["title", "url", "subject", "uploadedById", "visibility"],
-      "notes": "visibility: public | enrolled-only. uploaded por admin o profesor."
+      "name": "Review",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "sessionId", "type": "reference", "required": true, "references": "Session" },
+        { "name": "studentId", "type": "reference", "required": true, "references": "User" },
+        { "name": "tutorId", "type": "reference", "required": true, "references": "User" },
+        { "name": "rating", "type": "number", "required": true, "notes": "1-5 enteros" },
+        { "name": "comment", "type": "string", "required": false, "notes": "máximo 500 chars" }
+      ],
+      "businessRules": [
+        "solo se puede dejar reseña tras session.status === 'completed'",
+        "máximo 1 reseña por sesión",
+        "rating entre 1 y 5 (entero)",
+        "comment opcional, hasta 500 caracteres",
+        "estudiante no puede editar tras 30 días de creación"
+      ]
     }
   ],
   "useCases": [
-    "alumno busca slots disponibles por subject y level",
-    "alumno reserva un slot creando una session",
-    "alumno cancela una session propia hasta 4h antes",
-    "alumno deja rating 1-5 tras la session",
-    "alumno consulta materiales públicos del subject",
-    "profesor publica un slot con subject y duration",
-    "profesor cancela un slot propio (libera reservas)",
-    "profesor sube material y elige visibility",
-    "admin gestiona usuarios y materiales (CRUD)"
+    {
+      "actor": "estudiante",
+      "action": "Buscar tutores por asignatura y filtrar por rating/precio/disponibilidad",
+      "constraints": ["solo tutores con verified=true e isActive=true"]
+    },
+    {
+      "actor": "estudiante",
+      "action": "Ver perfil completo de un tutor (subjects, rating medio, reseñas)",
+      "constraints": []
+    },
+    {
+      "actor": "estudiante",
+      "action": "Reservar una sesión con un tutor",
+      "constraints": [
+        "validar que el tutor enseña el subject seleccionado",
+        "validar que el slot está disponible (no solapa con otra sesión del tutor)",
+        "validar que scheduledAt es futuro"
+      ]
+    },
+    {
+      "actor": "estudiante",
+      "action": "Cancelar una sesión propia",
+      "constraints": [
+        "solo si scheduledAt > now + 12h",
+        "refund completo si > 24h, parcial 50% si entre 12-24h"
+      ]
+    },
+    {
+      "actor": "estudiante",
+      "action": "Dejar reseña tras sesión completada",
+      "constraints": ["máximo 1 reseña por sesión", "solo tras status='completed'"]
+    },
+    {
+      "actor": "estudiante",
+      "action": "Ver mis sesiones (pasadas + futuras + canceladas)",
+      "constraints": ["solo las propias"]
+    },
+    {
+      "actor": "tutor",
+      "action": "Crear/editar mi TutorProfile (subjects, hourlyRate, yearsExperience, bio)",
+      "constraints": ["máximo 8 subjects", "hourlyRate >= 5"]
+    },
+    {
+      "actor": "tutor",
+      "action": "Confirmar o rechazar sesiones pendientes",
+      "constraints": [
+        "confirmar dentro de 24h de creación o se auto-cancela",
+        "rechazo libera el slot"
+      ]
+    },
+    {
+      "actor": "tutor",
+      "action": "Marcar sesión como completada o no_show",
+      "constraints": [
+        "solo después de scheduledAt + durationMinutes",
+        "ventana de 48h tras la sesión para marcar"
+      ]
+    },
+    {
+      "actor": "tutor",
+      "action": "Ver mi historial de sesiones, ingresos totales y rating medio",
+      "constraints": []
+    },
+    {
+      "actor": "admin",
+      "action": "Verificar TutorProfiles (revisar credenciales y aprobar verified=true)",
+      "constraints": []
+    },
+    {
+      "actor": "admin",
+      "action": "Gestionar lista de subjects (crear, editar, archivar)",
+      "constraints": ["no se puede archivar un subject con sesiones futuras programadas"]
+    },
+    {
+      "actor": "admin",
+      "action": "Ver dashboard con métricas: sesiones por mes, top tutores por ingresos, rating medio plataforma",
+      "constraints": []
+    },
+    {
+      "actor": "admin",
+      "action": "Suspender usuarios problemáticos (rating bajo persistente, denuncias)",
+      "constraints": []
+    }
   ],
-  "notes": [
-    "Cancelaciones cierran 4 horas antes del inicio.",
-    "Una session por (slotId, studentId) — un slot lo reserva un único alumno.",
-    "Rating solo se permite tras cancelledAt = null y startsAt < now.",
-    "Materiales 'enrolled-only' requieren que el alumno haya tenido al menos una session con ese profesor.",
-    "Admin tiene acceso total."
+  "specialRequirements": [
+    "pagos integrados (Stripe o similar — placeholder Bizum/PayPal en MVP)",
+    "notificaciones por email para confirmaciones, recordatorios 24h antes, recordatorios de reseña",
+    "audit log en Sessions (estado de cancelaciones, refunds)"
   ]
 }

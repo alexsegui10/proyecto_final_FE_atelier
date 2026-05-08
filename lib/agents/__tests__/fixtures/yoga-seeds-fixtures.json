@@ -1,0 +1,32 @@
+{
+  "seedScript": "prisma/seed.ts",
+  "seedDataFiles": [
+    "prisma/seed-data/admin.json",
+    "prisma/seed-data/teachers.json",
+    "prisma/seed-data/students.json",
+    "prisma/seed-data/classes.json",
+    "prisma/seed-data/bookings.json",
+    "prisma/seed-data/memberships.json"
+  ],
+  "fixtureFiles": [
+    "tests/fixtures/teachers.fixture.ts",
+    "tests/fixtures/students.fixture.ts",
+    "tests/fixtures/classes.fixture.ts",
+    "tests/fixtures/bookings.fixture.ts"
+  ],
+  "fixedCredentials": [
+    {
+      "email": "admin@demo.yoga",
+      "password": "demo1234",
+      "role": "admin",
+      "name": "Admin Demo"
+    }
+  ],
+  "seededEntities": [
+    { "entity": "User", "count": 16, "notes": "1 admin + 3 teachers + 12 students" },
+    { "entity": "Class", "count": 25, "notes": "20 future + 5 completed past" },
+    { "entity": "Booking", "count": 80, "notes": "20% cancelled, 1 user with 15 bookings, 1 class at 100% capacity" },
+    { "entity": "Membership", "count": 12, "notes": "60% mensual + 40% trimestral; 2 expiring in 7 days; 1 exhausted" }
+  ],
+  "totalRecords": 133
+}

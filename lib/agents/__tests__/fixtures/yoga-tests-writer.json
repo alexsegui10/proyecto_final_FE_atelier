@@ -1,0 +1,33 @@
+{
+  "files": [
+    { "path": "tests/unit/classes/ClassesService.test.ts", "layer": "unit", "tests": 14, "feature": "classes" },
+    { "path": "tests/unit/bookings/BookingsService.test.ts", "layer": "unit", "tests": 18, "feature": "bookings" },
+    { "path": "tests/unit/memberships/MembershipsService.test.ts", "layer": "unit", "tests": 12, "feature": "memberships" },
+    { "path": "tests/unit/auth/AuthService.test.ts", "layer": "unit", "tests": 10, "feature": "auth" },
+    { "path": "tests/unit/auth/TokenService.test.ts", "layer": "unit", "tests": 8, "feature": "auth" },
+    { "path": "tests/unit/auth/RefreshTokenService.test.ts", "layer": "unit", "tests": 8, "feature": "auth" },
+    { "path": "tests/unit/auth/AuthorizationService.test.ts", "layer": "unit", "tests": 22, "feature": "auth" },
+    { "path": "tests/integration/auth.api.test.ts", "layer": "integration", "tests": 12, "feature": "auth" },
+    { "path": "tests/integration/classes.api.test.ts", "layer": "integration", "tests": 14, "feature": "classes" },
+    { "path": "tests/integration/bookings.api.test.ts", "layer": "integration", "tests": 18, "feature": "bookings" },
+    { "path": "tests/integration/memberships.api.test.ts", "layer": "integration", "tests": 10, "feature": "memberships" },
+    { "path": "tests/e2e/auth-flow.spec.ts", "layer": "e2e", "tests": 3 },
+    { "path": "tests/e2e/booking-crud.spec.ts", "layer": "e2e", "tests": 4 },
+    { "path": "tests/e2e/rbac-guard.spec.ts", "layer": "e2e", "tests": 3 },
+    { "path": "tests/e2e/edge-cases.spec.ts", "layer": "e2e", "tests": 3 },
+    { "path": "tests/e2e/admin-demo.spec.ts", "layer": "e2e", "tests": 2 },
+    { "path": "tests/fixtures/in-memory-repos.ts", "layer": "fixtures", "tests": 0 },
+    { "path": "tests/helpers/test-db.ts", "layer": "helpers", "tests": 0 },
+    { "path": "tests/helpers/auth-helpers.ts", "layer": "helpers", "tests": 0 }
+  ],
+  "counts": {
+    "unit": 92,
+    "integration": 54,
+    "e2e": 15,
+    "total": 161
+  },
+  "coverage": {
+    "servicesPercent": 86,
+    "controllersPercent": 100
+  }
+}
