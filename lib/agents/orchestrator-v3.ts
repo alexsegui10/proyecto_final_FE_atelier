@@ -252,6 +252,36 @@ export interface PreWaveGateContext {
   artifacts: Readonly<Partial<Record<AgentNameV3, unknown>>>;
 }
 
+// ─── Post-wave gates (programmatic checks after agent invocation) ───
+
+/**
+ * Symmetric to PreWaveGate but runs AFTER the wave's agents complete.
+ * Use cases:
+ *  - Gate 6 visual regression (needs Visual QA screenshots → post wave-7)
+ *  - cross-artifact-coherence-scanner (needs all wave-2-design artifacts
+ *    written → post wave-2-design)
+ *
+ * Semantics differ from PreWaveGate:
+ *  - Post-gate violations DO NOT skip the wave (it already ran).
+ *  - Violations are accumulated in `GenerationV3Result.gateViolations`
+ *    just like preWaveGate output.
+ *  - If a post-gate throws, the orchestrator emits `generation.failed`.
+ */
+export interface PostWaveGate {
+  /** Stable kebab-case identifier. */
+  name: string;
+  run: (ctx: PostWaveGateContext) => Promise<readonly QaViolationV3[]>;
+}
+
+export interface PostWaveGateContext {
+  workDir: string;
+  appUrl?: string;
+  /** Artifacts including the ones the wave just produced. */
+  artifacts: Readonly<Partial<Record<AgentNameV3, unknown>>>;
+  /** Summary of which agents ran ok vs failed in the wave. */
+  waveResults: ReadonlyArray<{ agent: AgentNameV3; status: "ok" | "failed" }>;
+}
+
 // ─── Orchestrator entry ──────────────────────────────────────────────
 
 export interface RunGenerationV3Options {
@@ -277,6 +307,13 @@ export interface RunGenerationV3Options {
    * The violations are accumulated in `GenerationV3Result.gateViolations`.
    */
   preWaveGates?: Partial<Record<WaveNameV3, readonly PreWaveGate[]>>;
+  /**
+   * Per-wave post-gates. Each gate runs AFTER the wave's agents complete
+   * (with `ok` status). Violations are accumulated in `gateViolations` but
+   * DO NOT skip the wave (it already ran). Use cases: cross-artifact
+   * coherence (post wave-2-design), visual regression (post wave-7).
+   */
+  postWaveGates?: Partial<Record<WaveNameV3, readonly PostWaveGate[]>>;
   /**
    * Base URL of the running app, when a wave needs a live app to test
    * against. The orchestrator threads this into `PreWaveGateContext.appUrl`.
@@ -502,6 +539,52 @@ export async function runGenerationV3(
           ...(out.failed ? { failedAt: { wave: wave.name, ...out.failed } } : {}),
           ...(lastApproval ? { lastApproval } : {}),
         };
+      }
+
+      // ─── Post-wave gates ──────────────────────────────────────────
+      // Run AFTER the wave's agents completed successfully. Violations
+      // accumulate but DO NOT skip the wave (it already ran).
+      const postGates = opts.postWaveGates?.[wave.name] ?? [];
+      for (const postGate of postGates) {
+        await opts.emit({ type: "gate.started", gate: postGate.name, wave: wave.name });
+        let postOutcome: readonly QaViolationV3[] = [];
+        try {
+          postOutcome = await postGate.run({
+            workDir: opts.workDir,
+            artifacts,
+            waveResults: out.results.map((r) =>
+              "outcome" in r
+                ? { agent: r.agent, status: "ok" as const }
+                : { agent: r.agent, status: "failed" as const },
+            ),
+            ...(opts.appUrl ? { appUrl: opts.appUrl } : {}),
+          });
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          await opts.emit({
+            type: "generation.failed",
+            generationId: opts.generationId,
+            reason: `postWaveGate '${postGate.name}' threw: ${reason}`,
+          });
+          return {
+            durationMs: Date.now() - startedAt,
+            artifacts,
+            files,
+            qa,
+            gateViolations,
+            skippedWaves,
+            ...(lastApproval ? { lastApproval } : {}),
+          };
+        }
+        gateViolations.push(...postOutcome);
+        const blocking = postOutcome.filter((v) => v.severity === "error").length;
+        await opts.emit({
+          type: "gate.completed",
+          gate: postGate.name,
+          wave: wave.name,
+          violations: postOutcome.length,
+          passed: blocking === 0,
+        });
       }
 
       if (!opts.approvalResolver) {

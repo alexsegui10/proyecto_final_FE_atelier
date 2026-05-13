@@ -11,6 +11,7 @@ import {
   type ApprovalDecision,
   type ApprovalResolver,
   type OrchestratorV3Event,
+  type PostWaveGate,
   type PreWaveGate,
   type QaArtifactV3,
   type QaViolationV3,
@@ -449,6 +450,86 @@ describe("runGenerationV3 — preWaveGates", () => {
     const failed = events.find((e) => e.type === "generation.failed");
     expect(failed).toBeDefined();
     expect("reason" in (failed ?? {}) && (failed as { reason: string }).reason).toMatch(/broken-gate/);
+    expect(result.gateViolations).toEqual([]);
+  });
+});
+
+// ─── postWaveGates ──────────────────────────────────────────────────
+
+describe("runGenerationV3 — postWaveGates", () => {
+  const minimalWaves: WaveV3[] = [
+    { name: "wave-1-discovery", agents: ["discovery"], dependsOn: [] },
+  ];
+
+  it("runs the post-gate AFTER the wave (wave already ran, agents called)", async () => {
+    const { runner, calls } = makeRunner();
+    let observedArtifactsAtGate: unknown;
+    const postGate: PostWaveGate = {
+      name: "cross-coherence",
+      run: async (ctx) => {
+        // discovery's artifact must be available
+        observedArtifactsAtGate = ctx.artifacts["discovery"];
+        return [];
+      },
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      waves: minimalWaves,
+      postWaveGates: { "wave-1-discovery": [postGate] },
+    });
+    expect(calls.length).toBe(1); // wave ran
+    expect(observedArtifactsAtGate).toBeDefined();
+    expect(result.skippedWaves).toEqual([]);
+  });
+
+  it("accumulates post-gate violations into gateViolations[]", async () => {
+    const { runner } = makeRunner();
+    const postGate: PostWaveGate = {
+      name: "cross-coherence",
+      run: async () =>
+        [
+          {
+            rule: "layout-tree-orphan",
+            severity: "error",
+            agent: "architect",
+            message: "ghost route in layout-tree",
+            recommendedFix: "remove or declare",
+          } satisfies QaViolationV3,
+        ] as const,
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      waves: minimalWaves,
+      postWaveGates: { "wave-1-discovery": [postGate] },
+      emit: async (e) => void events.push(e),
+    });
+    expect(result.gateViolations).toHaveLength(1);
+    expect(result.gateViolations[0]?.rule).toBe("layout-tree-orphan");
+    // Wave still ran successfully (post-gate violations don't skip)
+    expect(result.skippedWaves).toEqual([]);
+    expect(events.find((e) => e.type === "gate.completed" && e.gate === "cross-coherence" && !e.passed)).toBeDefined();
+  });
+
+  it("emits generation.failed when a post-gate throws", async () => {
+    const throwingGate: PostWaveGate = {
+      name: "broken-post-gate",
+      run: async () => {
+        throw new Error("post-gate exploded");
+      },
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      waves: minimalWaves,
+      postWaveGates: { "wave-1-discovery": [throwingGate] },
+      emit: async (e) => void events.push(e),
+    });
+    const failed = events.find((e) => e.type === "generation.failed");
+    expect(failed).toBeDefined();
+    expect("reason" in (failed ?? {}) && (failed as { reason: string }).reason).toMatch(/broken-post-gate/);
     expect(result.gateViolations).toEqual([]);
   });
 });
