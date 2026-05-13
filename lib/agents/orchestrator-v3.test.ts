@@ -11,7 +11,9 @@ import {
   type ApprovalDecision,
   type ApprovalResolver,
   type OrchestratorV3Event,
+  type PreWaveGate,
   type QaArtifactV3,
+  type QaViolationV3,
   type WaveV3,
 } from "./orchestrator-v3";
 import { AGENT_NAMES_V3 } from "./contracts-v3/agent-names";
@@ -314,6 +316,140 @@ describe("groupViolationsByAgentV3 — 3-strategy routing", () => {
     ]);
     // Falls through to file routing → bootstrap-devops
     expect(groups.get("bootstrap-devops")).toHaveLength(1);
+  });
+});
+
+// ─── preWaveGates ───────────────────────────────────────────────────
+
+describe("runGenerationV3 — preWaveGates", () => {
+  const minimalWaves: WaveV3[] = [
+    { name: "wave-1-discovery", agents: ["discovery"], dependsOn: [] },
+    { name: "wave-1-bootstrap", agents: ["bootstrap-devops"], dependsOn: ["wave-1-discovery"] },
+  ];
+
+  it("runs gates before the wave and skips the wave on a blocking violation", async () => {
+    const { runner, calls } = makeRunner();
+    const blockingGate: PreWaveGate = {
+      name: "runtime-smoke",
+      run: async () =>
+        [
+          {
+            rule: "app-not-running",
+            severity: "error",
+            agent: "bootstrap-devops",
+            message: "fake-app down",
+            recommendedFix: "fake-fix",
+          } satisfies QaViolationV3,
+        ] as const,
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      waves: minimalWaves,
+      preWaveGates: {
+        "wave-1-bootstrap": [blockingGate],
+      },
+      emit: async (e) => void events.push(e),
+    });
+
+    // discovery runs, bootstrap-devops does NOT (skipped)
+    expect(calls.map((c) => c.agent)).toEqual(["discovery"]);
+    expect(result.skippedWaves).toEqual(["wave-1-bootstrap"]);
+    expect(result.gateViolations).toHaveLength(1);
+    expect(result.gateViolations[0]?.rule).toBe("app-not-running");
+    expect(events.some((e) => e.type === "gate.started" && e.gate === "runtime-smoke")).toBe(true);
+    expect(events.some((e) => e.type === "gate.completed" && !e.passed)).toBe(true);
+    expect(events.some((e) => e.type === "wave.skipped")).toBe(true);
+  });
+
+  it("runs the wave normally when gate emits only warn-severity violations", async () => {
+    const { runner, calls } = makeRunner();
+    const warnGate: PreWaveGate = {
+      name: "runtime-smoke",
+      run: async () =>
+        [
+          {
+            rule: "probe-slow",
+            severity: "warn",
+            agent: "api-backend",
+            message: "kept passing but was slow",
+            recommendedFix: "profile route handler",
+          } satisfies QaViolationV3,
+        ] as const,
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      waves: minimalWaves,
+      preWaveGates: { "wave-1-bootstrap": [warnGate] },
+      emit: async (e) => void events.push(e),
+    });
+
+    // Both agents ran (gate did not block)
+    expect(calls.map((c) => c.agent).sort()).toEqual(["bootstrap-devops", "discovery"]);
+    expect(result.skippedWaves).toEqual([]);
+    expect(result.gateViolations).toHaveLength(1);
+    expect(result.gateViolations[0]?.severity).toBe("warn");
+    expect(events.find((e) => e.type === "gate.completed")?.passed).toBe(true);
+  });
+
+  it("runs multiple gates sequentially; first error-violation stops invocation of agents", async () => {
+    const gateRuns: string[] = [];
+    const passGate: PreWaveGate = {
+      name: "gate-a",
+      run: async () => {
+        gateRuns.push("gate-a");
+        return [];
+      },
+    };
+    const blockGate: PreWaveGate = {
+      name: "gate-b",
+      run: async () => {
+        gateRuns.push("gate-b");
+        return [
+          {
+            rule: "blocked",
+            severity: "error",
+            agent: "bootstrap-devops",
+            message: "block message",
+            recommendedFix: "fix it",
+          } satisfies QaViolationV3,
+        ];
+      },
+    };
+    const { runner, calls } = makeRunner();
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      waves: minimalWaves,
+      preWaveGates: { "wave-1-bootstrap": [passGate, blockGate] },
+    });
+    expect(gateRuns).toEqual(["gate-a", "gate-b"]);
+    // bootstrap-devops did not run; discovery did
+    expect(calls.map((c) => c.agent)).toEqual(["discovery"]);
+    expect(result.skippedWaves).toEqual(["wave-1-bootstrap"]);
+  });
+
+  it("emits generation.failed when a gate throws", async () => {
+    const throwingGate: PreWaveGate = {
+      name: "broken-gate",
+      run: async () => {
+        throw new Error("gate exploded");
+      },
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      waves: minimalWaves,
+      preWaveGates: { "wave-1-bootstrap": [throwingGate] },
+      emit: async (e) => void events.push(e),
+    });
+    const failed = events.find((e) => e.type === "generation.failed");
+    expect(failed).toBeDefined();
+    expect("reason" in (failed ?? {}) && (failed as { reason: string }).reason).toMatch(/broken-gate/);
+    expect(result.gateViolations).toEqual([]);
   });
 });
 

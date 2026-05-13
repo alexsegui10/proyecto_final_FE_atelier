@@ -131,6 +131,15 @@ export type OrchestratorV3Event =
   | { type: "wave.paused"; wave: WaveNameV3; reason: string }
   | { type: "wave.approved"; wave: WaveNameV3 }
   | { type: "wave.rejected"; wave: WaveNameV3; humanFeedback: string }
+  | { type: "wave.skipped"; wave: WaveNameV3; reason: string; blockingViolations: number }
+  | { type: "gate.started"; gate: string; wave: WaveNameV3 }
+  | {
+      type: "gate.completed";
+      gate: string;
+      wave: WaveNameV3;
+      violations: number;
+      passed: boolean;
+    }
   | { type: "agent.started"; agent: AgentNameV3; wave: WaveNameV3 }
   | { type: "agent.completed"; agent: AgentNameV3; wave: WaveNameV3; summary: string }
   | { type: "agent.failed"; agent: AgentNameV3; wave: WaveNameV3; reason: string }
@@ -212,6 +221,37 @@ export interface WaveCompletedPayload {
   results: ReadonlyArray<{ agent: AgentNameV3; status: "ok" | "failed" }>;
 }
 
+// ─── Pre-wave gates (programmatic checks before agent invocation) ────
+
+/**
+ * A pre-wave gate is a deterministic check the orchestrator runs BEFORE
+ * invoking the agents of a wave. Gates emit `QaViolationV3[]` (empty if
+ * the check passed). If any returned violation has `severity: "error"` or
+ * `severity: "critical"`, the wave is SKIPPED (agents not invoked) and the
+ * orchestrator continues to the next wave. The violations are merged into
+ * `GenerationV3Result.gateViolations` and surfaced to the qa-reviewer LLM
+ * downstream as additional input.
+ *
+ * Use cases: Gate 5 runtime-smoke (before wave-7), Gate 6 visual regression
+ * (future, blocked by D3), env-leak scanner (already a standalone gate).
+ */
+export interface PreWaveGate {
+  /** Stable kebab-case identifier. Appears in events + violation logs. */
+  name: string;
+  run: (ctx: PreWaveGateContext) => Promise<readonly QaViolationV3[]>;
+}
+
+export interface PreWaveGateContext {
+  workDir: string;
+  /**
+   * Base URL of the running app, when the orchestrator (or future wave
+   * lifecycle hook) has booted it. Undefined when no app is running yet.
+   */
+  appUrl?: string;
+  /** Read-only view of artifacts produced by upstream waves. */
+  artifacts: Readonly<Partial<Record<AgentNameV3, unknown>>>;
+}
+
 // ─── Orchestrator entry ──────────────────────────────────────────────
 
 export interface RunGenerationV3Options {
@@ -230,6 +270,19 @@ export interface RunGenerationV3Options {
    * (auto mode, identical to v2).
    */
   approvalResolver?: ApprovalResolver;
+  /**
+   * Per-wave pre-gates. Each gate runs BEFORE the wave's agents are invoked.
+   * If any gate emits a violation with severity error/critical, the wave is
+   * skipped (its agents are not invoked, control proceeds to the next wave).
+   * The violations are accumulated in `GenerationV3Result.gateViolations`.
+   */
+  preWaveGates?: Partial<Record<WaveNameV3, readonly PreWaveGate[]>>;
+  /**
+   * Base URL of the running app, when a wave needs a live app to test
+   * against. The orchestrator threads this into `PreWaveGateContext.appUrl`.
+   * Future wave-7 lifecycle hooks will own boot/teardown.
+   */
+  appUrl?: string;
 }
 
 export interface GenerationV3Result {
@@ -240,6 +293,10 @@ export interface GenerationV3Result {
   failedAt?: { wave: WaveNameV3; agent: AgentNameV3; reason: string };
   /** Last human decision, if step-by-step was active. */
   lastApproval?: { wave: WaveNameV3; decision: ApprovalDecision };
+  /** Violations produced by preWaveGates across the run. */
+  gateViolations: QaViolationV3[];
+  /** Waves whose agents were not invoked because a preWaveGate blocked them. */
+  skippedWaves: WaveNameV3[];
 }
 
 interface WaveRunResult {
@@ -344,10 +401,70 @@ export async function runGenerationV3(
   await opts.emit({ type: "generation.started", generationId: opts.generationId });
 
   let humanFeedback: string | undefined;
+  const gateViolations: QaViolationV3[] = [];
+  const skippedWaves: WaveNameV3[] = [];
 
   for (let i = 0; i < waves.length; i++) {
     const wave = waves[i];
     if (!wave) continue;
+
+    // ─── Pre-wave gates ──────────────────────────────────────────────
+    // Run each configured gate sequentially. If any returns a violation
+    // with severity error/critical, skip the wave (do not invoke agents).
+    const gates = opts.preWaveGates?.[wave.name] ?? [];
+    let waveBlockedByGate = false;
+    let blockingCount = 0;
+    for (const gate of gates) {
+      await opts.emit({ type: "gate.started", gate: gate.name, wave: wave.name });
+      let gateOutcome: readonly QaViolationV3[] = [];
+      try {
+        gateOutcome = await gate.run({
+          workDir: opts.workDir,
+          artifacts,
+          ...(opts.appUrl ? { appUrl: opts.appUrl } : {}),
+        });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await opts.emit({
+          type: "generation.failed",
+          generationId: opts.generationId,
+          reason: `preWaveGate '${gate.name}' threw: ${reason}`,
+        });
+        return {
+          durationMs: Date.now() - startedAt,
+          artifacts,
+          files,
+          qa,
+          gateViolations,
+          skippedWaves,
+          ...(lastApproval ? { lastApproval } : {}),
+        };
+      }
+      gateViolations.push(...gateOutcome);
+      const blocking = gateOutcome.filter((v) => v.severity === "error").length;
+      if (blocking > 0) {
+        waveBlockedByGate = true;
+        blockingCount += blocking;
+      }
+      await opts.emit({
+        type: "gate.completed",
+        gate: gate.name,
+        wave: wave.name,
+        violations: gateOutcome.length,
+        passed: blocking === 0,
+      });
+    }
+
+    if (waveBlockedByGate) {
+      await opts.emit({
+        type: "wave.skipped",
+        wave: wave.name,
+        reason: `preWaveGate emitted ${blockingCount} blocking violation(s)`,
+        blockingViolations: blockingCount,
+      });
+      skippedWaves.push(wave.name);
+      continue; // Next wave — no agents run for this one
+    }
 
     // Outer loop: run the wave; may repeat if the human rejects in step-by-step.
     let waveSettled = false;
@@ -380,6 +497,8 @@ export async function runGenerationV3(
           artifacts,
           files,
           qa,
+          gateViolations,
+          skippedWaves,
           ...(out.failed ? { failedAt: { wave: wave.name, ...out.failed } } : {}),
           ...(lastApproval ? { lastApproval } : {}),
         };
@@ -501,6 +620,8 @@ export async function runGenerationV3(
             artifacts,
             files,
             qa: currentQa,
+            gateViolations,
+            skippedWaves,
             ...(lastApproval ? { lastApproval } : {}),
           };
         }
@@ -535,6 +656,8 @@ export async function runGenerationV3(
     artifacts,
     files,
     qa,
+    gateViolations,
+    skippedWaves,
     ...(lastApproval ? { lastApproval } : {}),
   };
 }
