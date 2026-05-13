@@ -173,6 +173,8 @@ export interface QaViolationV3 {
   severity: "error" | "warn";
   where?: string;
   file?: string;
+  /** 1-based line number when the gate can anchor the violation precisely. */
+  line?: number;
   agent?: string;
   message?: string;
   recommendedFix?: string;

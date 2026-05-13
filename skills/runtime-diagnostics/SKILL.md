@@ -56,9 +56,9 @@ interface Fault {
 #### `env-var-typo` (the original bug A from yoga v2)
 
 - **Symptom**: code reads `process.env.JWT_SECRET` but `.env.local` has `AUTH_JWT_SECRET`. The validator can't catch it because the agent that USES the var read the wrong name.
-- **Detect**: scan the codebase for `process.env\.` outside `src/_shared/config/env.ts`. Any match is a violation.
-- **Fix**: replace direct `process.env` access with `import { env } from "@/_shared/config/env"`; if the var is missing from the manifest, add it via Bootstrap fix loop.
-- **Preventive**: lint rule / QA gate forbidding `process.env.` outside the validator.
+- **Detect**: scan the codebase for `process.env\.[A-Z]` outside the canonical allowlist (`src/_shared/config/env.ts`, `next.config.{ts,mjs,js}`). The implementation lives in `lib/agents/runtime/qa-gates/env-leak-scanner.ts` (function `scanProcessEnvLeaks`) and is invoked by the Wave 6 runtime BEFORE the qa-reviewer LLM; the hits are merged into `qa-report.violations[]` with `rule: "env-leak"`, `severity: "error"`, `agent: "bootstrap-devops"`.
+- **Fix**: replace direct `process.env` access with `import { env } from "@/_shared/config/env"`; if the var is missing from the manifest, the fix loop re-invokes Bootstrap to add it (see R0 in `prompts-v3/bootstrap-devops.md`).
+- **Preventive**: the env-leak gate is permanent in Wave 6. The scanner skips line/block comments (so `// process.env.X` notes don't false-positive) and the regex's `[A-Z]` start anchor naturally rejects interpolation placeholders like `process.env.${KEY}`.
 
 ### build category
 
