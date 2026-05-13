@@ -5,7 +5,6 @@ import {
   generatorAgentOrderV3,
   groupViolationsByAgentV3,
   runGenerationV3,
-  type AgentNameV3,
   type AgentRunnerV3,
   type AgentRunInputV3,
   type AgentRunResultV3,
@@ -13,7 +12,6 @@ import {
   type ApprovalResolver,
   type OrchestratorV3Event,
   type QaArtifactV3,
-  type QaViolationV3,
   type WaveV3,
 } from "./orchestrator-v3";
 import { AGENT_NAMES_V3 } from "./contracts-v3/agent-names";
