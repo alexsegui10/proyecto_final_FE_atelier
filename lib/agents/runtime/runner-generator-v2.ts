@@ -81,6 +81,13 @@ export interface GeneratorAgentInput {
   _walkFiles?: (root: string) => Promise<Map<string, number>>;
   /** Test seam — replaces fs.readFile when reading the artifact. */
   _readArtifact?: (path: string) => Promise<string>;
+  /**
+   * v3 escape hatch: forward an explicit per-agent config so the runner can
+   * handle agents NOT present in `AGENT_CONFIG_V2` (e.g. v3 net-new agents
+   * like `bootstrap-devops`). When set, this overrides the V2 lookup
+   * entirely. Existing v2 callers don't pass it — behaviour is unchanged.
+   */
+  configOverride?: AgentConfigEntry;
 }
 
 export interface GeneratorAgentResult {
@@ -432,7 +439,14 @@ const FAILURE_RESULT = (
 export async function runGeneratorAgentV2(
   input: GeneratorAgentInput,
 ): Promise<GeneratorAgentResult> {
-  const config = AGENT_CONFIG_V2[input.agent];
+  // v2 default: read from the static config table by agent name. v3 callers
+  // can pass `configOverride` for agents that don't live in V2.
+  const config = input.configOverride ?? AGENT_CONFIG_V2[input.agent];
+  if (!config) {
+    throw new Error(
+      `runGeneratorAgentV2: no config for agent "${input.agent}" — pass configOverride for v3 agents`,
+    );
+  }
   const timeoutMs = input.timeoutMs ?? config.timeoutMs;
   const model = input.model ?? config.model;
   const artifactsDir = input.artifactsDir ?? join(input.workDir, ".atelier");
