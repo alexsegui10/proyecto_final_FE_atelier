@@ -36,6 +36,10 @@ import {
   validateBootstrapOutput,
   type BootstrapOutput,
 } from "../lib/agents/contracts-v3/bootstrap.schema";
+import {
+  validateVisualQaReport,
+  type VisualQaReport,
+} from "../lib/agents/contracts-v3/visual-qa.schema";
 
 // ─── Synthetic Bootstrap fixture (the only v3 agent with full schema today) ─
 
@@ -126,10 +130,90 @@ const BOOTSTRAP_FIXTURE: BootstrapOutput = {
   },
 };
 
+// ─── Visual QA synthetic fixture (Wave 7 — schema-valid green report) ─
+
+const VISUAL_QA_FIXTURE: VisualQaReport = {
+  generatedAt: "2026-05-13T22:00:00.000Z",
+  appUrl: "http://localhost:3000",
+  setup: {
+    setupCommand: "pnpm setup",
+    setupDurationMs: 42_000,
+    bootTimeMs: 6_500,
+    healthcheckUrl: "http://localhost:3000/",
+    healthcheckStatus: 200,
+  },
+  flows: [
+    {
+      flow: "client-anonymous",
+      startedAt: "2026-05-13T22:00:30.000Z",
+      durationMs: 4_200,
+      stepsTotal: 5,
+      stepsOk: 5,
+      stepsFailed: 0,
+      stepsSkipped: 0,
+      decision: "go",
+    },
+    {
+      flow: "client-authenticated",
+      startedAt: "2026-05-13T22:00:35.000Z",
+      durationMs: 8_400,
+      stepsTotal: 6,
+      stepsOk: 6,
+      stepsFailed: 0,
+      stepsSkipped: 0,
+      decision: "go",
+    },
+    {
+      flow: "admin",
+      startedAt: "2026-05-13T22:00:45.000Z",
+      durationMs: 7_100,
+      stepsTotal: 6,
+      stepsOk: 6,
+      stepsFailed: 0,
+      stepsSkipped: 0,
+      decision: "go",
+    },
+  ],
+  steps: [
+    {
+      flow: "client-anonymous",
+      name: "open / and verify home renders",
+      startedAt: "2026-05-13T22:00:30.500Z",
+      durationMs: 800,
+      status: "ok",
+      screenshot: ".atelier/screenshots/client-anonymous-001-home.png",
+    },
+    {
+      flow: "client-authenticated",
+      name: "sign in as demo client",
+      startedAt: "2026-05-13T22:00:35.500Z",
+      durationMs: 1_200,
+      status: "ok",
+      screenshot: ".atelier/screenshots/client-authenticated-001-signin.png",
+    },
+    {
+      flow: "admin",
+      name: "sign in as admin and load /admin dashboard",
+      startedAt: "2026-05-13T22:00:45.500Z",
+      durationMs: 1_500,
+      status: "ok",
+      screenshot: ".atelier/screenshots/admin-001-dashboard.png",
+    },
+  ],
+  screenshots: [],
+  consoleEvents: [],
+  networkEvents: [],
+  violations: [],
+  decision: "go",
+  summary: "Dry-run synthetic visual-qa report — all 3 flows pass, no violations.",
+  playwrightScriptPath: ".atelier/visual-qa-script.spec.ts",
+};
+
 // ─── Fake runner — synthesises an artifact per agent ────────────────
 
 function fakeArtifactFor(agent: AgentNameV3): unknown {
   if (agent === "bootstrap-devops") return BOOTSTRAP_FIXTURE;
+  if (agent === "visual-qa") return VISUAL_QA_FIXTURE;
   if (agent === "qa-reviewer") {
     return {
       decision: "go",
@@ -250,6 +334,13 @@ async function main(): Promise<number> {
   const bootErr = validateBootstrapOutput(bootstrapArtifact);
   if (bootErr) {
     failures.push(`bootstrap-devops artifact in result.artifacts fails schema: ${bootErr}`);
+  }
+
+  // visual-qa artifact must also validate (new in step 3).
+  const visualQaArtifact = result.artifacts["visual-qa"];
+  const visualQaErr = validateVisualQaReport(visualQaArtifact);
+  if (visualQaErr) {
+    failures.push(`visual-qa artifact in result.artifacts fails schema: ${visualQaErr}`);
   }
 
   log(
