@@ -1,0 +1,592 @@
+# ROADMAP V3 — Atelier
+
+> Documento de planificación técnica para la siguiente iteración del sistema multi-agente Atelier. Se redacta tras la validación end-to-end de la versión 2 con el dominio yoga, y motivado por los hallazgos concretos detectados durante esa validación.
+
+---
+
+## 1. Resumen ejecutivo
+
+Atelier v2 demostró que un sistema multi-agente orquestado por LLM puede generar aplicaciones full-stack arquitectónicamente correctas a partir de un único prompt de dominio. La validación E2E con yoga produjo 411 tests verde, typecheck limpio, lint limpio y dependencias sin errores. Sin embargo, al arrancar la aplicación generada en un entorno real (Postgres + Next.js dev server) emergieron tres categorías de bugs que ninguno de los cuatro gates de QA estáticos pudo detectar.
+
+La versión 3 nace de un hallazgo claro: **los gates estáticos no son suficientes**. Una aplicación con tests unitarios verdes puede estar funcionalmente rota en runtime. Hace falta validación con la aplicación ejecutándose, con datos reales, simulando un usuario.
+
+Esta v3 introduce siete cambios mayores:
+
+1. Un **Bootstrap & DevOps Agent** que garantiza que el proyecto generado arranca sin intervención humana.
+2. Un **Visual QA Agent** que prueba la app generada como cliente y admin reales, con clicks y scrolls.
+3. **Cuatro nuevos agentes de diseño** que reemplazan al UX/UI Designer monolítico de v2: Layout Architect, Brand Identity, Animation Choreographer, Accessibility Agent.
+4. Integración con **MCPs externos** para diseño y componentes: Stitch (motor principal de diseño visual), shadcn MCP, Tweakcn, 21st.dev, Framer.
+5. **Tres nuevos gates de QA** sobre los cuatro existentes: runtime smoke test, visual regression, flow validation E2E.
+6. Un **Seeds & Fixtures mejorado** con datos abundantes, variados y casos edge.
+7. **Reorganización del esquema de waves** del orchestrator para acomodar el nuevo pipeline.
+
+El objetivo final: con un único prompt de dominio, generar aplicaciones funcionales, estéticas y completas que un usuario humano puede probar de inmediato sin encontrarse con errores 500 ni datos que no cargan.
+
+---
+
+## 2. Hallazgos de la validación E2E de v2
+
+Durante la validación con yoga se ejecutaron 9 corridas iterativas hasta alcanzar FINAL GO. La generación atravesó las 6 waves con 16 agentes y produjo el código completo de la aplicación. Los gates estáticos pasaron: typecheck cero errores, lint cero errores, format verde, deps cero errores, tests 411 passed.
+
+Al intentar arrancar la aplicación generada se detectaron los siguientes bugs:
+
+### 2.1 Bug clase A — Inconsistencia de nombres entre agentes
+
+El agente Auth Security definió en su artifact que el JWT secret debía leerse de la variable de entorno `AUTH_JWT_SECRET`. El agente Service Layer, sin embargo, generó código que también usa esa variable, pero al generar el `.env.example` el sistema escribió `JWT_SECRET` en lugar de `AUTH_JWT_SECRET`. Resultado: la aplicación arrancaba, pero cualquier request que tocara el TokenService devolvía error 500 con mensaje *"AUTH_JWT_SECRET is not configured"*.
+
+**Naturaleza del bug**: contrato implícito entre agentes que no estaba formalizado en ningún schema validable.
+
+### 2.2 Bug clase B — Endpoint llamado por frontend, no creado por backend
+
+El agente Frontend Architect generó código cliente que llama a `/api/classes/public` y `/api/auth/me`. El agente API Backend solo creó `/api/classes/[slug]`. Resultado: la pantalla de listado de clases queda en estado de error permanente con mensaje *"No pudimos cargar las clases"*, y el contexto de autenticación nunca puede resolver el usuario actual.
+
+**Naturaleza del bug**: descoordinación entre el contrato API que el frontend asume y el contrato API que el backend implementa.
+
+### 2.3 Bug clase C — Hydration mismatch
+
+El componente ThemeToggle generado por el agente UI Components hace detección del tema actual del sistema en el primer render, lo que produce un valor distinto en servidor (donde no hay sistema) y en cliente (donde sí lo hay). React emite un warning de hydration mismatch en cada carga de página y el componente reinicia su estado.
+
+**Naturaleza del bug**: falta de conocimiento por parte del agente UI Components sobre las particularidades de Next.js App Router con respecto a server vs client components y al ciclo de hydration.
+
+### 2.4 Bug clase D — Inicialización del entorno
+
+Independiente de los bugs anteriores, arrancar la aplicación requirió aproximadamente tres horas porque Prisma con adapter-pg en Windows con Docker Desktop tiene un bug conocido de autenticación cuando se conecta a Postgres en localhost. La solución final fue migrar a Postgres serverless en Neon. La aplicación generada en sí no podía hacer nada al respecto: no tenía mecanismo para detectar el entorno, verificar la conexión, ni sugerir alternativas.
+
+**Naturaleza del bug**: la aplicación generada asume que el entorno está bien preparado, pero no incluye herramientas para diagnosticar ni recuperarse de problemas del entorno.
+
+### 2.5 Bug clase E — Diseño incompleto
+
+La pantalla de inicio de yoga no incluye header con navegación. El header existe en otras rutas porque está en `(public)/layout.tsx`, pero la home no se renderiza dentro de ese layout. El agente UX/UI Designer no especificó esta jerarquía con suficiente precisión y el agente Pages & Routing tomó decisiones que dejaron la home huérfana del layout público.
+
+**Naturaleza del bug**: el UX/UI Designer monolítico es responsable de demasiadas decisiones (paleta, tipografía, layout, hero, brand voice, micro-interacciones, navegación) y algunas decisiones quedan implícitas o incompletas.
+
+### 2.6 Síntesis
+
+Estos cinco bugs comparten una característica: **ninguno se detecta sin ejecutar la aplicación**. Los gates estáticos validan que el código compila, que los tests unitarios pasan, que las dependencias son consistentes. No validan que un humano (o un agente que se comporte como humano) pueda usar la aplicación. Esa es la brecha que v3 cierra.
+
+---
+
+## 3. Arquitectura de v3: nuevos agentes
+
+Atelier v3 mantiene la arquitectura general de v2 (orchestrator + waves + agentes + schemas + fix loop) pero añade siete agentes nuevos. Los agentes se reorganizan en siete waves en lugar de seis.
+
+### 3.1 Bootstrap & DevOps Agent
+
+**Posición en el pipeline**: Wave 1, entre Discovery y Architect.
+
+**Responsabilidades**:
+
+- Escanear el código que generarán los demás agentes (mediante análisis del PRD y del Discovery) y producir la lista exhaustiva de variables de entorno que la aplicación necesitará.
+- Generar `.env.example` con todas esas variables, sus valores por defecto donde aplique, y comentarios explicando cada una.
+- Generar `.env.local` con valores que funcionan en el entorno de desarrollo.
+- Generar `docker-compose.yml` con servicios preconfigurados (Postgres principalmente) usando configuración robusta probada contra Docker Desktop en Windows, macOS y Linux.
+- Generar scripts `setup.ps1` (PowerShell) y `setup.sh` (bash) que automatizan: levantar Docker, aplicar migraciones Prisma, ejecutar seed, verificar conexión, arrancar dev server.
+- Producir un agente `check-environment` que la aplicación pueda ejecutar al arrancar para detectar entorno inválido y sugerir fixes (por ejemplo: si Postgres no responde, sugerir Neon como alternativa).
+- Generar `README.md` con instrucciones paso a paso para que un humano arranque el proyecto en menos de cinco minutos.
+
+**Contratos clave**:
+
+- El Bootstrap Agent es el único agente autorizado a escribir variables de entorno. Cualquier otro agente que necesite leer `process.env.X` debe registrar `X` en el `env-manifest.json` que produce Bootstrap.
+- El schema de Bootstrap incluye `env-manifest.json` con campos `name`, `required`, `defaultValue`, `description`, `consumedBy[]` (agentes que la usan), `producedBy` (servicio que la valida).
+- Si un agente downstream usa una variable que no está en el manifest, el QA Reviewer emite violación con `severity: BLOCKER`.
+
+**Resuelve los bugs clase A (inconsistencia de nombres) y clase D (inicialización del entorno).**
+
+**Nota sobre enforcement de R0 (autoridad única).** La regla R0 del prompt
+de Bootstrap declara que es el único agente autorizado a declarar variables
+de entorno. Esa regla no descansa solo en la disciplina del agente: el QA
+Reviewer del Wave 6 implementa un gate que escanea todo el código generado
+buscando el patrón `process.env\.` fuera de `src/_shared/config/env.ts`.
+Cada coincidencia emite una violación routada a `bootstrap-devops` con
+`severity: error`, y el fix loop reinvoca al agente para añadir la variable
+faltante al manifest. Esto cierra completamente el bug clase A: no hay
+manera de que dos agentes acaben con nombres distintos para la misma
+variable porque el segundo nunca consigue leerla directamente — el QA gate
+lo fuerza a pasar por el manifest.
+
+### 3.2 Layout Architect Agent
+
+**Posición en el pipeline**: Wave 2, después de UX/UI Designer.
+
+**Responsabilidades**:
+
+- Decidir la arquitectura visual global de la aplicación: qué páginas existen, qué layout tiene cada página, qué elementos persisten entre páginas (header, footer, sidebar, breadcrumbs).
+- Decidir la jerarquía de layouts en Next.js App Router: qué páginas están dentro de `(public)/layout.tsx`, qué páginas están dentro de `(dashboard)/layout.tsx`, qué páginas tienen layout propio.
+- Decidir la composición de cada layout: en el header qué links aparecen, dónde va el toggle de tema, dónde el botón de empezar.
+- Producir un artifact `layout-tree.json` con la estructura completa.
+- **Conectarse con Stitch**: a partir del designVibe, del PRD y de la lista de páginas decidida, escribir el prompt arquitectónico que Stitch entiende para generar todas las pantallas de la aplicación.
+- Recibir la respuesta de Stitch y parsearla: extraer estructura, jerarquía, espaciados, agrupaciones visuales. **No tomar el HTML literal**. Producir un artifact `stitch-analysis.json` con la decomposición.
+
+**Contratos clave**:
+
+- Toda página declarada por Pages & Routing en Wave 3 debe corresponder a una entrada en `layout-tree.json`. Si no corresponde, violación BLOCKER.
+- El header generado por UI Components debe contener todos los links declarados en `layout-tree.json`. Si falta alguno, violación BLOCKER.
+- La home page debe estar declarada explícitamente como dentro de `(public)/layout.tsx` o como standalone. No puede quedar ambigua.
+
+**Resuelve el bug clase E (diseño incompleto, home sin header).**
+
+### 3.3 Brand Identity Agent
+
+**Posición en el pipeline**: Wave 2, en paralelo con Layout Architect.
+
+**Responsabilidades**:
+
+- Decidir el nombre de marca, tagline, voz, tono.
+- Decidir el microcopy de toda la aplicación: textos de botones, mensajes de error, estados vacíos, placeholders, tooltips, confirmaciones.
+- Decidir la paleta de colores final (los tokens concretos) a partir del designVibe del UX/UI Designer.
+- Decidir la tipografía: familias, escalas, pesos.
+- Producir `brand-identity.json` con todos estos elementos formalizados.
+- Generar logo SVG simple si la aplicación lo necesita (o decidir explícitamente que se usa solo wordmark).
+
+**Contratos clave**:
+
+- Cualquier string visible al usuario en la aplicación debe provenir del `brand-identity.json` o del archivo de i18n que este agente produce.
+- El UI Components Agent no puede hardcodear textos: debe consumirlos del manifest del Brand Identity.
+
+**Resuelve la fragmentación de voz y la inconsistencia de microcopy que existe en v2.**
+
+### 3.4 Animation Choreographer Agent
+
+**Posición en el pipeline**: Wave 4, después de UI Components.
+
+**Responsabilidades**:
+
+- Decidir qué animaciones hay y dónde: transiciones entre páginas, animaciones de entrada de elementos, micro-interacciones de botones, scroll-driven animations, hover states sofisticados.
+- Producir `animations.json` con cada animación: trigger, target, duration, easing, propiedades animadas, fallback para `prefers-reduced-motion`.
+- Generar el código real de las animaciones usando Framer Motion (o tu librería preferida) e inyectarlo en los componentes correspondientes.
+- Garantizar que ninguna animación rompe el flujo (no animar cosas que el usuario necesita pulsar, no animar formularios al teclear, etc).
+- Validar que todas las animaciones respetan `prefers-reduced-motion`.
+
+**Contratos clave**:
+
+- Las animaciones se aplican como wrappers o props sobre componentes existentes. El agente no reescribe componentes.
+- Toda animación debe tener fallback para accesibilidad.
+- Las animaciones se documentan visualmente (cada una con un gif o descripción precisa en `animations.json`).
+
+**Aporta el polish que el UX/UI Designer de v2 no producía.**
+
+### 3.5 Accessibility Agent
+
+**Posición en el pipeline**: Wave 5, después de Animation Choreographer.
+
+**Responsabilidades**:
+
+- Auditar la salida de UI Components y Forms Validations para verificar cumplimiento WCAG 2.1 nivel AA.
+- Verificar contrastes de color sobre todos los pares (foreground, background) usados en la aplicación.
+- Verificar que todos los elementos interactivos tienen estados de focus visibles.
+- Verificar que todos los formularios tienen labels asociados.
+- Verificar que las imágenes tienen `alt`.
+- Verificar que la navegación con teclado funciona en todos los flujos críticos.
+- Verificar que los roles ARIA son correctos y necesarios.
+- Producir un `accessibility-audit.json` con findings clasificados como CRITICAL, MAJOR, MINOR.
+- Para findings CRITICAL y MAJOR: emitir patches sobre los archivos involucrados y aplicarlos.
+
+**Contratos clave**:
+
+- Findings CRITICAL bloquean el GO. Findings MAJOR generan violations al fix loop. Findings MINOR se documentan pero no bloquean.
+- El Accessibility Agent puede modificar archivos producidos por otros agentes. Es el único agente con esa capacidad post-hoc además del fix loop.
+
+**Resuelve un gap completo de v2 donde la accesibilidad no se validaba.**
+
+### 3.6 Visual QA Agent
+
+**Posición en el pipeline**: Wave 7, después del QA estático tradicional y antes del FINAL GO.
+
+**Responsabilidades**:
+
+- Arrancar la aplicación generada en background (usando los scripts producidos por Bootstrap Agent).
+- Esperar a que esté lista (polling de `/` hasta recibir 200 OK).
+- Ejecutar dos suites de validación:
+  - **Suite cliente**: comportamiento como usuario no autenticado y como usuario autenticado normal. Navega home, ve listados públicos, hace signup, hace login, completa el flujo principal de la aplicación (en yoga: ver clases, reservar; en tutorías: ver tutores, contactar).
+  - **Suite admin**: comportamiento como administrador. Login con admin demo, accede al dashboard, lista entidades, crea una nueva, edita la existente, borra la creada.
+- Cada paso del flujo está parametrizado por el dominio: el Visual QA Agent lee el PRD y el discovery para entender qué flujos existen y qué entidades manipula el admin.
+- Capturar screenshot tras cada paso.
+- Detectar errores de runtime: error 500, error 404 sobre endpoints internos, hydration mismatches, errores de consola que no son `console.warn`, requests fallidos en la network tab.
+- Comparar screenshots con mockups de Stitch (cuando existen) para detectar regresiones visuales mayores.
+- Producir `visual-qa-report.json` con: pasos ejecutados, screenshots, errores detectados, request log, console log.
+- Para cada error detectado: emitir violación routada al agente responsable (404 sobre endpoint → API Backend; hydration mismatch → UI Components; layout roto → Layout Architect).
+- El fix loop existente recoge esas violaciones y las arregla.
+
+**Implementación técnica**:
+
+- **Para flujos deterministas** (login, navegar a ruta concreta, click en botón con selector estable, rellenar formulario): **Playwright headless**. Es rápido, determinista, y los pasos los puede generar el propio Visual QA Agent leyendo el PRD.
+- **Para evaluación más sutil** (¿este botón está bien alineado?, ¿este texto se sale del card?, ¿este color tiene contraste suficiente?): **Claude Vision sobre los screenshots**. Se llama a Claude con la imagen y un prompt de auditoría. Esto es Claude Code subprocess, no API, manteniendo la coherencia del stack v2.
+- **Para auditorías reactivas a fallos** (cuando Playwright detecta un 500, capturar el contexto completo: stack trace, request, headers, body): el agente compone un reporte estructurado.
+
+**Contratos clave**:
+
+- Ningún FINAL GO se emite sin Visual QA verde.
+- Visual QA es el único agente que ejecuta código de la aplicación generada, no solo lo analiza.
+- Si la app no arranca, Visual QA emite violación CRITICAL routada a Bootstrap Agent.
+
+**Resuelve los bugs clase A, B, C, D y E**. Es la pieza central de v3.
+
+### 3.7 Seeds & Fixtures mejorado
+
+**Posición en el pipeline**: Wave 5 (igual que en v2, pero con responsabilidades ampliadas).
+
+**Responsabilidades nuevas respecto a v2**:
+
+- Generar volumen realista: si la aplicación es para gestión de clases de yoga, no 6 clases sino 50; no 5 usuarios sino 30; no 3 reservas sino 200.
+- Distribuir datos en el tiempo de forma natural: las clases del pasado, presente y futuro tienen distribución realista.
+- Generar casos edge explícitos: un usuario suspended, una clase cancelled, una membresía exhausted, una reserva invalidated. Cada estado del dominio debe tener al menos un representante en el seed.
+- Generar relaciones consistentes pero diversas: usuarios con múltiples membresías históricas, clases con teachers diferentes, reservas dispersas entre fechas y usuarios.
+- Coordinar con Visual QA: el Visual QA Agent necesita saber qué entidades concretas existen en el seed para verificar que el admin puede editarlas. Seeds produce un `seed-manifest.json` con los identificadores de las entidades clave que Visual QA usará en sus scripts.
+
+**Contratos clave**:
+
+- Cobertura de estados: para cada enum del dominio, al menos un row en el seed con cada valor del enum.
+- Identificadores estables: las entidades demo principales (admin, demo user, demo class, demo membership) tienen IDs fijos predecibles que Visual QA puede usar.
+
+**Resuelve la insuficiencia de los datos demo de v2 y habilita la validación admin de Visual QA.**
+
+---
+
+## 4. Integración con MCPs externos
+
+V3 introduce uso intensivo de MCPs para acercar la calidad del output al nivel de un equipo humano senior. Todos los MCPs se consumen desde subagentes Claude Code, no desde API directa.
+
+### 4.1 Stitch (Google) — Motor principal de diseño visual
+
+Stitch es la herramienta de diseño más capaz disponible: genera pantallas completas y multi-página desde un prompt. En v3 ocupa el rol de **generador maestro de diseño**.
+
+**Cómo se usa en v3**:
+
+- **Layout Architect** redacta el prompt arquitectónico para Stitch. El prompt incluye: tipo de aplicación, designVibe, lista de páginas a generar, descripción funcional de cada página, paleta de colores tentativa, tipografía tentativa, brand voice.
+- Stitch genera todas las pantallas. La salida es HTML/CSS de alta calidad.
+- **El HTML de Stitch no se usa literalmente**. Layout Architect parsea la salida y produce `stitch-analysis.json` con: estructura jerárquica, agrupaciones visuales, espaciados, tokens de color, tokens tipográficos, decisiones de layout.
+- **UI Components Agent** consume `stitch-analysis.json` y codifica los componentes en la arquitectura real de Atelier: React + shadcn + Tailwind, con las convenciones de v2.
+- El resultado: la aplicación se ve como Stitch la diseñó, pero está implementada con tu stack real, tus convenciones, tus tests.
+
+**Limitaciones de Stitch que cubren otros agentes**:
+
+- Stitch no genera animaciones complejas → Animation Choreographer
+- Stitch no audita accesibilidad → Accessibility Agent
+- Stitch no decide microcopy ni voz de marca → Brand Identity (que también informa al prompt de Stitch)
+- Stitch no implementa funcionalidad real → toda la cadena backend + frontend de v2
+
+### 4.2 shadcn MCP
+
+Atelier v2 ya usa shadcn como librería de componentes base. En v3, el shadcn MCP permite al UI Components Agent:
+
+- Consultar el catálogo completo de componentes shadcn actualizado.
+- Importar componentes con un comando del MCP en lugar de copiar código manualmente.
+- Pedir variantes (botón con loading state, dropdown con search, etc) que vienen pre-armadas.
+
+### 4.3 Tweakcn
+
+Tweakcn produce themes premium para shadcn (tokens de color y radius más sofisticados que los defaults). En v3, **Brand Identity Agent** consulta Tweakcn para obtener tokens de color que combinen bien con el designVibe decidido.
+
+### 4.4 21st.dev
+
+21st.dev es una librería de componentes UI premium. En v3, **UI Components Agent** consulta 21st.dev cuando shadcn no tiene un componente que el diseño requiere (por ejemplo: bento grid sofisticado, hero con animaciones específicas, pricing table con comparador).
+
+### 4.5 Framer Motion (librería, no MCP)
+
+Para animaciones, Framer Motion es la librería estándar en React. **Animation Choreographer** la usa para implementar todas las animaciones decididas. No hay MCP de Framer por ahora, pero la librería en sí es suficiente: el agente conoce su API y genera el código directamente.
+
+### 4.6 Decisión sobre Figma
+
+Figma MCP existe y permitiría importar diseños humanos hechos en Figma. **Se excluye explícitamente de v3** porque va contra la visión: Atelier debe generar la aplicación completa sin necesidad de diseño humano previo. Stitch reemplaza ese rol con generación automática.
+
+---
+
+## 5. Nuevos gates de QA
+
+Atelier v2 tiene cuatro gates: typecheck, lint, tests, deps. En v3 se añaden tres más, ejecutados secuencialmente tras los cuatro existentes.
+
+### 5.1 Gate 5 — Runtime smoke test
+
+**Qué hace**: arranca la aplicación en background con los scripts de Bootstrap Agent. Espera a que `/` responda 200. Verifica que cinco rutas básicas (home, login page, signup page, una ruta protegida sin auth devuelve 401, una ruta pública devuelve 200) responden lo esperado.
+
+**Quién lo ejecuta**: el orchestrator, antes de pasar a gate 6.
+
+**Si falla**: violación routada a Bootstrap Agent o al agente API Backend según el tipo de fallo.
+
+### 5.2 Gate 6 — Visual regression
+
+**Qué hace**: para cada página principal generada, captura screenshot. Compara con los mockups de Stitch correspondientes mediante pixel diff con tolerancia (las diferencias menores son aceptables, las grandes no).
+
+**Quién lo ejecuta**: Visual QA Agent en modo screenshot-only.
+
+**Si falla**: violación routada a UI Components o Layout Architect según el tipo de regresión.
+
+### 5.3 Gate 7 — Flow validation E2E
+
+**Qué hace**: ejecuta las suites cliente y admin completas con Playwright. Pasa si todos los flujos completan sin errores 500, sin 404s sobre endpoints internos, sin hydration mismatches, sin errores en consola.
+
+**Quién lo ejecuta**: Visual QA Agent.
+
+**Si falla**: violaciones individuales routadas según el origen (404 → API Backend, hydration → UI Components, layout incompleto → Layout Architect, datos no cargan → Service Layer o Persistence).
+
+### 5.4 Estrategia general de los gates
+
+El principio se mantiene: cada gate produce violaciones que el fix loop intenta resolver. La diferencia es que ahora los gates 5, 6, 7 detectan **bugs de runtime**, lo cual cierra completamente la brecha que motivó v3.
+
+---
+
+### 5.5 Protocolo de validación incremental wave-por-wave
+
+V2 demostró que correr el pipeline entero y validar al final es inadecuado: una corrida puede terminar en FINAL GO con todos los gates verde y aún así tener bugs runtime detectables solo al arrancar la aplicación. V3 introduce un modo de validación incremental que pausa entre waves para permitir intervención humana cuando se desea.
+
+#### Modo `--step-by-step`
+
+El orchestrator acepta el flag `--step-by-step` que cambia su comportamiento de "correr todo de un tirón" a "correr una wave, pausar, mostrar artifacts, esperar aprobación humana".
+
+Cuando una wave termina, el orchestrator:
+
+1. Imprime en consola un resumen estructurado y legible de los artifacts producidos por esa wave (no JSON crudo, formato humano).
+2. Para wave 2 (diseño): renderiza los mockups de Stitch que Layout Architect ha consumido, junto con la paleta, tipografía y microcopy decidido por Brand Identity. Permite ver lo decidido antes de codificar.
+3. Para wave 4 (frontend): produce un report HTML temporal con cada componente generado en un sandbox aislado (storybook-like) para que el humano pueda revisar visualmente.
+4. Para wave 7 (visual QA): produce un report con todos los screenshots tomados, los logs de errores capturados, y el detalle de qué flujos pasaron y cuáles no.
+5. Espera input humano mediante uno de tres comandos:
+   - `atelier approve <wave>`: aprueba la wave y procede a la siguiente.
+   - `atelier reject <wave> --reason "texto explicando qué cambiar"`: rechaza la wave, regenera SOLO esa wave con el feedback humano como contexto adicional, vuelve a pausar.
+   - `atelier inspect <wave>`: imprime detalle adicional sin tomar decisión, permite explorar antes de decidir.
+
+#### Regeneración granular en rechazo
+
+Cuando el humano rechaza una wave, el orchestrator:
+
+- Conserva intactos los artifacts de las waves anteriores aprobadas.
+- Descarta los artifacts de la wave rechazada.
+- Re-ejecuta solo los agentes de esa wave, inyectándoles en el contexto el motivo del rechazo del humano y los artifacts anteriores que ya están aprobados.
+- Vuelve a pausar tras terminar.
+
+Si el rechazo de una wave invalida lógicamente waves anteriores (por ejemplo: el humano rechaza wave 2 diciendo "quiero un dominio de e-commerce, no de yoga", lo cual invalida el Discovery), el orchestrator detecta la incompatibilidad y propone regenerar también las waves anteriores afectadas, pidiendo confirmación.
+
+#### Modo `--auto` por defecto
+
+Si el flag `--step-by-step` no se proporciona, el orchestrator se comporta como en v2: corre todo de un tirón, gates se ejecutan al final, fix loop intenta arreglar. Este modo se mantiene para iteraciones rápidas y para CI/CD.
+
+#### Recomendación de uso
+
+La recomendación operativa es:
+
+- **Primera generación de un dominio nuevo**: siempre `--step-by-step`. El humano valida cada wave antes de gastar tokens en la siguiente. Esto previene quemar 1h de generación por una decisión arquitectónica mal tomada en wave 1 que invalida todo lo de después.
+- **Iteraciones posteriores sobre el mismo dominio**: `--auto`, fiándose del fix loop, porque las decisiones de diseño ya están validadas.
+- **Validación de la propia v3 sobre dominios de prueba**: `--step-by-step` siempre, para que el equipo humano pueda detectar regresiones del sistema multi-agente en cada punto del pipeline.
+
+#### Comparativa de modos
+
+| Aspecto | Modo v2 (auto) | Modo v3 step-by-step |
+|---|---|---|
+| Intervención humana | Solo al final | En cada wave |
+| Detección temprana de problemas | No | Sí |
+| Coste de tokens si algo va mal | Alto (toda la corrida) | Bajo (solo hasta el rechazo) |
+| Tiempo total | Más rápido si todo va bien | Más lento pero más seguro |
+| Adecuado para | CI, iteraciones | Primera generación de dominio |
+
+Este protocolo aborda directamente la preocupación de que "v2 parece que va todo pero al final fallan cosas". En v3 las cosas no fallan al final porque cada paso se valida en su momento, no después de horas de generación.
+
+---
+
+## 6. Cambios al orchestrator y al esquema de waves
+
+V2 tiene 6 waves y 16 agentes. V3 tiene 7 waves y 23 agentes.
+
+```
+Wave 1 — Discovery & Architecture
+  - Discovery Agent (existente)
+  - Architect Agent (existente)
+  - Bootstrap & DevOps Agent (NUEVO)
+
+Wave 2 — Design & Domain
+  - UX/UI Designer Agent (existente, simplificado)
+  - Layout Architect Agent (NUEVO)
+  - Brand Identity Agent (NUEVO)
+  - Domain Modeler Agent (existente)
+
+Wave 3 — Backend Foundation
+  - Persistence Agent (existente)
+  - Auth Security Agent (existente)
+  - RBAC Authorization Agent (existente)
+  - Service Layer Agent (existente)
+  - API Contract Agent (existente)
+  - API Backend Agent (existente)
+
+Wave 4 — Frontend Foundation
+  - Frontend Architect Agent (existente)
+  - UI Components Agent (existente, ahora consume stitch-analysis)
+  - Pages Routing Agent (existente, ahora consume layout-tree)
+  - Forms Validations Agent (existente)
+  - Animation Choreographer Agent (NUEVO)
+
+Wave 5 — Data & Polish
+  - Seeds & Fixtures Agent (existente, ampliado)
+  - Tests Writer Agent (existente)
+  - Accessibility Agent (NUEVO)
+
+Wave 6 — Static QA
+  - QA Reviewer Agent (existente)
+  - Gates: typecheck, lint, tests, deps
+
+Wave 7 — Runtime QA
+  - Visual QA Agent (NUEVO)
+  - Gates: runtime smoke test, visual regression, flow validation
+```
+
+### 6.1 Fix loop ampliado
+
+El fix loop de v2 solo enruta violaciones a agentes que producen código. En v3 también enruta violaciones a:
+
+- **Bootstrap Agent** (cuando hay env vars mal documentadas, cuando docker-compose falla, cuando la app no arranca).
+- **Layout Architect** (cuando una página carece de layout o tiene layout incorrecto).
+- **Brand Identity** (cuando un texto hardcodeado debería venir del manifest).
+- **Animation Choreographer** (cuando una animación rompe accesibilidad).
+- **Accessibility Agent** (cuando una nueva regresión introduce un finding CRITICAL).
+
+### 6.2 Modo orchestrator: skip y resume
+
+V2 ya soporta skip y resume. En v3 se generaliza: cualquier wave puede saltarse si su artifact está presente en disco y valida contra schema. Esto es crítico porque las waves nuevas (Wave 7 especialmente) son costosas y queremos poder iterar sobre fixes sin re-generar diseño.
+
+---
+
+## 7. Skills custom propuestos
+
+Claude Code soporta skills (paquetes con instrucciones especializadas). V3 introduce los siguientes skills custom que viven en `/skills/` del repositorio Atelier:
+
+### 7.1 Skill `stitch-bridge`
+
+Instrucciones precisas sobre cómo escribir prompts efectivos para Stitch y cómo parsear su salida. Usado por Layout Architect.
+
+### 7.2 Skill `motion-design`
+
+Buenas prácticas de motion design: cuándo animar, cuándo no, qué easings usar para cada tipo de transición, cómo respetar prefers-reduced-motion. Usado por Animation Choreographer.
+
+### 7.3 Skill `brand-voice-writing`
+
+Plantillas y ejemplos de microcopy efectivo para los estados comunes de aplicaciones SaaS: empty states, error states, success states, loading states, tooltips, placeholders. Usado por Brand Identity.
+
+### 7.4 Skill `playwright-e2e-flows`
+
+Patrones probados de scripts Playwright para flujos comunes: signup, login, CRUD de entidad, navegación entre roles, captura de errores de consola. Usado por Visual QA.
+
+### 7.5 Skill `accessibility-audit`
+
+Checklist completa WCAG 2.1 AA con código de detección para cada criterio. Usado por Accessibility Agent.
+
+### 7.6 Skill `runtime-diagnostics`
+
+Patrones de detección y resolución de problemas comunes de arranque: connection refused, env vars missing, port in use, dependencies missing, migrations not applied. Usado por Bootstrap y Visual QA.
+
+---
+
+## 8. Decisiones técnicas explícitas
+
+### 8.1 Sin API de Anthropic, solo Claude Code subprocess
+
+Todos los agentes y sub-agentes de v3 se ejecutan como subprocess de Claude Code con el plan Max, sin uso de la API directa. Esto preserva el modelo económico de v2 (subscription en lugar de pago por token) y mantiene la coherencia operativa.
+
+### 8.2 Stitch via MCP, no via screenshot manual
+
+El Layout Architect interactúa con Stitch programáticamente a través del MCP. No se pegan capturas manualmente. Esto garantiza reproducibilidad.
+
+### 8.3 Visual QA usa Playwright + Claude Vision
+
+- **Playwright** para clicks deterministas, asserts duros, captura de logs de red y consola.
+- **Claude Vision** (a través de subprocess Claude Code analizando screenshots) para evaluación visual subjetiva y detección de problemas de layout que Playwright no puede expresar.
+
+### 8.4 El admin demo es first-class
+
+V2 ya tiene admin demo (`admin@demo.atelier / demo1234`). En v3 este admin es **first-class**: el Visual QA Agent siempre prueba el flujo admin, y el Seed Agent garantiza que existe data abundante que el admin pueda manipular.
+
+### 8.5 Detección de stack incompleto
+
+Si durante la generación se detecta que la aplicación necesita algo que ningún agente cubre (por ejemplo: pagos, emails transaccionales, file uploads, websockets), el orchestrator emite una nota explícita en el FINAL report. No falla, pero documenta la limitación. Esto es transparencia técnica que evita sorpresas.
+
+---
+
+## 9. Prompt de implementación para Claude Code
+
+A continuación, el prompt que se le entregará a Claude Code (Max plan, sin `--bare`) para implementar v3 sobre la rama actual de v2. Este prompt se usa **después de la defensa del TFG**, no antes. Durante la defensa, v3 se presenta como evidencia de hallazgos y plan de evolución.
+
+---
+
+**INICIO DEL PROMPT**
+
+Estás trabajando sobre Atelier v2, un sistema multi-agente generador de aplicaciones web full-stack. La versión 2 está completa, validada con yoga y tutorías, y residente en la rama `v2`. Tu tarea es implementar la versión 3.
+
+El documento `ROADMAP_V3.md` en la raíz del repo contiene la especificación completa. Léelo en su totalidad antes de empezar. No improvises sobre lo que no está en el documento.
+
+Objetivos de v3:
+
+1. Añadir Bootstrap & DevOps Agent que garantice que el proyecto generado arranca sin intervención humana.
+2. Añadir Visual QA Agent que pruebe la aplicación generada como cliente y como admin reales con Playwright y Claude Vision.
+3. Descomponer el UX/UI Designer monolítico en cuatro agentes especializados: Layout Architect, Brand Identity, Animation Choreographer, Accessibility Agent.
+4. Integrar MCPs externos: Stitch (motor de diseño), shadcn MCP, Tweakcn, 21st.dev. Sin Figma.
+5. Añadir tres gates nuevos de QA: runtime smoke test, visual regression, flow validation E2E.
+6. Ampliar Seeds & Fixtures para producir datos abundantes, variados y con casos edge cubiertos.
+7. Reorganizar el orchestrator a siete waves en lugar de seis.
+
+Restricciones operativas:
+
+- Todos los agentes son subprocess de Claude Code, plan Max, sin `--bare`. No usar la API de Anthropic directamente.
+- Mantener compatibilidad hacia atrás con v2: el motor v2 sigue funcionando, v3 es opt-in mediante flag `--v3` en el orchestrator.
+- Cada nuevo agente tiene su prompt en `/prompts/v3/<agent>.md`, su schema en `/schemas/v3/<agent>.zod.ts`, y su artifact se guarda en `.atelier/<artifact>.json` igual que en v2.
+- Cada nuevo skill custom vive en `/skills/<skill-name>/SKILL.md` con sus ejemplos.
+- Crear un fixture nuevo `restaurant-prd.json` para validar v3 contra un dominio que v2 no ha tocado.
+- Lanzar generación end-to-end del fixture restaurant con v3 activado, debe terminar en FINAL GO con todos los gates verde incluidos los nuevos.
+
+Orden recomendado de implementación:
+
+1. Bootstrap & DevOps Agent (resuelve los bloqueos más sangrantes de arranque).
+2. Flag `--step-by-step` en el orchestrator y comandos `atelier approve|reject|inspect`. Esto entra temprano porque facilita validar todo lo demás.
+3. Esquema de Wave 7 y Visual QA Agent versión Playwright-only (sin Claude Vision aún).
+4. Tres gates nuevos integrados al orchestrator.
+5. Layout Architect Agent con integración Stitch MCP.
+6. Brand Identity Agent.
+7. Animation Choreographer Agent.
+8. Accessibility Agent.
+9. Visual QA Agent versión con Claude Vision integrada.
+10. Seeds & Fixtures ampliado.
+11. Skills custom (en paralelo durante todo el proceso).
+12. Validación E2E con fixture restaurant en modo `--step-by-step`, wave por wave, sin pasar a la siguiente hasta aprobación.
+13. Re-validación de yoga y tutorías para asegurar no-regresión.
+
+Para cada agente nuevo, antes de codificar:
+
+- Leer en el ROADMAP la sección correspondiente.
+- Diseñar el schema Zod del artifact.
+- Diseñar el prompt del agente (estilo v2: rol, contexto, inputs, deliverables, restricciones, formato de salida).
+- Escribir 3-5 tests unitarios sobre el agente con fixtures sintéticos antes de integrarlo al orchestrator.
+- Integrarlo al orchestrator detrás del flag `--v3`.
+- Probarlo en dry-run completo antes de probarlo con LLM real.
+
+Trabajas iterativamente. Reportas progreso cada wave. Si algo no está claro en el ROADMAP, paras y preguntas en lugar de improvisar.
+
+**FIN DEL PROMPT**
+
+---
+
+## 10. Métricas de éxito de v3
+
+V3 se considera completa cuando, sobre tres dominios distintos (yoga, tutorías, restaurant) en cleanup separado:
+
+- La aplicación generada arranca con un único comando (`pnpm setup && pnpm dev`) en menos de cinco minutos sobre Windows, macOS y Linux.
+- Los siete gates de QA pasan en verde en la primera corrida o tras un único ciclo de fix loop.
+- Un humano puede completar el flujo cliente principal y el flujo admin principal sin encontrarse con error 500, error 404 sobre endpoints internos, hydration mismatch ni datos que no cargan.
+- El diseño es comparable visualmente a aplicaciones SaaS contemporáneas de buena factura: tiene header, tiene navegación, tiene microcopy cuidado, tiene animaciones discretas pero presentes, tiene estados vacíos diseñados.
+- La accesibilidad WCAG 2.1 nivel AA se cumple sin findings CRITICAL.
+
+---
+
+## 11. Trabajo futuro post-v3
+
+V3 no es la versión final del sistema. Más allá de v3, hay decisiones que quedarán abiertas y que se documentan aquí para no perder el hilo:
+
+- **Multi-tenancy nativo**: que las aplicaciones generadas soporten múltiples organizaciones desde el primer momento, no como añadido posterior.
+- **Self-improving agents**: que el sistema aprenda de las violaciones que ha tenido que arreglar y ajuste los prompts de los agentes para evitarlas en futuras corridas.
+- **Deploy agent**: que tras el FINAL GO la aplicación se despliegue automáticamente a Vercel o equivalente con Postgres en Neon, dominio, SSL, y todo configurado.
+- **Branding wizard**: permitir al usuario customizar la identidad de marca tras la generación inicial, con regeneración solo de los artifacts afectados.
+- **Plugin marketplace**: que los dominios verticales (e-commerce, SaaS B2B, marketplaces) tengan paquetes de agentes especializados encima del core.
+
+Estas no son tareas de v3, pero forman el horizonte natural del proyecto.
+
+---
+
+## 12. Cierre
+
+V3 es la consecuencia directa de lo aprendido en v2. No es ambición desordenada, no es feature creep. Es respuesta concreta a cinco clases de bugs identificados y reproducibles en la validación E2E del dominio yoga. Cada agente nuevo, cada gate nuevo, cada MCP integrado responde a un bug específico que v2 no detectó.
+
+El sistema resultante mantendrá la arquitectura clara y modular de v2 pero cerrará la brecha entre "código sintácticamente correcto" y "aplicación funcionalmente operativa", completando el ciclo de validación end-to-end y acercando la calidad del output al nivel de un equipo humano senior trabajando con buenas prácticas.

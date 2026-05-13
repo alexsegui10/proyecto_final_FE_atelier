@@ -211,6 +211,18 @@ export const bootstrapOutputSchema = z
       return a.dockerServices.every((s) => s.envVars.every((name) => declared.has(name)));
     },
     "dockerServices reference env vars that aren't declared in the manifest",
+  )
+  // crossPlatformScripts ⟺ ambos paths terminan en .ps1 y .sh
+  .refine(
+    (a) => a.invariants.crossPlatformScripts ===
+      (a.filesProduced.setupPs1.endsWith(".ps1") && a.filesProduced.setupSh.endsWith(".sh")),
+    "invariant.crossPlatformScripts must match (setupPs1.endsWith(.ps1) && setupSh.endsWith(.sh))",
+  )
+  // healthcheckPresent ⟺ al menos un service tiene healthcheck non-empty
+  .refine(
+    (a) => a.invariants.healthcheckPresent ===
+      a.dockerServices.some((s) => typeof s.healthcheck === "string" && s.healthcheck.length > 0),
+    "invariant.healthcheckPresent must match (dockerServices has at least one non-empty healthcheck)",
   );
 
 export type DockerService = z.infer<typeof dockerServiceSchema>;

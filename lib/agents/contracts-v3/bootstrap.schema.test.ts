@@ -236,4 +236,58 @@ describe("bootstrapOutputSchema", () => {
     });
     expect(validateBootstrapOutput(art)).toMatch(/service name/);
   });
+
+  // ─── Invariant enforcement: crossPlatformScripts + healthcheckPresent ──
+
+  it("rejects crossPlatformScripts=true when setupPs1 has a non-.ps1 extension", () => {
+    const art = fullArtifact({
+      filesProduced: {
+        envExample: ".env.example",
+        envLocal: ".env.local",
+        dockerCompose: "docker-compose.yml",
+        setupPs1: "scripts/setup.bat", // wrong extension
+        setupSh: "scripts/setup.sh",
+        readme: "README.md",
+        checkEnvironment: "src/_shared/config/check-environment.ts",
+        envValidator: "src/_shared/config/env.ts",
+      },
+      invariants: {
+        singleSourceOfTruth: true,
+        crossPlatformScripts: true, // claim contradicts setupPs1 extension
+        healthcheckPresent: true,
+      },
+    });
+    expect(validateBootstrapOutput(art)).toMatch(/crossPlatformScripts/);
+  });
+
+  it("rejects healthcheckPresent=true when no docker service has a non-empty healthcheck", () => {
+    const art = fullArtifact({
+      dockerServices: [
+        {
+          name: "postgres",
+          image: "postgres:16-alpine",
+          ports: ["5433:5432"],
+          envVars: [],
+          // healthcheck deliberately omitted
+        },
+      ],
+      invariants: {
+        singleSourceOfTruth: true,
+        crossPlatformScripts: true,
+        healthcheckPresent: true, // claim contradicts the lack of any healthcheck
+      },
+    });
+    expect(validateBootstrapOutput(art)).toMatch(/healthcheckPresent/);
+  });
+
+  it("accepts artifact where both invariants honestly match reality", () => {
+    // Default fixture already has setupPs1: scripts/setup.ps1 and
+    // dockerServices[0].healthcheck: "pg_isready ..." — so this is the
+    // positive case for both refinements together.
+    const art = fullArtifact();
+    expect(art.filesProduced.setupPs1.endsWith(".ps1")).toBe(true);
+    expect(art.filesProduced.setupSh.endsWith(".sh")).toBe(true);
+    expect(typeof art.dockerServices[0]?.healthcheck === "string").toBe(true);
+    expect(validateBootstrapOutput(art)).toBeNull();
+  });
 });
