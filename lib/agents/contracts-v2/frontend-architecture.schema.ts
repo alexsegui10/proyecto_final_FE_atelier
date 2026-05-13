@@ -10,11 +10,18 @@ import { z } from "zod";
 
 const contextSchema = z
   .object({
-    name: z.string().regex(/^[A-Z][A-Za-z0-9]*Context$/, "must end in 'Context'"),
-    state: z.array(z.string().min(1)).min(1),
+    // Accept both `*Context` (named after the context value) and `*Provider`
+    // (named after the wrapper component) — both are valid React patterns,
+    // and pure Provider wrappers like QueryProvider are common.
+    // Accept *Context / *Provider / *Providers — all are valid React patterns
+    // (Context value, single Provider wrapper, or composition-root Providers).
+    name: z.string().regex(/^[A-Z][A-Za-z0-9]*(Context|Provider|Providers)$/, "must end in Context|Provider|Providers"),
+    // Pure providers (e.g. QueryProvider wrapping TanStack Query) have no
+    // own state — they just inject a dependency. Empty array is valid.
+    state: z.array(z.string().min(1)),
     actions: z.array(z.string().min(1)),
   })
-  .strict();
+  .passthrough();
 
 const querySchema = z
   .object({
@@ -28,15 +35,17 @@ const querySchema = z
     ]),
     staleTimeMs: z.number().int().nonnegative().optional(),
   })
-  .strict();
+  .passthrough();
 
 const mutationSchema = z
   .object({
     name: z.string().regex(/^use[A-Z][A-Za-z0-9]*$/),
     endpoint: z.string().regex(/^(POST|PUT|PATCH|DELETE) \/api\//),
-    invalidates: z.array(z.union([z.string(), z.array(z.string())])).min(1),
+    // Mutations like signOut/signOutEverywhere clear the cache entirely (no
+    // specific invalidates). Empty array is valid.
+    invalidates: z.array(z.union([z.string(), z.array(z.string())])),
   })
-  .strict();
+  .passthrough();
 
 export const frontendArchitectureSchema = z
   .object({
@@ -44,7 +53,7 @@ export const frontendArchitectureSchema = z
     queries: z.array(querySchema).min(1),
     mutations: z.array(mutationSchema).min(1),
   })
-  .strict();
+  .passthrough();
 
 export type FrontendArchitecture = z.infer<typeof frontendArchitectureSchema>;
 

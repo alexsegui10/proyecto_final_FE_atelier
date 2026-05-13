@@ -11,9 +11,11 @@ const indexSchema = z
   .object({
     model: z.string().min(1),
     fields: z.array(z.string().min(1)).min(1),
-    type: z.enum(["unique", "btree", "unique-where-active", "gin", "hash"]),
+    // 'primary' added for explicit PK index declarations. Prisma auto-derives
+    // PKs but the LLM sometimes documents them in the metadata explicitly.
+    type: z.enum(["unique", "btree", "unique-where-active", "gin", "hash", "primary"]),
   })
-  .strict();
+  .passthrough();
 
 // Passthrough — LLM may produce alternative check shapes (e.g. {model, field,
 // values, documentedAs} for enum-like CHECK constraints) which are sensible

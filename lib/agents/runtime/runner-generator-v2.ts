@@ -109,7 +109,10 @@ export const AGENT_CONFIG_V2: Record<AgentNameV2, AgentConfigEntry> = {
 
   // Wave 2
   "domain-modeler": { timeoutMs: 8 * 60_000, model: "opus", stopSentinel: "DOMAIN_MODELER_DONE" },
-  persistence: { timeoutMs: 8 * 60_000, model: "opus", stopSentinel: "PERSISTENCE_DONE" },
+  // Bumped 8→15min after Day-5 run 3 timed out at exactly 8m. Persistence
+  // generates 4 models + repos + DTOs + mappers + prisma schema; the workload
+  // legitimately needs more headroom on yoga-scale PRDs.
+  persistence: { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "PERSISTENCE_DONE" },
   "seeds-shape": { timeoutMs: 4 * 60_000, model: "opus", stopSentinel: "SEEDS_SHAPE_DONE" },
 
   // Wave 3
@@ -121,24 +124,28 @@ export const AGENT_CONFIG_V2: Record<AgentNameV2, AgentConfigEntry> = {
     stopSentinel: "RBAC_AUTHORIZATION_DONE",
   },
 
-  // Wave 4
-  "api-backend": { timeoutMs: 18 * 60_000, model: "opus", stopSentinel: "API_BACKEND_DONE" },
+  // Wave 4 — bumped after Day-5 run 4: frontend-architect, ui-components,
+  // forms-validations all timed out at their original limits. UI Components
+  // generates ALL shadcn primitives + variants for ~28 components and
+  // legitimately needs the bigger envelope.
+  "api-backend": { timeoutMs: 20 * 60_000, model: "opus", stopSentinel: "API_BACKEND_DONE" },
   "frontend-architect": {
-    timeoutMs: 12 * 60_000,
+    timeoutMs: 18 * 60_000,
     model: "opus",
     stopSentinel: "FRONTEND_ARCHITECT_DONE",
   },
-  "ui-components": { timeoutMs: 25 * 60_000, model: "opus", stopSentinel: "UI_COMPONENTS_DONE" },
+  "ui-components": { timeoutMs: 35 * 60_000, model: "opus", stopSentinel: "UI_COMPONENTS_DONE" },
   "forms-validations": {
-    timeoutMs: 12 * 60_000,
+    timeoutMs: 18 * 60_000,
     model: "opus",
     stopSentinel: "FORMS_VALIDATIONS_DONE",
   },
-  "pages-routing": { timeoutMs: 12 * 60_000, model: "opus", stopSentinel: "PAGES_ROUTING_DONE" },
+  "pages-routing": { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "PAGES_ROUTING_DONE" },
 
-  // Wave 5
-  "seeds-fixtures": { timeoutMs: 8 * 60_000, model: "opus", stopSentinel: "SEEDS_FIXTURES_DONE" },
-  "tests-writer": { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "TESTS_WRITER_DONE" },
+  // Wave 5 — seeds-fixtures bumped after Day-5 wave-5 timeout (yoga PRD ⇒
+  // 16 users + classes + bookings + memberships seed graph is non-trivial).
+  "seeds-fixtures": { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "SEEDS_FIXTURES_DONE" },
+  "tests-writer": { timeoutMs: 20 * 60_000, model: "opus", stopSentinel: "TESTS_WRITER_DONE" },
 
   // Wave 6
   "qa-reviewer": { timeoutMs: 25 * 60_000, model: "opus", stopSentinel: "QA_REVIEWER_DONE" },
@@ -345,8 +352,17 @@ export function buildUserPrompt(input: {
   additionalInstructions?: string;
   /** Inline artifacts whose serialized JSON is shorter than this threshold. Default: 0 (never inline). */
   inlineArtifactsBelowBytes?: number;
+  /**
+   * Filename (under `.atelier/`) the agent should write its primary artifact
+   * to. Defaults to `<agent>.json`. When the caller's `artifactFile` differs
+   * from the agent name (e.g. service-layer → services.json), THIS must be
+   * forwarded — otherwise the user prompt would override the system prompt
+   * and the LLM writes to the wrong file.
+   */
+  artifactFilename?: string;
 }): string {
   const { agent, workDir, contextArtifacts, additionalInstructions } = input;
+  const artifactFilename = input.artifactFilename ?? `${agent}.json`;
   const inlineThreshold = input.inlineArtifactsBelowBytes ?? 0;
   const lines: string[] = [];
   lines.push(`Estás trabajando en el directorio actual (workDir = ${workDir}).`);
@@ -386,7 +402,7 @@ export function buildUserPrompt(input: {
   lines.push("## What to do");
   lines.push("");
   lines.push(
-    `Read your system prompt for your role + outputs. Write your artifact to \`.atelier/${agent}.json\` (create the directory if needed). When done, print EXACTLY the stop sentinel documented in your system prompt and exit.`,
+    `Read your system prompt for your role + outputs. Write your artifact to \`.atelier/${artifactFilename}\` (create the directory if needed). When done, print EXACTLY the stop sentinel documented in your system prompt and exit.`,
   );
   lines.push("");
   lines.push(
@@ -439,6 +455,11 @@ export async function runGeneratorAgentV2(
     agent: input.agent,
     workDir: input.workDir,
     ...(input.contextArtifacts ? { contextArtifacts: input.contextArtifacts } : {}),
+    // Forward the actual filename so the user prompt doesn't tell the LLM to
+    // write to `<agent>.json` when the runner expects a different name (e.g.
+    // service-layer→services.json, qa-reviewer→qa-report.json). If the caller
+    // passed `false` to skip primary load, fall back to the default name.
+    ...(typeof input.artifactFile === "string" ? { artifactFilename: input.artifactFile } : {}),
   });
   const args = buildClaudeArgs({ systemPrompt: input.systemPrompt, userPrompt, model });
   const executable = process.platform === "win32" ? "claude.exe" : "claude";

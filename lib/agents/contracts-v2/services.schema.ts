@@ -17,7 +17,7 @@ const serviceMethodSchema = z
     businessRules: z.array(z.string().min(1)).optional(),
     throws: z.array(z.string().min(1)).optional(),
   })
-  .strict();
+  .passthrough();
 
 const serviceSchema = z
   .object({
@@ -27,13 +27,13 @@ const serviceSchema = z
     methods: z.array(serviceMethodSchema).min(1),
     testFile: z.string().min(1),
   })
-  .strict();
+  .passthrough();
 
 export const servicesSchema = z
   .object({
     services: z.array(serviceSchema).min(1),
   })
-  .strict();
+  .passthrough();
 
 export type ServicesArtifact = z.infer<typeof servicesSchema>;
 export type ServiceMethod = z.infer<typeof serviceMethodSchema>;

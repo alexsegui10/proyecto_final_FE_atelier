@@ -23,7 +23,8 @@ const violationSchema = z
     rule: z.string().min(1),
     agent: z.string().regex(/^[a-z][a-z0-9-]*$/, "agent must be kebab-case identifier").optional(),
     file: z.string().min(1),
-    line: z.number().int().positive().optional(),
+    // 0 = file-level violation (no specific line); positive = anchored line.
+    line: z.number().int().nonnegative().optional(),
     message: z.string().min(1),
     recommendedFix: z.string().optional(),
   })

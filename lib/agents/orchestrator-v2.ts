@@ -189,7 +189,15 @@ export type QaDecision = "go" | "no-go";
 export interface QaViolation {
   rule: string;
   severity: "error" | "warn";
+  /** Legacy field name. The current qa-reviewer prompt emits `file` instead. */
   where?: string;
+  /** File path where the violation fires (current contract). */
+  file?: string;
+  /**
+   * If the qa-reviewer attributed the violation to a specific v2 agent,
+   * this is its kebab-case name. Takes precedence over path-based routing.
+   */
+  agent?: string;
   message?: string;
   recommendedFix?: string;
 }
@@ -452,13 +460,43 @@ export async function runGenerationV2(
  * `warn` and unrouteable violations are dropped (caller surfaces them
  * separately if needed).
  */
+const AGENT_NAME_SET = new Set<string>([
+  "discovery",
+  "architect",
+  "ux-ui-designer",
+  "domain-modeler",
+  "persistence",
+  "seeds-shape",
+  "service-layer",
+  "auth-security",
+  "rbac-authorization",
+  "api-backend",
+  "frontend-architect",
+  "ui-components",
+  "forms-validations",
+  "pages-routing",
+  "seeds-fixtures",
+  "tests-writer",
+  "qa-reviewer",
+]);
+
 export function groupViolationsByAgent(
   violations: ReadonlyArray<QaViolation>,
 ): Map<AgentNameV2, QaViolation[]> {
   const out = new Map<AgentNameV2, QaViolation[]>();
   for (const v of violations) {
     if (v.severity !== "error") continue;
-    const agent = routeViolationToAgent(v.where ?? "");
+    // Three routing strategies, in priority order:
+    // 1. Explicit `agent` field from qa-reviewer (most accurate)
+    // 2. `file` path → agent owner via violations-router-v2
+    // 3. Legacy `where` path → agent owner via violations-router-v2
+    let agent: AgentNameV2 | null = null;
+    if (v.agent && AGENT_NAME_SET.has(v.agent)) {
+      agent = v.agent as AgentNameV2;
+    }
+    if (!agent) {
+      agent = routeViolationToAgent(v.file ?? v.where ?? "");
+    }
     if (!agent) continue;
     const list = out.get(agent) ?? [];
     list.push(v);

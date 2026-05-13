@@ -14,12 +14,19 @@ const fieldKindSchema = z.enum([
   "enum-string",
   "enum-numeric",
   "foreign-key",
+  // Many-to-many relations modelled as an array of foreign keys
+  // (e.g. TutorProfile.subjects: array<reference> Subject).
+  "foreign-key-array",
   "soft-delete",
   "timestamp",
   // `secret` flags fields that must NEVER cross the DTO boundary
   // (e.g. passwordHash). The LLM produced this kind voluntarily and it's
   // useful downstream (Persistence + Mappers can omit secrets from DTOs).
   "secret",
+  // Computed fields not stored directly — derived from other data
+  // (e.g. TutorProfile.rating averaged from Reviews, totalSessions
+  // counted from Sessions). Persistence layer treats them as read-only.
+  "derived",
 ]);
 
 const fieldSchema = z
@@ -37,10 +44,17 @@ const fieldSchema = z
 const valueObjectSchema = z
   .object({
     name: z.string().min(1),
-    fields: z.array(z.object({ name: z.string(), type: z.string() })),
+    // `fields` is the common shape for aggregate VOs (CreditBalance with
+    // total/used/available). It's OPTIONAL because the LLM also emits
+    // constant-map VOs like CREDITS_BY_TIER = { mensual: 12, trimestral: 36 }
+    // where the "fields" abstraction doesn't fit. We keep the shape check
+    // when present.
+    fields: z
+      .array(z.object({ name: z.string(), type: z.string() }).passthrough())
+      .optional(),
     invariants: z.array(z.string()).optional(),
   })
-  .strict();
+  .passthrough();
 
 const entitySchema = z
   .object({

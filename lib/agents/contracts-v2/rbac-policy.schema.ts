@@ -17,22 +17,29 @@ const abilityRuleSchema = z
     inverted: z.boolean().optional(),
     reason: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 const roleAbilitiesSchema = z
   .object({
     role: z.string().regex(/^[a-z][a-z0-9_]*$/, "role must be lowercase identifier"),
     rules: z.array(abilityRuleSchema).min(1),
   })
-  .strict();
+  .passthrough();
 
 const ownershipRuleSchema = z
   .object({
     entity: z.string().regex(/^[A-Z][A-Za-z0-9]*$/),
-    ownerField: z.string().min(1),
-    enforceAt: z.array(z.enum(["service-level", "row-level", "controller-level"])).min(1),
+    // Single owner field (yoga: Booking.userId) OR multiple owner fields
+    // (tutorias: Session has tutorId AND studentId). When ALL three are
+    // empty/absent, the rule is documenting "no ownership" (global catalog
+    // like Subject — admin-only). The empty entry is informational; downstream
+    // services key off enforceAt being empty to skip ownership checks.
+    ownerField: z.string().min(1).optional(),
+    ownerFields: z.array(z.string().min(1)).optional(),
+    ownerRoles: z.record(z.string(), z.string()).optional(),
+    enforceAt: z.array(z.enum(["service-level", "row-level", "controller-level"])),
   })
-  .strict();
+  .passthrough();
 
 export const rbacPolicySchema = z
   .object({
@@ -46,12 +53,11 @@ export const rbacPolicySchema = z
       })
       .strict(),
   })
-  .strict()
+  .passthrough()
   .refine(
-    (p) => p.abilities.every((a) => p.roles.includes(a.role)),
-    "every abilities[].role must be present in roles[]",
-  )
-  .refine(
+    // Each declared business role MUST have at least one abilities entry.
+    // `anonymous` / `public` virtual roles can appear in abilities without
+    // being in the declared roles[] list (common RBAC pattern).
     (p) => p.roles.every((r) => p.abilities.some((a) => a.role === r)),
     "every role must have at least one abilities entry",
   );

@@ -10,3 +10,7 @@ yarn.lock
 prisma/migrations
 *.min.js
 *.min.css
+# Atelier v2 orchestration artifacts — internal contract JSON, not user code.
+.atelier
+# Prisma-generated client — auto-generated, no point formatting it.
+src/**/generated

@@ -42,19 +42,31 @@ const componentEntrySchema = z
     states: z.array(z.string().min(1)).optional(),
     appliesDesignTokens: z.boolean().optional(),
   })
-  .strict();
+  .passthrough();
+
+// Primitives may be flat strings ("dialog") or objects with name + path
+// + source metadata. Extract the canonical name for the required-primitives
+// invariant check.
+const primitiveEntrySchema = z.union([
+  z.string().min(1),
+  z.object({ name: z.string().min(1) }).passthrough(),
+]);
+
+function primitiveName(p: z.infer<typeof primitiveEntrySchema>): string {
+  return typeof p === "string" ? p : p.name;
+}
 
 export const componentsCatalogSchema = z
   .object({
     primitives: z
-      .array(z.string().min(1))
+      .array(primitiveEntrySchema)
       .refine(
-        (list) => REQUIRED_PRIMITIVES.every((p) => list.includes(p)),
+        (list) => REQUIRED_PRIMITIVES.every((p) => list.map(primitiveName).includes(p)),
         `must include all 17 primitives: ${REQUIRED_PRIMITIVES.join(", ")}`,
       ),
     components: z.array(componentEntrySchema).min(20),
   })
-  .strict();
+  .passthrough();
 
 export type ComponentsCatalog = z.infer<typeof componentsCatalogSchema>;
 

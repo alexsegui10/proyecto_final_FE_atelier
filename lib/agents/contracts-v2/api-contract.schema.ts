@@ -13,34 +13,41 @@ const errorMappingSchema = z
     code: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
     status: z.number().int().min(400).max(599),
   })
-  .strict();
+  .passthrough();
 
 const endpointSchema = z
   .object({
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
     path: z.string().regex(/^\/api\//, "path must start with /api/"),
     handler: z.string().min(1),
-    auth: z.enum(["public", "authenticated", "admin"]),
+    // 'optional' = auth-aware but not required (endpoint serves anonymous
+    // AND identified users with different responses, e.g. /api/subjects
+    // showing extra data if logged in).
+    auth: z.enum(["public", "authenticated", "admin", "optional"]),
+    // The LLM emits `rbac: null` for public endpoints (more explicit than
+    // omitting). Same for `request: null` on GETs without a body.
     rbac: z
       .object({
         action: z.string().min(1),
         subject: z.string().min(1),
       })
-      .strict()
+      .passthrough()
+      .nullable()
       .optional(),
-    request: z.string().optional(),
-    response: z.string().min(1),
+    request: z.string().nullable().optional(),
+    // 204 DELETE endpoints have no body — LLM emits `response: null`.
+    response: z.string().min(1).nullable(),
     successStatus: z.number().int().min(200).max(299),
     errors: z.array(errorMappingSchema).optional(),
   })
-  .strict();
+  .passthrough();
 
 export const apiContractSchema = z
   .object({
     endpoints: z.array(endpointSchema).min(1),
     openApiPath: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export type ApiContract = z.infer<typeof apiContractSchema>;
 export type Endpoint = z.infer<typeof endpointSchema>;

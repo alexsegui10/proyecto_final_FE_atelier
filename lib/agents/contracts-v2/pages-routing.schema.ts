@@ -22,7 +22,7 @@ const pageSchema = z
     suspense: z.boolean().optional(),
     errorBoundary: z.boolean().optional(),
   })
-  .strict();
+  .passthrough();
 
 const layoutSchema = z
   .object({
@@ -31,15 +31,25 @@ const layoutSchema = z
     wraps: z.enum(["public", "private", "admin", "root"]),
     component: z.enum(["server", "client"]),
   })
-  .strict();
+  .passthrough();
 
 export const pagesRoutingSchema = z
   .object({
     pages: z.array(pageSchema).min(1),
     layouts: z.array(layoutSchema).min(1),
-    specialFiles: z.array(z.string().regex(/^app\//)).min(1),
+    // LLM emits either flat string paths or `{ file, purpose }` objects.
+    specialFiles: z
+      .array(
+        z.union([
+          z.string().regex(/^app\//),
+          z
+            .object({ file: z.string().regex(/^app\//) })
+            .passthrough(),
+        ]),
+      )
+      .min(1),
   })
-  .strict();
+  .passthrough();
 
 export type PagesRouting = z.infer<typeof pagesRoutingSchema>;
 

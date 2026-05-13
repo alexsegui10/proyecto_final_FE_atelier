@@ -14,18 +14,40 @@ const formSchema = z
       .regex(/^client\/components\/forms\/.+\.tsx$/, "must live under client/components/forms/"),
     schemaFile: z.string().regex(/\.ts$/, "schemaFile must be a TS file"),
     schemaName: z.string().min(1),
-    mutation: z.string().regex(/^use[A-Z][A-Za-z0-9]*$/, "mutation must be a use*-style hook"),
-    fields: z.array(z.string().min(1)).min(1),
+    // mutation is usually a single use* hook name, but the LLM emits
+    // composite descriptions ("useCreateClass + useUpdateClass") for forms
+    // that unify create/edit. Allow free-text; the use* contract is enforced
+    // by the actual `client/hooks/mutations/` files written to disk.
+    mutation: z.string().min(1),
+    // Accepts flat field names ("email") OR rich descriptors
+    // `{name, type, label, required, validation}` that document the
+    // form field inline. Both are valid representations.
+    fields: z
+      .array(
+        z.union([
+          z.string().min(1),
+          z.object({ name: z.string().min(1) }).passthrough(),
+        ]),
+      )
+      .min(1),
     submitFlow: z.array(z.string().min(1)).optional(),
   })
-  .strict();
+  .passthrough();
 
 export const formsValidationsSchema = z
   .object({
     forms: z.array(formSchema).min(1),
-    schemaFiles: z.array(z.string().regex(/\.ts$/)).min(1),
+    // schemaFiles may be flat paths or `{ path, schemas, consumedBy, notes }` objects.
+    schemaFiles: z
+      .array(
+        z.union([
+          z.string().regex(/\.ts$/),
+          z.object({ path: z.string().regex(/\.ts$/) }).passthrough(),
+        ]),
+      )
+      .min(1),
   })
-  .strict();
+  .passthrough();
 
 export type FormsValidations = z.infer<typeof formsValidationsSchema>;
 

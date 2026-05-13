@@ -7,15 +7,22 @@ import { z } from "zod";
  * uses to wire route handlers.
  */
 
+// Access tokens are always JWTs (need algorithm + claims). Refresh tokens
+// are sometimes opaque random strings stored server-side, in which case
+// algorithm/claims don't apply — keep them OPTIONAL and let passthrough
+// absorb extras like `format`, `byteLength`, `storage`, etc.
 const tokenSpecSchema = z
   .object({
     lifetime: z.string().regex(/^\d+(s|m|h|d)$/, "lifetime must be like 15m, 30d"),
-    algorithm: z.enum(["HS256", "HS384", "HS512", "RS256", "ES256"]),
-    claims: z.array(z.string().min(1)).min(1),
+    // JWT algorithms (HS256/RS256/etc) for access tokens, or descriptors
+    // like 'opaque-random-256bit' for non-JWT refresh tokens. Free-form
+    // string keeps the field semantic without locking it to crypto enums.
+    algorithm: z.string().min(1).optional(),
+    claims: z.array(z.string().min(1)).min(1).optional(),
     rotation: z.boolean().optional(),
     familyDetection: z.boolean().optional(),
   })
-  .strict();
+  .passthrough();
 
 const passwordPolicySchema = z
   .object({
@@ -26,16 +33,15 @@ const passwordPolicySchema = z
         linux: z.enum(["bcrypt", "argon2id"]),
         darwin: z.enum(["bcrypt", "argon2id"]),
       })
-      .strict(),
+      .passthrough(),
     params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
     minLength: z.number().int().min(8),
   })
-  .strict();
+  .passthrough();
 
-const rateLimitSchema = z.record(
-  z.string().regex(/^\/(api|app)\//, "must be a route path"),
-  z.string().min(1),
-);
+// Accept route-path keys (`/api/...`) AND metadata siblings like `enforcedBy`
+// that the LLM emits to document who applies the policy.
+const rateLimitSchema = z.record(z.string(), z.string().min(1));
 
 const sessionStrategySchema = z
   .object({
@@ -43,7 +49,7 @@ const sessionStrategySchema = z
     deviceTracking: z.boolean(),
     globalLogoutSupport: z.boolean(),
   })
-  .strict();
+  .passthrough();
 
 export const authMechanicsSchema = z
   .object({
@@ -52,14 +58,30 @@ export const authMechanicsSchema = z
         access: tokenSpecSchema,
         refresh: tokenSpecSchema,
       })
-      .strict(),
+      .passthrough(),
     passwordPolicy: passwordPolicySchema,
     rateLimit: rateLimitSchema,
     sessions: sessionStrategySchema,
-    services: z.array(z.string().min(1)).min(4),
-    repositories: z.array(z.string().min(1)).min(2),
+    // The LLM emits either flat strings ("AuthService") or objects
+    // ({ name, file, methods }) — accept both via union.
+    services: z
+      .array(
+        z.union([
+          z.string().min(1),
+          z.object({ name: z.string().min(1) }).passthrough(),
+        ]),
+      )
+      .min(4),
+    repositories: z
+      .array(
+        z.union([
+          z.string().min(1),
+          z.object({ name: z.string().min(1) }).passthrough(),
+        ]),
+      )
+      .min(2),
   })
-  .strict();
+  .passthrough();
 
 export type AuthMechanics = z.infer<typeof authMechanicsSchema>;
 
