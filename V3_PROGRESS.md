@@ -145,15 +145,38 @@ Inventario actual de deudas de cableado:
 
 5. **Layout Architect Agent NO se ejecuta en `--real` todavía** (cierre paso 5). Prompt + 3 schemas + StitchClient listos; cableado al subprocess con Stitch MCP configurado pendiente.
 
-6. **cross-artifact-coherence-scanner NO está cableado como postWaveGate de wave-2-design**. API y tests existen; el caller real lo configurará.
+6. **cross-artifact-coherence-scanner cableado como postWaveGate de wave-2-design** — CERRADO en F2.1 (`scripts/full-yoga-regen-v3.ts`).
 
 7. **visual-regression-scanner (Gate 6) NO está cableado como postWaveGate de wave-7**. Mismo patrón: necesita el wave-7 runtime que owns el ciclo de vida.
 
-8. **StitchClient.defaultInvoke es placeholder**. Lanza error; el cableado al MCP real (`@google/stitch-mcp` o el CLI `stitch-mcp`) ocurre cuando el runner del Layout Architect se construya.
+8. **StitchClient.defaultInvoke cableado al SDK real con caveat** — PARCIALMENTE CERRADO en F2 PARTE 1. `defaultInvoke` ahora lazy-inicializa `StitchToolClient` del `@google/stitch-sdk@^0.3.5` y reenvía `callTool(tool, params)` AS-IS. **Caveat trazado como deuda #11 abajo.**
 
 9. **UI Components v3 SIGUE siendo v2**. Va a leer `test-id-contract.json` cuando llegue paso 10 (D4). Mientras tanto, Visual QA cae a fallback selectors (warn) y visual-regression scanner reporta minor regressions (warn) por la divergencia esperada entre Stitch propone y UI Components v2 emite.
 
-10. **Severity `critical` documentada pero no implementada en orchestrator-v3**. Schema acepta critical; `groupViolationsByAgentV3` lo trata como error. Cuando el runner real exista, se podrá emitir `generation.failed` directamente al ver una critical sin pasar por fix loop.
+10. **Severity `critical` implementada en orchestrator-v3** — CERRADO en F1.1. El orchestrator emite `generation.failed` con `failedAt` poblado al detectar `severity: "critical"` en preWaveGate, postWaveGate o qa-reviewer output, bypassando el fix loop.
+
+11. **StitchClient envuelve nombres de tool ficticios que NO existen en el MCP real de Stitch** — NUEVA DEUDA, descubierta en F2 PARTE 1.
+
+    **El problema**. `lib/agents/runtime/stitch-client.ts` declara los `StitchTool` literals `"enhance_prompt" | "design_screens" | "fetch_design_md" | "get_screen_image"` y los métodos públicos (`enhancePrompt()`, `designScreens()`, `fetchDesignMd()`, `getScreenImage()`) los pasan a `_invokeStitch()` como nombres de tool a invocar contra el MCP. **Esos 4 nombres NO existen en el MCP real de Stitch.** Los reales (inspeccionados en `node_modules/@google/stitch-sdk/dist/generated/src/tool-definitions.js`):
+    - `create_project`, `get_project`, `list_projects`
+    - `list_screens`, `get_screen`
+    - `generate_screen_from_text`, `edit_screens`, `generate_variants`
+    - `create_design_system`, `update_design_system`, `list_design_systems`, `apply_design_system`
+
+    **Tests verdes, realidad rota.** El módulo tiene 12 tests verdes, pero todos inyectan `_invokeStitch` mock y NUNCA verifican la concordancia con el MCP real. Tests verdes a nivel de contract interno; código roto a nivel de integración productiva. Es exactamente el patrón de bug que v3 viene a cazar y se nos coló dentro de v3 mismo.
+
+    **Impacto operativo actual: BAJO.** `StitchClient` SOLO se importa desde su propio test (verificado con grep en F2 PARTE 1) — no hay path productivo que lo invoque. Layout Architect agent en producción habla con el MCP via claude.exe, no via TypeScript. El script `scripts/record-stitch-yoga-fixture.ts` (F2.2) usa el SDK directamente con los nombres reales, no via `StitchClient`.
+
+    **Decisión pendiente** — diferida hasta tener evidencia del primer run real:
+    - **Opción A — reescribir** `StitchClient` contra los nombres reales del SDK. Esto requiere mapear las 4 operaciones del contract actual a la API real:
+      - `enhancePrompt()` → no hay equivalente directo; eliminar o reimaginar.
+      - `designScreens()` → composición de `create_project` + `generate_screen_from_text` por cada page.
+      - `fetchDesignMd()` → aproximar con `list_design_systems`/`get_project`.
+      - `getScreenImage()` → `get_screen` + extraer `imageUrl`/`getImage()`.
+      - Tests reescritos contra nombres reales.
+    - **Opción B — eliminar**: si el script F2.2 demuestra que el acceso directo al SDK (`stitch.createProject(...)`, `screen.generate(...)`) basta para el uso productivo del proyecto, `StitchClient` es redundante. En ese caso eliminar el archivo + los 12 tests + las referencias en `skills/stitch-bridge/SKILL.md` y `lib/agents/prompts-v3/layout-architect.md`.
+
+    **Trigger de resolución**: después de F3 (primer run real), evaluar si en algún momento del pipeline había necesidad legítima de un cliente TypeScript de Stitch para producción. Si la respuesta es no → Opción B. Si hay un caller productivo plausible (e.g. recorder script más sofisticado, gate que verifica disponibilidad de Stitch antes de wave-2) → Opción A.
 
 ---
 
