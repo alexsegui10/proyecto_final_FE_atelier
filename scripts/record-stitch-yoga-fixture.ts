@@ -50,7 +50,10 @@ import { config as loadDotenv } from "dotenv";
 // tsx executes scripts as CJS by default, so a top-level static import would
 // fail with ERR_PACKAGE_PATH_NOT_EXPORTED. Use a dynamic import inside main()
 // instead — works fine from a CJS host.
-import type { StitchFixture } from "../lib/agents/contracts-v3/stitch-fixture.schema";
+import {
+  canonicalRouteSlug,
+  type StitchFixture,
+} from "../lib/agents/contracts-v3/stitch-fixture.schema";
 import { runGeneratorAgentV3 } from "../lib/agents/runtime/runner-generator-v3";
 
 // Load .env.local (and .env as fallback) BEFORE the SDK reads the env var.
@@ -92,15 +95,8 @@ interface ArchitectArtifact {
   features: ReadonlyArray<ArchitectFeature>;
 }
 
-function routeToSlug(route: string): string {
-  if (route === "/") return "home";
-  // Replace parameter syntax `[id]` with literal `id` so slugs stay kebab-case.
-  return route
-    .replace(/^\//, "")
-    .replace(/\[([^\]]+)\]/g, "$1")
-    .replace(/\//g, "-")
-    .toLowerCase();
-}
+// Imported from stitch-fixture.schema — single source of truth.
+const routeToSlug = canonicalRouteSlug;
 
 function flattenArchitectRoutes(architect: ArchitectArtifact): YogaPage[] {
   // Filter to keep quota cost similar to F2.2 (~8 generations ≈ 2-3% of

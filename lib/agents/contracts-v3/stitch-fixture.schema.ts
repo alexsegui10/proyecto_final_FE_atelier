@@ -94,15 +94,19 @@ export const stitchFixtureSchema = z
     "attempts[] must declare consecutive attempt values starting at 0 (0, 0+1, 0+1+2)",
   )
   // routeSlug and pageRoute must agree within each screen.
+  // Conversion rules:
+  //   - leading `/` removed
+  //   - `[param]` dynamic segments replaced with `param` (drops brackets so
+  //     the slug stays kebab-case filesystem-safe)
+  //   - remaining `/` → `-`
+  //   - lowercased
+  //   - empty (home) → "home"
   .refine(
     (f) =>
       f.attempts.every((a) =>
-        a.screens.every((s) => {
-          const slugFromRoute = s.pageRoute.replace(/^\//, "").replace(/\//g, "-") || "home";
-          return s.routeSlug === slugFromRoute;
-        }),
+        a.screens.every((s) => s.routeSlug === canonicalRouteSlug(s.pageRoute)),
       ),
-    "screen.routeSlug must equal pageRoute.replace(/^\\//,'').replace(/\\//g,'-') || 'home'",
+    "screen.routeSlug must equal canonicalRouteSlug(pageRoute): strip leading '/', replace '[param]' → 'param', replace '/' → '-', lowercase, '' → 'home'",
   )
   // Within an attempt, routes must be unique.
   .refine(
@@ -117,6 +121,25 @@ export const stitchFixtureSchema = z
 export type StitchFixtureScreen = z.infer<typeof screenSchema>;
 export type StitchFixtureAttempt = z.infer<typeof attemptSchema>;
 export type StitchFixture = z.infer<typeof stitchFixtureSchema>;
+
+/**
+ * Canonical route→slug conversion used by both the schema refinement and
+ * the recorder. Single source of truth so the two don't drift.
+ *
+ *   /                       → 'home'
+ *   /sign-in                → 'sign-in'
+ *   /shop/classes           → 'shop-classes'
+ *   /shop/classes/[slug]    → 'shop-classes-slug'   (brackets dropped)
+ *   /admin/users            → 'admin-users'
+ */
+export function canonicalRouteSlug(route: string): string {
+  const stripped = route
+    .replace(/^\//, "")
+    .replace(/\[([^\]]+)\]/g, "$1")
+    .replace(/\//g, "-")
+    .toLowerCase();
+  return stripped === "" ? "home" : stripped;
+}
 
 export function validateStitchFixture(input: unknown): string | null {
   const r = stitchFixtureSchema.safeParse(input);
