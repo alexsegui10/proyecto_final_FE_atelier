@@ -61,12 +61,12 @@ const ADMIN_CLASSES_HTML = `
 </body></html>
 `;
 
-// HTML that misses critical elements (no <form> for signin).
-const SIGNIN_HTML_MISSING_FORM = `
+// HTML missing a critical layoutGroup-based element (no <nav>).
+const HOME_HTML_MISSING_NAV = `
 <!doctype html>
 <html><body>
-  <header><nav><a href="/">Home</a></nav></header>
-  <main><h1>Sign in</h1><p>Please contact admin.</p></main>
+  <header><h1>Atelier</h1></header>
+  <main><section><h2>Welcome</h2><p>Hello.</p></section></main>
 </body></html>
 `;
 
@@ -96,34 +96,21 @@ const STITCH_ANALYSIS_OK: StitchAnalysisLike = {
 
 const TEST_ID_CONTRACT: TestIdContractLike = {
   entries: [
+    // layoutGroup-based criticals: must appear on EVERY page of that group.
     { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
     { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
-    { selector: "signin-form", criticality: "critical", requiredOn: { layoutGroup: "public" } },
     { selector: "signout-button", criticality: "critical", requiredOn: { layoutGroup: "dashboard" } },
     { selector: "signout-button", criticality: "critical", requiredOn: { layoutGroup: "admin" } },
-    { selector: "admin-create-class", criticality: "critical", requiredOn: { layoutGroup: "admin" } },
+    // component-based criticals: only required on pages rendering that
+    // component. The scanner currently only inspects layoutGroup-based
+    // entries (component matching needs route↔component info we don't
+    // have). These are recorded so the fixture mirrors a realistic
+    // contract.
+    { selector: "signin-form", criticality: "critical", requiredOn: { component: "SignInForm" } },
+    { selector: "admin-create-class", criticality: "critical", requiredOn: { component: "AdminCreateButton" } },
     { selector: "public-list-root", criticality: "recommended", requiredOn: { layoutGroup: "public" } },
   ],
 };
-
-function makeReadFile(map: Record<string, string>): (path: string) => Promise<string> {
-  return async (path: string) => {
-    const key = Object.keys(map).find((k) => path.endsWith(k.replace(/\//g, "\\")) || path.endsWith(k));
-    if (key === undefined) throw new Error(`mock _readFile: no fixture for ${path}`);
-    const content = map[key];
-    if (content === undefined) throw new Error(`mock _readFile: no fixture for ${path}`);
-    return content;
-  };
-}
-
-function makeAllExist(): StitchCompletenessOptions["_readFile"] {
-  return makeReadFile({
-    ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
-    ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
-    ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
-    ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
-  });
-}
 
 // existsSync uses the real FS — we need actual files for the "happy path"
 // tests. The simplest way without mocking node:fs is to drop fixtures into a
@@ -226,10 +213,10 @@ describe("scanStitchCompleteness — check 1: missing HTML", () => {
 // ─── Check 2: critical test-id has no expected element ──────────────
 
 describe("scanStitchCompleteness — check 2: missing critical elements", () => {
-  it("emits stitch-missing-critical-element when signin-form has no <form> in /sign-in HTML", async () => {
+  it("emits stitch-missing-critical-element when nav-primary has no <nav> in the page HTML", async () => {
     const workDir = setupTmpWorkDir({
-      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
-      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML_MISSING_FORM,
+      ".atelier/stitch-html/home.html": HOME_HTML_MISSING_NAV,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
       ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
       ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
     });
@@ -241,10 +228,10 @@ describe("scanStitchCompleteness — check 2: missing critical elements", () => 
         testIdContract: TEST_ID_CONTRACT,
       });
       const missingEl = report.violations.filter((v) => v.rule === "stitch-missing-critical-element");
-      const signinFormFailures = missingEl.filter((v) => v.message.includes("signin-form"));
-      expect(signinFormFailures.length).toBeGreaterThanOrEqual(1);
-      const failureForSignIn = report.pageFailures.find((f) => f.pageRoute === "/sign-in");
-      expect(failureForSignIn?.missingCriticalElements).toContain("signin-form");
+      const navFailures = missingEl.filter((v) => v.message?.includes("nav-primary") ?? false);
+      expect(navFailures.length).toBeGreaterThanOrEqual(1);
+      const failureForHome = report.pageFailures.find((f) => f.pageRoute === "/");
+      expect(failureForHome?.missingCriticalElements).toContain("nav-primary");
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
@@ -268,7 +255,8 @@ describe("scanStitchCompleteness — check 2: missing critical elements", () => 
       // a violation even though the trimmed home has no <ul>/<table>.
       expect(
         report.violations.find((v) =>
-          v.rule === "stitch-missing-critical-element" && v.message.includes("public-list-root"),
+          v.rule === "stitch-missing-critical-element" &&
+          (v.message?.includes("public-list-root") ?? false),
         ),
       ).toBeUndefined();
     } finally {
@@ -295,7 +283,7 @@ describe("scanStitchCompleteness — check 3: thin sections", () => {
         testIdContract: TEST_ID_CONTRACT,
       });
       const thin = report.violations.filter((v) => v.rule === "stitch-thin-section");
-      expect(thin.some((v) => v.message.includes("/"))).toBe(true);
+      expect(thin.some((v) => v.message?.includes("/") ?? false)).toBe(true);
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }

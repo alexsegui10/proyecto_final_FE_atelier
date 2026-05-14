@@ -89,10 +89,14 @@ const pageAdaptationSchema = z
         /^\.atelier\/stitch-html\/.+\.html$/,
         "sourceHtmlPath must live under .atelier/stitch-html/",
       ),
-    /** Generated Next.js page under `app/<route>/page.tsx`. */
+    /**
+     * Generated Next.js page. Either `app/page.tsx` (home) or
+     * `app/<route>/page.tsx` for any other route. The regex accepts both
+     * to match Next.js App Router conventions exactly.
+     */
     generatedPagePath: z
       .string()
-      .regex(/^app\/.+\/page\.tsx$/, "generatedPagePath must look like 'app/<route>/page.tsx'"),
+      .regex(/^app\/(.+\/)?page\.tsx$/, "generatedPagePath must be 'app/page.tsx' or 'app/<route>/page.tsx'"),
     adaptationStatus: z.enum(ADAPTATION_STATUSES),
     changes: z.array(adaptationChangeSchema),
     /**

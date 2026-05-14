@@ -43,6 +43,8 @@ function stitchAnalysis(over: Partial<StitchAnalysis> = {}): StitchAnalysis {
     generatedAt: "2026-05-13T22:00:00.000Z",
     stitchProjectId: "proj-001",
     designVibe: "Calm",
+    stitchAttempt: 0,
+    stitchHealth: "clean",
     colorTokens: [
       { role: "primary", value: "#4a7c59" },
       { role: "background", value: "#fafaf7" },
@@ -59,8 +61,9 @@ function stitchAnalysis(over: Partial<StitchAnalysis> = {}): StitchAnalysis {
       {
         pageRoute: "/",
         mockupPath: ".atelier/stitch-mockups/home.png",
+        rawHtmlPath: ".atelier/stitch-html/home.html",
         stitchScreenId: "scr-001",
-        rootSection: { id: "home-root", purpose: "page-root", layoutPrimitive: "stack" },
+        linkedFonts: [],
       },
     ],
     designMdPath: ".atelier/stitch-design.md",
@@ -147,8 +150,8 @@ describe("runVisualRegression — identical PNGs (no regression)", () => {
   });
 });
 
-describe("runVisualRegression — major regression (>25% diff)", () => {
-  it("emits visual-regression-major routed to layout-architect", async () => {
+describe("runVisualRegression — major regression (>5% diff, post-rework)", () => {
+  it("emits visual-regression-major routed to visual-adapter", async () => {
     const wd = await freshWorkDir();
     const mockup = solidPng(20, 20, [74, 124, 89, 255]);
     const screenshot = solidPng(20, 20, [200, 50, 50, 255]); // very different
@@ -163,12 +166,12 @@ describe("runVisualRegression — major regression (>25% diff)", () => {
     expect(report.pagesCompared).toBe(1);
     expect(report.violations).toHaveLength(1);
     expect(report.violations[0]?.rule).toBe("visual-regression-major");
-    expect(report.violations[0]?.agent).toBe("layout-architect");
+    expect(report.violations[0]?.agent).toBe("visual-adapter");
     expect(report.violations[0]?.severity).toBe("error");
   });
 });
 
-describe("runVisualRegression — minor regression (10-25% diff)", () => {
+describe("runVisualRegression — minor regression (1-5% diff, post-rework)", () => {
   it("uses _diff test seam to deterministically set the diff ratio", async () => {
     const wd = await freshWorkDir();
     const placeholder = solidPng(2, 2, [0, 0, 0, 255]);
@@ -179,12 +182,12 @@ describe("runVisualRegression — minor regression (10-25% diff)", () => {
       workDir: wd,
       stitchAnalysis: stitchAnalysis(),
       visualQaReport: visualQaReport(".atelier/screenshots/home.png", "http://localhost:3000/"),
-      _diff: () => ({ pixelsDiff: 1500, total: 10_000 }), // 15%
+      _diff: () => ({ pixelsDiff: 300, total: 10_000 }), // 3% — between 1% and 5%
     });
     expect(report.pagesCompared).toBe(1);
     expect(report.violations).toHaveLength(1);
     expect(report.violations[0]?.rule).toBe("visual-regression-minor");
-    expect(report.violations[0]?.agent).toBe("ui-components");
+    expect(report.violations[0]?.agent).toBe("visual-adapter");
     expect(report.violations[0]?.severity).toBe("warn");
   });
 });
@@ -235,14 +238,16 @@ describe("runVisualRegression — multiple pages", () => {
           {
             pageRoute: "/",
             mockupPath: ".atelier/stitch-mockups/home.png",
+            rawHtmlPath: ".atelier/stitch-html/home.html",
             stitchScreenId: "scr-001",
-            rootSection: { id: "h", purpose: "p", layoutPrimitive: "stack" },
+            linkedFonts: [],
           },
           {
             pageRoute: "/shop",
             mockupPath: ".atelier/stitch-mockups/shop.png",
+            rawHtmlPath: ".atelier/stitch-html/shop.html",
             stitchScreenId: "scr-002",
-            rootSection: { id: "s", purpose: "p", layoutPrimitive: "stack" },
+            linkedFonts: [],
           },
         ],
       }),

@@ -590,7 +590,11 @@ export async function runGenerationV3(
 
       // ─── Post-wave gates ──────────────────────────────────────────
       // Run AFTER the wave's agents completed successfully. Violations
-      // accumulate but DO NOT skip the wave (it already ran).
+      // accumulate but DO NOT skip the wave (it already ran). Capture
+      // the slice boundary so the stitch reprompt loop below can inspect
+      // only the violations emitted in THIS wave iteration (not the
+      // accumulated set across previous iterations).
+      const gateViolationsBeforeIdx = gateViolations.length;
       const postGates = opts.postWaveGates?.[wave.name] ?? [];
       for (const postGate of postGates) {
         await opts.emit({ type: "gate.started", gate: postGate.name, wave: wave.name });
@@ -647,7 +651,12 @@ export async function runGenerationV3(
           "stitch-missing-critical-element",
           "stitch-thin-section",
         ]);
-        const stitchViolationsThisRun = gateViolations.filter(
+        // Only the violations emitted IN THIS WAVE ITERATION count.
+        // gateViolations is cumulative across iterations; without the
+        // slice we'd reprompt forever based on stale violations from
+        // the previous attempt.
+        const violationsThisIteration = gateViolations.slice(gateViolationsBeforeIdx);
+        const stitchViolationsThisRun = violationsThisIteration.filter(
           (v) => STITCH_REPROMPT_RULES.has(v.rule) && v.severity === "error",
         );
         if (stitchViolationsThisRun.length > 0) {
