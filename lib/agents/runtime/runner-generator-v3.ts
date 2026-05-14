@@ -6,9 +6,9 @@
  * detect stop sentinel, validate artifact JSON, diff file tree) is identical.
  *
  * What changes in v3 is the **per-agent config table**: AGENT_CONFIG_V3 holds
- * the 23-agent timeouts + stop sentinels, including the 6 net-new agents
+ * the 24-agent timeouts + stop sentinels, including the 7 net-new agents
  * introduced by v3 (bootstrap-devops, layout-architect, brand-identity,
- * animation-choreographer, accessibility, visual-qa).
+ * animation-choreographer, visual-adapter, accessibility, visual-qa).
  *
  * Defaults are deliberately conservative — yoga + tutorias v2 taught us that
  * underestimating wave-4 agents leads to wasted runs. We bump conservatively
@@ -28,7 +28,7 @@ export type { AgentConfigEntry, GeneratorAgentInput, GeneratorAgentResult };
 // ─── v3 config ──────────────────────────────────────────────────────
 
 /**
- * 23 entries: the 17 v2 configs preserved verbatim + 6 new agent configs.
+ * 24 entries: the 17 v2 configs preserved verbatim + 7 new agent configs.
  *
  * Bootstrap-devops: small artifact + many tiny files (env.example, scripts,
  * etc.). 8 min is plenty.
@@ -37,6 +37,11 @@ export type { AgentConfigEntry, GeneratorAgentInput, GeneratorAgentResult };
  * ux-ui-designer. 15 min.
  * Animation-choreographer: walks every component file, wraps with motion
  * primitives. Comparable to ui-components. 25 min.
+ * Visual-adapter: reads HTML literal per page, parses with cheerio, mutates
+ * (inject test-ids + microcopy + preserve fonts + wire forms/data/auth),
+ * serializes JSX, writes app/<route>/page.tsx. Worst case 35 min for an
+ * 8-page app — the adapter does substantial work per page but no LLM
+ * generation of look (Stitch already did that).
  * Accessibility: audits + patches across many files. 20 min.
  * Visual-qa: runs Playwright suites + Claude Vision analysis. Worst case
  * 40 min (post-yoga lesson: don't underestimate boot+probe latency).
@@ -65,6 +70,11 @@ export const AGENT_CONFIG_V3: Record<AgentNameV3, AgentConfigEntry> = {
     timeoutMs: 25 * 60_000,
     model: "opus",
     stopSentinel: "ANIMATION_CHOREOGRAPHER_DONE",
+  },
+  "visual-adapter": {
+    timeoutMs: 35 * 60_000,
+    model: "opus",
+    stopSentinel: "VISUAL_ADAPTER_DONE",
   },
   accessibility: {
     timeoutMs: 20 * 60_000,

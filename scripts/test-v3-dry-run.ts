@@ -1,22 +1,27 @@
 /**
  * Atelier v3 — orchestrator dry-run.
  *
- * Validates that orchestrator-v3 recognises all 23 agents and walks through
+ * Validates that orchestrator-v3 recognises all 24 agents and walks through
  * the 10-slice wave graph end-to-end without invoking LLMs. Used as the
  * "v3 pipeline reconocido" gate before any real-LLM v3 run.
  *
  * What's tested:
  *   1. Every wave runs (10 wave.completed events).
- *   2. Every agent runs exactly once (23 agent.completed events).
+ *   2. Every agent runs exactly once (24 agent.completed events).
  *   3. Bootstrap & DevOps fixture artifact passes `validateBootstrapOutput`.
- *   4. qa-reviewer "go" decision lets generation.completed fire.
+ *   4. Visual QA fixture passes `validateVisualQaReport`.
+ *   5. Layout Architect bundle: layout-tree + stitch-analysis + test-id-contract
+ *      all parse (post-rework: stitch-analysis carries rawHtmlPath + linkedFonts,
+ *      no rootSection).
+ *   6. Brand Identity reduced shape passes `validateBrandIdentity` (post-rework:
+ *      no palette, no typography canonical, only microcopy + hints).
+ *   7. Visual Adapter page-adaptations fixture passes `validatePageAdaptations`.
+ *   8. qa-reviewer "go" decision lets generation.completed fire.
  *
- * What's NOT tested here (out of scope — comes later in step 1/2):
+ * What's NOT tested here (out of scope):
  *   - Real LLM behaviour for any agent (no `claude` subprocess).
- *   - Schemas of the 5 unfinished v3 agents (layout-architect, brand-identity,
- *     animation-choreographer, accessibility, visual-qa). They're stubbed
- *     with a trivial fixture so the orchestrator can complete the walk.
  *   - File-system side effects (the fake runner reports no filesCreated).
+ *   - Stitch reprompt loop (covered in orchestrator-v3.test.ts).
  *
  * Usage:
  *   tsx scripts/test-v3-dry-run.ts
@@ -52,6 +57,14 @@ import {
   validateTestIdContract,
   type TestIdContract,
 } from "../lib/agents/contracts-v3/test-id-contract.schema";
+import {
+  validateBrandIdentity,
+  type BrandIdentity,
+} from "../lib/agents/contracts-v3/brand-identity.schema";
+import {
+  validatePageAdaptations,
+  type PageAdaptations,
+} from "../lib/agents/contracts-v3/page-adaptation.schema";
 
 // ─── Synthetic Bootstrap fixture (the only v3 agent with full schema today) ─
 
@@ -295,7 +308,11 @@ const STITCH_ANALYSIS_FIXTURE: StitchAnalysis = {
   generatedAt: "2026-05-14T09:00:00.000Z",
   stitchProjectId: "stitch-yoga-001",
   designVibe: "Calm",
-  // Yoga-coherent salvia greens (not greys) per user request.
+  // Post-rework: tokens are theming-only for shadcn primitives the Visual
+  // Adapter injects as last resort. The canonical look lives in the .html
+  // files referenced by pages[].rawHtmlPath.
+  stitchAttempt: 0,
+  stitchHealth: "clean",
   colorTokens: [
     { role: "primary", value: "#4a7c59", hint: "salvia" },
     { role: "background", value: "#fafaf7", hint: "warm-off-white" },
@@ -314,59 +331,16 @@ const STITCH_ANALYSIS_FIXTURE: StitchAnalysis = {
     {
       pageRoute: "/",
       mockupPath: ".atelier/stitch-mockups/home.png",
+      rawHtmlPath: ".atelier/stitch-html/home.html",
       stitchScreenId: "scr-yoga-home",
-      // Hero (stack) + feature grid (3 cols) + footer (stack)
-      rootSection: {
-        id: "home-root",
-        purpose: "page-root",
-        layoutPrimitive: "stack",
-        gapPx: 96,
-        paddingPx: { top: 0, right: 0, bottom: 0, left: 0 },
-        children: [
-          {
-            id: "hero",
-            purpose: "hero",
-            layoutPrimitive: "stack",
-            gapPx: 24,
-            paddingPx: { top: 96, right: 24, bottom: 96, left: 24 },
-          },
-          {
-            id: "features",
-            purpose: "feature-grid",
-            layoutPrimitive: "grid",
-            columns: 3,
-            gapPx: 32,
-            paddingPx: { top: 64, right: 24, bottom: 64, left: 24 },
-          },
-          {
-            id: "footer",
-            purpose: "footer",
-            layoutPrimitive: "stack",
-            gapPx: 16,
-            paddingPx: { top: 48, right: 24, bottom: 48, left: 24 },
-          },
-        ],
-      },
+      linkedFonts: ["https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"],
     },
     {
       pageRoute: "/shop",
       mockupPath: ".atelier/stitch-mockups/shop.png",
+      rawHtmlPath: ".atelier/stitch-html/shop.html",
       stitchScreenId: "scr-yoga-shop",
-      rootSection: {
-        id: "shop-root",
-        purpose: "page-root",
-        layoutPrimitive: "stack",
-        gapPx: 32,
-        children: [
-          {
-            id: "shop-grid",
-            purpose: "catalogue-grid",
-            layoutPrimitive: "grid",
-            columns: 3,
-            gapPx: 24,
-          },
-        ],
-      },
+      linkedFonts: ["https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"],
     },
   ],
   designMdPath: ".atelier/stitch-design.md",
@@ -434,11 +408,123 @@ const TEST_ID_CONTRACT_FIXTURE: TestIdContract = {
   ],
 };
 
+// ─── Brand Identity fixture (post-rework reduced shape) ─────────────
+
+const BRAND_IDENTITY_FIXTURE: BrandIdentity = {
+  brand: {
+    name: "Atelier Yoga",
+    tagline: "Encontrá tu calma en cada clase",
+    voice: "calm",
+    tone: "intimate",
+    logo: { kind: "wordmark", font: "Inter", tracking: "-0.02em" },
+  },
+  tentativePaletteHints: {
+    primarySeed: "#4a7c59",
+    vibeMood: "calm",
+    rationale: "Verdes salvia muted evocan calma y naturaleza del yoga.",
+  },
+  tentativeFontHints: {
+    sansSuggestion: "Inter",
+    displaySuggestion: "Cormorant Garamond",
+    rationale: "Inter para body legible; Cormorant para titulares editoriales premium.",
+  },
+  microcopy: {
+    "button.primary.submit": "Confirmar",
+    "button.primary.cancel": "Cancelar",
+    "button.primary.delete": "Eliminar",
+    "button.secondary.back": "Volver",
+    "empty-state.classes.no-items": "Todavía no hay clases.",
+    "empty-state.bookings.no-items": "No tenés reservas.",
+    "empty-state.search.no-results": "Sin resultados.",
+    "error.network.offline": "Sin conexión.",
+    "error.network.retry": "Reintentar.",
+    "error.validation.required": "Este campo es obligatorio.",
+    "success.booking.created": "Reserva confirmada.",
+    "success.profile.updated": "Perfil actualizado.",
+    "loading.classes.fetching": "Cargando clases...",
+    "loading.checkout.processing": "Procesando pago...",
+    "placeholder.email": "tu@email.com",
+    "placeholder.password": "Mínimo 8 caracteres",
+    "placeholder.search.classes": "Buscar clases...",
+    "tooltip.help.calendar": "Tocá un día para reservar.",
+    "tooltip.help.membership": "Tu plan vigente.",
+    "confirmation.booking.cancel": "¿Cancelar reserva?",
+    "confirmation.account.delete": "¿Eliminar cuenta?",
+    "validation.email.invalid": "Email inválido.",
+    "validation.password.weak": "Contraseña débil.",
+    "validation.required.field": "Campo obligatorio.",
+    "navigation.home": "Inicio",
+    "navigation.classes": "Clases",
+    "navigation.profile": "Perfil",
+    "navigation.signin": "Iniciar sesión",
+    "navigation.signout": "Cerrar sesión",
+    "navigation.admin": "Administrar",
+  },
+};
+
+// ─── Visual Adapter fixture (post-rework new agent) ─────────────────
+
+const PAGE_ADAPTATIONS_FIXTURE: PageAdaptations = {
+  generatedAt: "2026-05-14T10:00:00.000Z",
+  stitchProjectId: "stitch-yoga-001",
+  stitchHealth: "clean",
+  pages: [
+    {
+      pageRoute: "/",
+      sourceHtmlPath: ".atelier/stitch-html/home.html",
+      generatedPagePath: "app/page.tsx",
+      adaptationStatus: "clean",
+      changes: [
+        {
+          type: "injected-test-id",
+          targetSelector: "header.hero",
+          rationale: "Inyectado data-testid=header-root desde test-id-contract.",
+        },
+        {
+          type: "preserved-font-link",
+          targetSelector: 'link[href*="fonts.googleapis.com"]',
+          rationale: "Inter copiado a app/layout.tsx <head>.",
+        },
+        {
+          type: "injected-microcopy",
+          targetSelector: "section.hero h1",
+          rationale: "Placeholder 'Hero title' reemplazado por microcopy.navigation.home.",
+          before: "Hero title here",
+          after: "{microcopy['navigation.home']}",
+        },
+      ],
+      preservedFonts: [
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap",
+      ],
+      injectedTestIds: ["header-root"],
+    },
+    {
+      pageRoute: "/shop",
+      sourceHtmlPath: ".atelier/stitch-html/shop.html",
+      generatedPagePath: "app/shop/page.tsx",
+      adaptationStatus: "clean",
+      changes: [
+        {
+          type: "wired-data",
+          targetSelector: "ul.class-grid",
+          rationale: "Lista hardcodeada reemplazada por map sobre useQuery(/api/classes).",
+        },
+      ],
+      preservedFonts: [
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap",
+      ],
+      injectedTestIds: ["public-list-root"],
+    },
+  ],
+};
+
 // ─── Fake runner — synthesises an artifact per agent ────────────────
 
 function fakeArtifactFor(agent: AgentNameV3): unknown {
   if (agent === "bootstrap-devops") return BOOTSTRAP_FIXTURE;
   if (agent === "visual-qa") return VISUAL_QA_FIXTURE;
+  if (agent === "brand-identity") return BRAND_IDENTITY_FIXTURE;
+  if (agent === "visual-adapter") return PAGE_ADAPTATIONS_FIXTURE;
   if (agent === "layout-architect") {
     // Layout Architect produces 3 separate artifacts; we surface them as
     // a single bag of artifacts. The orchestrator's `artifacts` map stores
@@ -594,10 +680,22 @@ async function main(): Promise<number> {
     if (tcErr) failures.push(`test-id-contract.json fails schema: ${tcErr}`);
   }
 
+  // brand-identity reduced shape (new post-rework: paso 6 D).
+  const brandErr = validateBrandIdentity(result.artifacts["brand-identity"]);
+  if (brandErr) {
+    failures.push(`brand-identity artifact fails schema: ${brandErr}`);
+  }
+
+  // visual-adapter page-adaptations (new post-rework: paso B).
+  const adaptErr = validatePageAdaptations(result.artifacts["visual-adapter"]);
+  if (adaptErr) {
+    failures.push(`visual-adapter artifact fails schema: ${adaptErr}`);
+  }
+
   log(
     "done",
     failures.length === 0
-      ? `▣ v3 DRY-RUN GREEN — ${agentCompletedCount}/23 agents, ${waveCompletedCount}/10 waves, ${durationMs}ms`
+      ? `▣ v3 DRY-RUN GREEN — ${agentCompletedCount}/24 agents, ${waveCompletedCount}/10 waves, ${durationMs}ms`
       : `▣ v3 DRY-RUN FAIL — ${failures.length} invariant(s) violated`,
   );
 

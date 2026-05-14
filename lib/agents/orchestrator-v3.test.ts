@@ -80,12 +80,12 @@ describe("WAVES_V3 — structural sanity", () => {
     }
   });
 
-  it("includes all 23 agents exactly once", () => {
+  it("includes all 24 agents exactly once", () => {
     const counts = new Map<string, number>();
     for (const w of WAVES_V3) {
       for (const a of w.agents) counts.set(a, (counts.get(a) ?? 0) + 1);
     }
-    expect(counts.size).toBe(23);
+    expect(counts.size).toBe(24);
     for (const [agent, count] of counts) {
       expect(count, `${agent} appears more than once`).toBe(1);
     }
@@ -105,16 +105,17 @@ describe("WAVES_V3 — structural sanity", () => {
     expect(w7?.agents).toEqual(["visual-qa"]);
   });
 
-  it("places wave-4-presentation with 6 agents (5 v2 + animation-choreographer)", () => {
+  it("places wave-4-presentation with 7 agents (5 v2 + animation-choreographer + visual-adapter)", () => {
     const w4 = WAVES_V3.find((w) => w.name === "wave-4-presentation");
-    expect(w4?.agents).toHaveLength(6);
+    expect(w4?.agents).toHaveLength(7);
     expect(w4?.agents).toContain("animation-choreographer");
+    expect(w4?.agents).toContain("visual-adapter");
   });
 
-  it("generatorAgentOrderV3 returns 23 deterministic entries", () => {
+  it("generatorAgentOrderV3 returns 24 deterministic entries", () => {
     const order = generatorAgentOrderV3();
-    expect(order).toHaveLength(23);
-    expect(new Set(order).size).toBe(23);
+    expect(order).toHaveLength(24);
+    expect(new Set(order).size).toBe(24);
     expect(order).toEqual(AGENT_NAMES_V3.slice().sort((a, b) => {
       const ai = order.indexOf(a);
       const bi = order.indexOf(b);
@@ -142,7 +143,7 @@ describe("runGenerationV3 — auto mode", () => {
     });
     expect(result.qa?.decision).toBe("go");
     expect(result.failedAt).toBeUndefined();
-    expect(calls.length).toBe(23);
+    expect(calls.length).toBe(24);
 
     // Sanity events
     expect(events.some((e) => e.type === "generation.started")).toBe(true);
@@ -560,5 +561,166 @@ describe("type plumbing", () => {
       "wave-7-runtime-qa",
     ];
     expect(WAVES_V3.map((w) => w.name)).toEqual(expected);
+  });
+});
+
+// ─── Stitch reprompt loop (rework Punto C) + skip-resume ────────────
+
+/**
+ * The Stitch reprompt loop fires when a post-wave-2-design gate emits any
+ * of these three rules with severity 'error':
+ *   - stitch-missing-page
+ *   - stitch-missing-critical-element
+ *   - stitch-thin-section
+ *
+ * Behaviour contract under test:
+ *   1. On first detection: wave-2-design re-runs WITH skip-resume —
+ *      ux-ui-designer + brand-identity are NOT re-invoked (their artifacts
+ *      were preserved); only layout-architect re-runs. This prevents token
+ *      burn on agents whose work is still valid.
+ *   2. Tries up to 2 reprompts. On the third encounter (after attempts 0
+ *      and 1 both produced gaps), the orchestrator activates plan B:
+ *      `requiresHumanReview: true` is set on the result, the wave stops
+ *      re-running, and the generation proceeds to wave-2-domain etc.
+ *   3. The runner receives humanFeedback containing the reprompt counter
+ *      and the path to .atelier/stitch-failures.json each time it re-runs.
+ */
+describe("runGenerationV3 — Stitch reprompt loop (rework Punto C)", () => {
+  /**
+   * Builds a runner that records which agents were invoked per attempt.
+   * Returns artifacts whose shape matches the orchestrator's expectation:
+   * `qa-reviewer` always returns `go` so the fix loop is skipped.
+   */
+  function repromptRunner() {
+    const callsPerAgent = new Map<string, number>();
+    const humanFeedbacks: string[] = [];
+    const runner: AgentRunnerV3 = async (input) => {
+      callsPerAgent.set(input.agent, (callsPerAgent.get(input.agent) ?? 0) + 1);
+      if (input.humanFeedback) humanFeedbacks.push(input.humanFeedback);
+      return {
+        artifact:
+          input.agent === "qa-reviewer"
+            ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+            : { agent: input.agent, attemptOrFixRound: input.fixRound },
+        filesCreated: [],
+        summary: `${input.agent.toUpperCase()}_DONE`,
+      };
+    };
+    return { runner, callsPerAgent, humanFeedbacks };
+  }
+
+  /**
+   * Builds a post-wave gate that emits stitch-missing-page on the first N
+   * calls, then succeeds. Models a flaky Stitch that needs a reprompt or
+   * two to produce complete HTML.
+   */
+  function gateThatFailsNTimes(n: number): PostWaveGate {
+    let invocations = 0;
+    return {
+      name: "stitch-completeness-scanner",
+      async run() {
+        invocations++;
+        if (invocations <= n) {
+          return [
+            {
+              rule: "stitch-missing-page",
+              severity: "error",
+              agent: "layout-architect",
+              file: ".atelier/stitch-analysis.json",
+              message: `Synthetic gap on attempt ${invocations}`,
+              recommendedFix: "Re-prompt Stitch",
+            },
+          ];
+        }
+        return [];
+      },
+    };
+  }
+
+  it("re-runs ONLY layout-architect on the reprompt (skip-resume preserves siblings)", async () => {
+    const { runner, callsPerAgent, humanFeedbacks } = repromptRunner();
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: {
+        "wave-2-design": [gateThatFailsNTimes(1)],
+      },
+    });
+    expect(result.failedAt).toBeUndefined();
+    expect(result.requiresHumanReview).toBeUndefined();
+    // The reprompt fires once: layout-architect runs twice.
+    expect(callsPerAgent.get("layout-architect")).toBe(2);
+    // ux-ui-designer + brand-identity were preserved → called exactly once.
+    expect(callsPerAgent.get("ux-ui-designer")).toBe(1);
+    expect(callsPerAgent.get("brand-identity")).toBe(1);
+    // humanFeedback was set on the reprompt invocation.
+    expect(humanFeedbacks.some((f) => f.includes("STITCH_REPROMPT_ATTEMPT=1"))).toBe(true);
+    expect(humanFeedbacks.some((f) => f.includes("stitch-failures.json"))).toBe(true);
+  });
+
+  it("activates plan B (requiresHumanReview) after 2 failed reprompts", async () => {
+    const { runner, callsPerAgent } = repromptRunner();
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: {
+        // Gate fails on attempts 1, 2, 3 — orchestrator only allows 2 reprompts,
+        // so plan B activates after the 3rd failed gate.
+        "wave-2-design": [gateThatFailsNTimes(99)],
+      },
+    });
+    expect(result.requiresHumanReview).toBe(true);
+    // layout-architect ran 3 times total: original + 2 reprompts. No more.
+    expect(callsPerAgent.get("layout-architect")).toBe(3);
+    // Siblings still preserved across both reprompts.
+    expect(callsPerAgent.get("ux-ui-designer")).toBe(1);
+    expect(callsPerAgent.get("brand-identity")).toBe(1);
+    // Downstream waves still ran (run continues with placeholders).
+    expect(callsPerAgent.get("domain-modeler")).toBe(1);
+    expect(callsPerAgent.get("visual-adapter")).toBe(1);
+    expect(callsPerAgent.get("qa-reviewer")).toBe(1);
+  });
+
+  it("does NOT reprompt when the gate is clean on first pass", async () => {
+    const { runner, callsPerAgent } = repromptRunner();
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: {
+        "wave-2-design": [gateThatFailsNTimes(0)],
+      },
+    });
+    expect(result.requiresHumanReview).toBeUndefined();
+    expect(callsPerAgent.get("layout-architect")).toBe(1);
+    expect(callsPerAgent.get("ux-ui-designer")).toBe(1);
+    expect(callsPerAgent.get("brand-identity")).toBe(1);
+  });
+
+  it("does NOT reprompt when a non-stitch rule triggers a violation", async () => {
+    const { runner, callsPerAgent } = repromptRunner();
+    const unrelatedGate: PostWaveGate = {
+      name: "unrelated-coherence-scanner",
+      async run() {
+        return [
+          {
+            rule: "layout-tree-orphan",
+            severity: "error",
+            agent: "architect",
+            file: ".atelier/layout-tree.json",
+            message: "orphan",
+            recommendedFix: "fix it",
+          },
+        ];
+      },
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: { "wave-2-design": [unrelatedGate] },
+    });
+    expect(result.requiresHumanReview).toBeUndefined();
+    expect(callsPerAgent.get("layout-architect")).toBe(1);
+    // The violation is accumulated, but the reprompt loop is rule-specific.
+    expect(result.gateViolations.some((v) => v.rule === "layout-tree-orphan")).toBe(true);
   });
 });

@@ -2,9 +2,12 @@
  * Atelier v3 violations router.
  *
  * Maps workspace file paths to the v3 agent that owns them. Extends the v2
- * routing table with rules for the 6 new agents (bootstrap-devops,
- * layout-architect, brand-identity, animation-choreographer, accessibility,
- * visual-qa).
+ * routing table with rules for the 7 net-new agents (bootstrap-devops,
+ * layout-architect, brand-identity, animation-choreographer, visual-adapter,
+ * accessibility, visual-qa). visual-adapter violations typically arrive
+ * with their `agent` field pre-set by visual-regression-scanner or
+ * stitch-completeness-scanner, so the path-based routing rules below are
+ * minimal — only the artifact JSON path is registered.
  *
  * Same priority semantics as v2: higher number wins, ties resolved by
  * first declaration. We keep the v2 rules verbatim so v3 behaviour is a

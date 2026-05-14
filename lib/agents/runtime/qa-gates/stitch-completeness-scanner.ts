@@ -29,12 +29,12 @@
  * Pure function — no FS writes, no MCP calls. `_readFile` is a test seam.
  */
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { load as loadHtml } from "cheerio";
 
-import type { QaViolationV3 } from "../../orchestrator-v3";
+import type { PostWaveGate, QaViolationV3 } from "../../orchestrator-v3";
 
 // ─── Public types ───────────────────────────────────────────────────
 
@@ -370,9 +370,6 @@ function describe(e: unknown): string {
  * to plan B (sets `stitchHealth: "degraded"` and marks
  * `requires_human_review` in the run-state).
  */
-import { writeFile } from "node:fs/promises";
-
-import type { PostWaveGate } from "../../orchestrator-v3";
 
 export function createStitchCompletenessGate(): PostWaveGate {
   return {

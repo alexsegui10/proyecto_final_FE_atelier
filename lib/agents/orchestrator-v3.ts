@@ -89,6 +89,12 @@ export const WAVES_V3: readonly WaveV3[] = [
       "forms-validations",
       "pages-routing",
       "animation-choreographer",
+      // visual-adapter runs LAST inside wave-4-presentation: it consumes
+      // ui-components primitives for the rare `replaced-with-shadcn` cases
+      // (R5 of visual-adapter.md). Ordering within a wave is best-effort —
+      // the orchestrator runs all agents of a wave concurrently with
+      // Promise.allSettled, so this ordering is mostly documentation.
+      "visual-adapter",
     ],
     dependsOn: ["wave-3-app-security"],
   },
@@ -357,13 +363,27 @@ async function runWave(
   wave: WaveV3,
   runner: AgentRunnerV3,
   emit: EmitEventV3,
-  ctx: { workDir: string; prd: unknown; humanFeedback?: string },
+  ctx: {
+    workDir: string;
+    prd: unknown;
+    humanFeedback?: string;
+    /**
+     * Agents in this wave whose artifact already exists upstream (e.g. the
+     * Stitch reprompt loop preserves ux-ui-designer + brand-identity while
+     * re-running only layout-architect). When set, those agents are NOT
+     * re-invoked; their previously-stored artifact remains the wave's
+     * contribution and `results[]` does not include them.
+     */
+    skipAgents?: ReadonlySet<AgentNameV3>;
+  },
 ): Promise<WaveRunResult> {
   const startedAt = Date.now();
-  await emit({ type: "wave.started", wave: wave.name, agents: wave.agents, startedAt });
+  const skip = ctx.skipAgents;
+  const agentsToRun = wave.agents.filter((a) => !skip?.has(a));
+  await emit({ type: "wave.started", wave: wave.name, agents: agentsToRun, startedAt });
 
   const settled = await Promise.allSettled(
-    wave.agents.map(async (agent) => {
+    agentsToRun.map(async (agent) => {
       await emit({ type: "agent.started", agent, wave: wave.name });
       const out = await runner({
         agent,
@@ -392,7 +412,7 @@ async function runWave(
   let firstFailure: { agent: AgentNameV3; reason: string } | undefined;
   for (let i = 0; i < settled.length; i++) {
     const s = settled[i];
-    const agent = wave.agents[i];
+    const agent = agentsToRun[i];
     if (!s || agent === undefined) continue;
     if (s.status === "fulfilled") {
       results.push({ agent: s.value.agent, outcome: s.value.outcome });
@@ -518,13 +538,25 @@ export async function runGenerationV3(
       continue; // Next wave — no agents run for this one
     }
 
-    // Outer loop: run the wave; may repeat if the human rejects in step-by-step.
+    // Outer loop: run the wave; may repeat if the human rejects in step-by-step
+    // or if the Stitch reprompt loop fires.
     let waveSettled = false;
     while (!waveSettled) {
+      // Compute skip set: any agent in this wave whose artifact already
+      // exists from a previous attempt is preserved (skip-resume). This is
+      // what keeps the Stitch reprompt loop from re-burning tokens on
+      // ux-ui-designer / brand-identity when only layout-architect needs
+      // to retry. Full-wave rejects upstream (approvalResolver) explicitly
+      // delete the artifacts so this set comes out empty there.
+      const skipAgents = new Set<AgentNameV3>();
+      for (const agent of wave.agents) {
+        if (artifacts[agent] !== undefined) skipAgents.add(agent);
+      }
       const out = await runWave(wave, opts.runner, opts.emit, {
         workDir: opts.workDir,
         prd: opts.prd,
         ...(humanFeedback ? { humanFeedback } : {}),
+        ...(skipAgents.size > 0 ? { skipAgents } : {}),
       });
 
       for (const r of out.results) {
