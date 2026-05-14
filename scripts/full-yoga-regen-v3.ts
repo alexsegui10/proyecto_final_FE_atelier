@@ -163,10 +163,21 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
         readFile(join(atelier, "stitch-analysis.json"), "utf8"),
         readFile(join(atelier, "test-id-contract.json"), "utf8"),
       ]);
+      // B4 — Layout Architect may optionally emit a `.atelier/layout-architect.json`
+      // summary file (route decisions, fixture-mode mappings, etc.). Absorb it
+      // when present so the artifact bundle records the rationale; absence is
+      // legitimate and not an error.
+      let summary: unknown = null;
+      try {
+        summary = JSON.parse(await readFile(join(atelier, "layout-architect.json"), "utf8"));
+      } catch {
+        // not emitted — fine, the agent isn't obligated to produce it
+      }
       return {
         layoutTree: JSON.parse(lt),
         stitchAnalysis: JSON.parse(sa),
         testIdContract: JSON.parse(tic),
+        ...(summary !== null ? { summary } : {}),
       };
     },
   },
