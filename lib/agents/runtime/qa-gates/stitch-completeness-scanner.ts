@@ -58,12 +58,25 @@ export interface StitchAnalysisLike {
   stitchHealth: "clean" | "degraded";
 }
 
+/**
+ * `requiredOn` is one of three variants — see test-id-contract.schema.ts.
+ * The scanner does NOT use a discriminated union here: it inspects
+ * whichever keys are present and routes verification accordingly.
+ *
+ *   - `layoutGroup` → verify against every page of that group in layout-tree
+ *   - `pageRoute`   → verify against the one page in layout-tree
+ *   - `component`   → DEFERRED to wave-4-presentation (no silent skip — a
+ *                     single warn-summary violation is emitted at the end
+ *                     of the scan, listing how many criticals were deferred)
+ */
 export interface TestIdEntryLike {
   selector: string;
   criticality: "critical" | "recommended" | "optional";
-  requiredOn:
-    | { layoutGroup: LayoutGroupV3 }
-    | { component: string };
+  requiredOn: {
+    layoutGroup?: LayoutGroupV3;
+    component?: string;
+    pageRoute?: string;
+  };
 }
 export interface TestIdContractLike {
   entries: ReadonlyArray<TestIdEntryLike>;
@@ -113,6 +126,34 @@ export async function scanStitchCompleteness(
 
   // Index stitch pages by route for O(1) lookup.
   const stitchByRoute = new Map(opts.stitchAnalysis.pages.map((p) => [p.pageRoute, p]));
+
+  // Pre-classify critical test-id entries by their requiredOn variant.
+  // Component-scoped entries are NOT silently skipped — they're counted
+  // and surfaced as a single warn-summary violation at the end of the
+  // scan. This closes B1 of the F3 first-real-run triage (the
+  // "silent-skip is the failure mode" pattern).
+  const criticals = opts.testIdContract.entries.filter((e) => e.criticality === "critical");
+  const criticalByLayoutGroup = new Map<LayoutGroupV3, TestIdEntryLike[]>();
+  const criticalByPageRoute = new Map<string, TestIdEntryLike[]>();
+  const criticalComponentDeferred: TestIdEntryLike[] = [];
+  for (const e of criticals) {
+    // Order of precedence: pageRoute > layoutGroup > component. If an entry
+    // declares more than one (legal per schema), prefer the most specific
+    // verifiable scope. component is the fallback because we cannot verify
+    // it in this wave.
+    if (e.requiredOn.pageRoute !== undefined) {
+      const list = criticalByPageRoute.get(e.requiredOn.pageRoute) ?? [];
+      list.push(e);
+      criticalByPageRoute.set(e.requiredOn.pageRoute, list);
+    } else if (e.requiredOn.layoutGroup !== undefined) {
+      const list = criticalByLayoutGroup.get(e.requiredOn.layoutGroup) ?? [];
+      list.push(e);
+      criticalByLayoutGroup.set(e.requiredOn.layoutGroup, list);
+    } else if (e.requiredOn.component !== undefined) {
+      criticalComponentDeferred.push(e);
+    }
+    // Schema guarantees at least one of the three is present.
+  }
 
   for (const ltPage of opts.layoutTree.pages) {
     const stitchPage = stitchByRoute.get(ltPage.pageRoute);
@@ -177,12 +218,14 @@ export async function scanStitchCompleteness(
     const $ = loadHtml(html);
 
     // ── Check 2: critical test-ids have an expected element ──────────
-    const criticalForThisPage = opts.testIdContract.entries.filter(
-      (e) =>
-        e.criticality === "critical" &&
-        "layoutGroup" in e.requiredOn &&
-        e.requiredOn.layoutGroup === ltPage.layoutGroup,
-    );
+    // Build the per-page critical list by combining:
+    //   (a) layoutGroup-based entries that apply to this page's group
+    //   (b) pageRoute-based entries whose route matches this page exactly
+    // component-scoped entries are deferred (handled below at the
+    // scan-summary level — NOT silently skipped).
+    const fromLayoutGroup = criticalByLayoutGroup.get(ltPage.layoutGroup) ?? [];
+    const fromPageRoute = criticalByPageRoute.get(ltPage.pageRoute) ?? [];
+    const criticalForThisPage = [...fromLayoutGroup, ...fromPageRoute];
 
     for (const entry of criticalForThisPage) {
       if (!hasExpectedElement($, entry.selector)) {
@@ -218,6 +261,25 @@ export async function scanStitchCompleteness(
       failure.reason = describeFailureReason(failure);
       pageFailures.push(failure);
     }
+  }
+
+  // ── Warn-summary for component-scoped criticals (B1 closure) ──────
+  // Silent skip was the failure mode of F3 — a contract dominated by
+  // requiredOn.component looked like "no gaps" to the scanner. The
+  // single warn-summary makes the deferral visible: the run still passes
+  // (warn, not error), but the report names how many criticals could not
+  // be verified at this wave and whose responsibility it is downstream.
+  if (criticalComponentDeferred.length > 0) {
+    const selectors = criticalComponentDeferred.map((e) => e.selector).sort();
+    violations.push({
+      rule: "stitch-completeness-component-deferred",
+      severity: "warn",
+      agent: "layout-architect",
+      message:
+        `${criticalComponentDeferred.length} critical selector(s) declared with requiredOn.component — deferred to wave-4-presentation (no page↔component map at wave-2). Deferred: ${selectors.join(", ")}.`,
+      recommendedFix:
+        "If these selectors live in a known page (e.g. signin-form on /sign-in), change requiredOn to { pageRoute: \"/sign-in\" } so the wave-2 scanner can verify them locally. Transversal selectors (no fixed route) are fine to keep as component — they'll be verified by the future wave-4 scanner.",
+    });
   }
 
   const shouldReprompt =

@@ -100,14 +100,13 @@ const TEST_ID_CONTRACT: TestIdContractLike = {
     { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
     { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
     { selector: "signout-button", criticality: "critical", requiredOn: { layoutGroup: "dashboard" } },
-    { selector: "signout-button", criticality: "critical", requiredOn: { layoutGroup: "admin" } },
-    // component-based criticals: only required on pages rendering that
-    // component. The scanner currently only inspects layoutGroup-based
-    // entries (component matching needs route↔component info we don't
-    // have). These are recorded so the fixture mirrors a realistic
-    // contract.
-    { selector: "signin-form", criticality: "critical", requiredOn: { component: "SignInForm" } },
+    { selector: "signout-button-admin", criticality: "critical", requiredOn: { layoutGroup: "admin" } },
+    // pageRoute-based critical (new variant in three-variant model).
+    { selector: "signin-form", criticality: "critical", requiredOn: { pageRoute: "/sign-in" } },
+    // component-based critical — deferred to wave-4 with warn-summary,
+    // NOT silently skipped (closes B1 of F3 triage).
     { selector: "admin-create-class", criticality: "critical", requiredOn: { component: "AdminCreateButton" } },
+    // Recommended (any variant) — never blocks, never warned about.
     { selector: "public-list-root", criticality: "recommended", requiredOn: { layoutGroup: "public" } },
   ],
 };
@@ -132,7 +131,7 @@ function setupTmpWorkDir(htmlByPath: Record<string, string>): string {
 // ─── Positive: clean run on coherent artifacts ──────────────────────
 
 describe("scanStitchCompleteness — positive", () => {
-  it("returns 0 violations + shouldReprompt=false when all 4 pages are complete", async () => {
+  it("emits no ERROR violations + shouldReprompt=false when all 4 pages are complete (component-deferred warn is acceptable)", async () => {
     const workDir = setupTmpWorkDir({
       ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
       ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
@@ -146,9 +145,16 @@ describe("scanStitchCompleteness — positive", () => {
         stitchAnalysis: STITCH_ANALYSIS_OK,
         testIdContract: TEST_ID_CONTRACT,
       });
-      expect(report.violations).toEqual([]);
+      // No error-severity violations — all required selectors present.
+      expect(report.violations.filter((v) => v.severity === "error")).toEqual([]);
       expect(report.pageFailures).toEqual([]);
       expect(report.shouldReprompt).toBe(false);
+      // But the component-deferred warn-summary IS expected (admin-create-class).
+      const summary = report.violations.find(
+        (v) => v.rule === "stitch-completeness-component-deferred",
+      );
+      expect(summary?.severity).toBe("warn");
+      expect(summary?.message).toContain("admin-create-class");
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
@@ -320,6 +326,175 @@ describe("scanStitchCompleteness — reprompt budget", () => {
       expect(report.shouldReprompt).toBe(false);
       // violations still emitted; orchestrator's plan B reads them
       expect(report.violations.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── Three-variant model: layoutGroup vs pageRoute vs component ────
+
+describe("scanStitchCompleteness — three-variant requiredOn model (B1 closure)", () => {
+  /**
+   * Custom HTML that misses the <form> on /sign-in. Used to verify that
+   * a pageRoute-based critical IS verified (vs the old behaviour where
+   * component-based criticals were silently skipped).
+   */
+  const SIGNIN_HTML_NO_FORM = `
+    <!doctype html>
+    <html><body>
+      <header><nav><a href="/">Home</a></nav></header>
+      <main><h1>Sign in</h1><p>Form is broken in this fixture for testing.</p></main>
+    </body></html>
+  `;
+
+  it("pageRoute-based critical is verified and FAILS when the target page lacks the expected element", async () => {
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML_NO_FORM,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      // signin-form is declared with pageRoute=/sign-in. The HTML lacks
+      // a <form> there → the scanner MUST emit the missing-critical
+      // violation. This is the key behavior that B1 had broken.
+      const signinFormFailures = report.violations.filter(
+        (v) =>
+          v.rule === "stitch-missing-critical-element" &&
+          (v.message?.includes("signin-form") ?? false),
+      );
+      expect(signinFormFailures.length).toBeGreaterThanOrEqual(1);
+      expect(signinFormFailures[0]?.message).toContain("/sign-in");
+      // Reprompt should trigger since pageFailures exist + attempt < 2.
+      expect(report.shouldReprompt).toBe(true);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("pageRoute-based critical PASSES when the target page has the expected element", async () => {
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML, // has <form>
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      const signinFormFailures = report.violations.filter(
+        (v) =>
+          v.rule === "stitch-missing-critical-element" &&
+          (v.message?.includes("signin-form") ?? false),
+      );
+      expect(signinFormFailures).toEqual([]);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("component-based critical is NOT silently skipped — emits the warn-summary violation", async () => {
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      const deferred = report.violations.find(
+        (v) => v.rule === "stitch-completeness-component-deferred",
+      );
+      expect(deferred).toBeDefined();
+      expect(deferred?.severity).toBe("warn"); // visible, not blocking
+      expect(deferred?.agent).toBe("layout-architect");
+      expect(deferred?.message).toMatch(/admin-create-class/);
+      expect(deferred?.recommendedFix).toMatch(/pageRoute/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("warn-summary is SINGLE per scan, not one per deferred entry (noise control)", async () => {
+    const contractWithManyComponentEntries: TestIdContractLike = {
+      entries: [
+        { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        // 5 component-deferred criticals — should yield ONE warn-summary.
+        { selector: "x-1", criticality: "critical", requiredOn: { component: "X1" } },
+        { selector: "x-2", criticality: "critical", requiredOn: { component: "X2" } },
+        { selector: "x-3", criticality: "critical", requiredOn: { component: "X3" } },
+        { selector: "x-4", criticality: "critical", requiredOn: { component: "X4" } },
+        { selector: "x-5", criticality: "critical", requiredOn: { component: "X5" } },
+      ],
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: contractWithManyComponentEntries,
+      });
+      const deferredViolations = report.violations.filter(
+        (v) => v.rule === "stitch-completeness-component-deferred",
+      );
+      expect(deferredViolations).toHaveLength(1);
+      // The single message lists all five selectors.
+      const msg = deferredViolations[0]?.message ?? "";
+      for (const sel of ["x-1", "x-2", "x-3", "x-4", "x-5"]) {
+        expect(msg).toContain(sel);
+      }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("zero component-deferred criticals → no warn-summary", async () => {
+    const pureContract: TestIdContractLike = {
+      entries: [
+        { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        { selector: "signin-form", criticality: "critical", requiredOn: { pageRoute: "/sign-in" } },
+      ],
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: pureContract,
+      });
+      expect(
+        report.violations.find((v) => v.rule === "stitch-completeness-component-deferred"),
+      ).toBeUndefined();
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }

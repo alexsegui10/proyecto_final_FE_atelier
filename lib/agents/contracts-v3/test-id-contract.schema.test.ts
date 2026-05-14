@@ -91,7 +91,7 @@ describe("testIdContractSchema — refinements", () => {
     ).toMatch(/duplicate selector/);
   });
 
-  it("rejects entries where requiredOn has NEITHER component nor layoutGroup", () => {
+  it("rejects entries where requiredOn has NONE of component / layoutGroup / pageRoute", () => {
     expect(
       validateTestIdContract(
         contract({
@@ -104,7 +104,7 @@ describe("testIdContractSchema — refinements", () => {
           ],
         }),
       ),
-    ).toMatch(/requiredOn must specify either component or layoutGroup/);
+    ).toMatch(/requiredOn must specify at least one of/);
   });
 
   it("rejects non-kebab-case selectors", () => {
@@ -153,5 +153,103 @@ describe("testIdContractSchema — refinements", () => {
         }),
       ),
     ).toMatch(/consumedByFlow/);
+  });
+});
+
+describe("testIdContractSchema — requiredOn three-variant model (post-F3 fix)", () => {
+  it("accepts requiredOn with pageRoute (new variant)", () => {
+    expect(
+      validateTestIdContract(
+        contract({
+          entries: [
+            entry({ selector: "header-root" }),
+            entry({ selector: "nav-primary" }),
+            entry({
+              selector: "signin-form",
+              purpose: "Sign-in form root on /sign-in",
+              requiredOn: { pageRoute: "/sign-in" },
+              consumedByFlow: ["client-anonymous", "client-authenticated"],
+            }),
+            entry({
+              selector: "hero-cta",
+              purpose: "Hero CTA on the home page",
+              requiredOn: { pageRoute: "/" },
+              consumedByFlow: ["client-anonymous"],
+              criticality: "recommended",
+            }),
+            entry({ selector: "signup-form", purpose: "Sign-up form on /sign-up" }),
+          ],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("accepts layoutGroup: 'standalone' (post-rework — auth pages can be standalone)", () => {
+    expect(
+      validateTestIdContract(
+        contract({
+          entries: [
+            entry({ selector: "header-root" }),
+            entry({
+              selector: "auth-shell",
+              purpose: "Standalone auth shell wrapper (sign-in, sign-up, errors)",
+              requiredOn: { layoutGroup: "standalone" },
+              consumedByFlow: ["client-anonymous"],
+            }),
+            entry({ selector: "nav-primary", purpose: "Primary nav inside header" }),
+            entry({ selector: "signin-form", purpose: "Sign-in form root" }),
+            entry({ selector: "signup-form", purpose: "Sign-up form root" }),
+          ],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects pageRoute that does not start with '/'", () => {
+    expect(
+      validateTestIdContract(
+        contract({
+          entries: [
+            entry({
+              selector: "signin-form",
+              requiredOn: { pageRoute: "sign-in" as never },
+            }),
+            entry({ selector: "a" }),
+            entry({ selector: "b" }),
+            entry({ selector: "c" }),
+            entry({ selector: "d" }),
+          ],
+        }),
+      ),
+    ).toMatch(/pageRoute must start with/);
+  });
+
+  it("accepts a mixed contract: layoutGroup + pageRoute + component (the realistic case)", () => {
+    expect(
+      validateTestIdContract(
+        contract({
+          entries: [
+            entry({
+              selector: "header-root",
+              requiredOn: { layoutGroup: "public" },
+            }),
+            entry({
+              selector: "signin-form",
+              purpose: "Sign-in form on /sign-in",
+              requiredOn: { pageRoute: "/sign-in" },
+              consumedByFlow: ["client-anonymous"],
+            }),
+            entry({
+              selector: "admin-create-class",
+              purpose: "Create button — can live in /admin/classes or a modal",
+              requiredOn: { component: "AdminCreateButton" },
+              consumedByFlow: ["admin"],
+            }),
+            entry({ selector: "nav-primary", purpose: "Primary nav inside header" }),
+            entry({ selector: "signup-form", purpose: "Sign-up form on /sign-up" }),
+          ],
+        }),
+      ),
+    ).toBeNull();
   });
 });

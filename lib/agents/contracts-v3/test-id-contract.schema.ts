@@ -11,6 +11,22 @@ import { z } from "zod";
  * Authoritative reference: `ROADMAP_V3.md` § 3.2 + PENDING_V3_DECISIONS.md D2.
  */
 
+/**
+ * Three scopes a critical selector can live at:
+ *
+ *   - `layoutGroup` — universal in that group (e.g. `header-root` in every
+ *     `public` page). The Stitch completeness scanner can verify these
+ *     directly against the layout-tree.
+ *   - `pageRoute`   — local to one specific page (e.g. `signin-form` in
+ *     `/sign-in`). The scanner finds the page in layout-tree and verifies.
+ *   - `component`   — transversal, no fixed route (e.g. `admin-create-class`
+ *     where the create button may live in the page OR a modal). Verified
+ *     by a wave-4-presentation scanner that has the component↔page map.
+ *
+ * The scanner reports a single warn-summary listing component-scoped
+ * entries deferred to wave-4 — silence is the failure mode we are
+ * explicitly retiring (B1 of the F3 first-real-run triage).
+ */
 const requiredOnSchema = z
   .object({
     /** PascalCase component name owned by UI Components. */
@@ -19,12 +35,20 @@ const requiredOnSchema = z
       .regex(/^[A-Z][A-Za-z0-9]*$/, "component must be PascalCase")
       .optional(),
     /** Layout group owned by Layout Architect (renders the wrapper). */
-    layoutGroup: z.enum(["public", "dashboard", "admin"]).optional(),
+    layoutGroup: z.enum(["public", "dashboard", "admin", "standalone"]).optional(),
+    /** Single page route the selector is local to (e.g. "/sign-in", "/"). */
+    pageRoute: z
+      .string()
+      .regex(/^\/.*/, "pageRoute must start with '/'")
+      .optional(),
   })
   .strict()
   .refine(
-    (r) => r.component !== undefined || r.layoutGroup !== undefined,
-    "requiredOn must specify either component or layoutGroup",
+    (r) =>
+      r.component !== undefined ||
+      r.layoutGroup !== undefined ||
+      r.pageRoute !== undefined,
+    "requiredOn must specify at least one of: component, layoutGroup, pageRoute",
   );
 
 const testIdEntrySchema = z

@@ -112,9 +112,11 @@ Le pasás (a) el prompt refinado o el original directo, (b) `designVibe` canonic
 
 ## Reglas (R0-R10)
 
-**R0 — Home siempre con layout group (cierre del bug clase E)**
+**R0 — Home siempre con layout group (cierre del bug clase E) + auth=standalone aceptable**
 
 La página `/` (home) **NO PUEDE** tener `layoutGroup: "standalone"`. El schema bloquea esa shape. Tu decisión válida es `public` (lo normal), `dashboard` (apps con landing autenticado) o `admin` (raro). Si en duda → `public`.
+
+**Auth pages (`/sign-in`, `/sign-up`) Y páginas de error (`/404`, `/500`) PUEDEN ser `layoutGroup: "standalone"`** — es decisión UX válida (compact header + minimal footer reduce form abandon; las páginas de error no necesitan nav primario). Cuando elegís standalone para auth, documentá la razón en `rationale` y asegurate de que las navigation/test-id entries que apliquen a esas pages usen `requiredOn: { pageRoute: "/sign-in" }` en vez de `requiredOn: { layoutGroup: "public" }`, porque el scanner de wave-2-design verifica criticals por la combinación correcta.
 
 **R1 — Correspondencia layout-tree ↔ architect**
 
@@ -151,22 +153,32 @@ Por cada screen de Stitch:
 
 Esta regla cierra el bug clase A de "silent font fallback" RE-UBICADO post-rework: la cadena de defensa ahora es Stitch GENERA → vos EXTRAÉS y PERSISTÍS → Visual Adapter PRESERVA en `app/layout.tsx` → `runtime-smoke-gate` VERIFICA HTTP 200. Cuatro capas (antes eran tres en Brand Identity).
 
-**R5 — Test-id contract por defecto**
+**R5 — Test-id contract por defecto + modelo de 3 variantes de `requiredOn`**
+
+`requiredOn` tiene **tres** variantes con semántica distinta. Elegí la que más se ajuste:
+
+- `{ layoutGroup: "public" | "dashboard" | "admin" | "standalone" }` — el selector está en TODAS las pages de ese grupo (universal). Usalo para wrappers de shell: `header-root`, `nav-primary`, `signout-button`. El scanner verifica contra cada page del grupo.
+- `{ pageRoute: "/sign-in" }` — el selector vive en UNA page específica (local). Usalo cuando el selector solo aparece en una route concreta: `signin-form` en /sign-in, `hero-cta` en /, `public-list-root` en /classes. El scanner verifica contra esa page exacta.
+- `{ component: "AdminCreateButton" }` — el selector aparece donde sea que el componente se renderice (transversal, sin route fijo). Usalo solo cuando el selector NO es local a una page: modales que pueden vivir en múltiples routes, botones reusables que aparecen en varias pages. El scanner de wave-2-design **NO puede verificarlo** (no tiene mapeo component↔page), pero emite un warn-summary listándolos para trazabilidad — la verificación real ocurre en wave-4-presentation.
+
+**Elegí la variante MÁS específica que aplique**: pageRoute > layoutGroup > component. Si dudás entre layoutGroup y pageRoute, usá pageRoute (el scanner es más preciso). Si dudás entre pageRoute y component, usá pageRoute (component se difiere a wave-4).
 
 Emitís al menos estos 8 selectors críticos:
 
-| selector | requiredOn | criticality | consumedByFlow |
+| selector | requiredOn sugerido | criticality | consumedByFlow |
 |---|---|---|---|
-| `header-root` | layoutGroup public/dashboard/admin | critical | client-anonymous |
-| `nav-primary` | layoutGroup public/dashboard/admin | critical | client-anonymous |
-| `signin-form` | component SignInForm | critical | client-anonymous, client-authenticated |
-| `signup-form` | component SignUpForm | critical | client-anonymous |
-| `signout-button` | layoutGroup dashboard/admin | critical | client-authenticated, admin |
-| `admin-create-<entity>` (lowercase) | component AdminCreateButton | critical | admin |
-| `public-list-root` | depende del dominio | critical | client-anonymous |
-| `hero-cta` | component HomeHero | recommended | client-anonymous |
+| `header-root` | `{ layoutGroup: "public" }` + entries análogas para dashboard y admin | critical | client-anonymous |
+| `nav-primary` | `{ layoutGroup: "public" }` + dashboard + admin | critical | client-anonymous |
+| `signin-form` | `{ pageRoute: "/sign-in" }` | critical | client-anonymous, client-authenticated |
+| `signup-form` | `{ pageRoute: "/sign-up" }` | critical | client-anonymous |
+| `signout-button` | `{ layoutGroup: "dashboard" }` + admin | critical | client-authenticated, admin |
+| `admin-create-<entity>` (lowercase) | `{ pageRoute: "/admin/<entities>" }` si la page existe; si el botón vive en un modal transversal, `{ component: "AdminCreateButton" }` (se diferida a wave-4 con warn-summary) | critical | admin |
+| `public-list-root` | `{ pageRoute: "/classes" }` (o la route principal del listado público que el architect declare) | critical | client-anonymous |
+| `hero-cta` | `{ pageRoute: "/" }` | recommended | client-anonymous |
 
 Selectors siempre kebab-case lowercase (`admin-create-class`, NO `admin-create-Class`). El schema regex lo enforza.
+
+**Regla operativa**: si terminás con muchos selectors críticos `requiredOn.component` (e.g. >50% del total), revisá la elección — la mayoría son normalmente locales a una page y deberían usar `pageRoute`. El warn-summary del scanner te lo va a recordar en el reporte, pero es preferible elegir bien desde el origen.
 
 **R6 — Flag `esQuestionable`**
 
