@@ -334,6 +334,14 @@ export interface GenerationV3Result {
   gateViolations: QaViolationV3[];
   /** Waves whose agents were not invoked because a preWaveGate blocked them. */
   skippedWaves: WaveNameV3[];
+  /**
+   * Set to true by the Stitch reprompt loop (rework Punto C) when the
+   * stitch-completeness-scanner kept finding gaps after 2 reprompts.
+   * The Visual Adapter substitutes placeholders for missing pages and
+   * the run completes, but the orchestrator caller should surface the
+   * flag to the human operator.
+   */
+  requiresHumanReview?: boolean;
 }
 
 interface WaveRunResult {
@@ -440,6 +448,13 @@ export async function runGenerationV3(
   let humanFeedback: string | undefined;
   const gateViolations: QaViolationV3[] = [];
   const skippedWaves: WaveNameV3[] = [];
+  // Stitch reprompt loop (rework Punto C): tracks how many times Layout
+  // Architect was re-invoked with --stitch-reprompt. Capped at 2; after
+  // that the orchestrator triggers plan B (stitchHealth: "degraded" +
+  // requires_human_review) and the run proceeds with whatever HTML pages
+  // exist on disk.
+  let stitchRepromptAttempts = 0;
+  let requiresHumanReview = false;
 
   for (let i = 0; i < waves.length; i++) {
     const wave = waves[i];
@@ -585,6 +600,50 @@ export async function runGenerationV3(
           violations: postOutcome.length,
           passed: blocking === 0,
         });
+      }
+
+      // ─── Stitch reprompt loop (rework Punto C) ────────────────────
+      // Only relevant to wave-2-design. If the stitch-completeness-scanner
+      // emitted any of the 3 stitch-* rules AND we have not exhausted
+      // the reprompt budget (max 2), re-run the wave with feedback that
+      // points Layout Architect at `.atelier/stitch-failures.json`.
+      // After 2 attempts plan B: set requires_human_review and proceed
+      // (the Visual Adapter will substitute placeholders for missing pages).
+      if (wave.name === "wave-2-design") {
+        const STITCH_REPROMPT_RULES = new Set([
+          "stitch-missing-page",
+          "stitch-missing-critical-element",
+          "stitch-thin-section",
+        ]);
+        const stitchViolationsThisRun = gateViolations.filter(
+          (v) => STITCH_REPROMPT_RULES.has(v.rule) && v.severity === "error",
+        );
+        if (stitchViolationsThisRun.length > 0) {
+          if (stitchRepromptAttempts < 2) {
+            stitchRepromptAttempts++;
+            await opts.emit({
+              type: "wave.paused",
+              wave: wave.name,
+              reason: `stitch-completeness flagged ${stitchViolationsThisRun.length} gap(s) — reprompt attempt ${stitchRepromptAttempts}/2`,
+            });
+            // Strip the Layout Architect artifact so the wave can re-run
+            // (UX/UI slim + Brand Identity outputs are conserved — they're
+            // idempotent w.r.t. their inputs).
+            delete artifacts["layout-architect"];
+            // The runner reads humanFeedback; we use it to signal reprompt.
+            humanFeedback = `STITCH_REPROMPT_ATTEMPT=${stitchRepromptAttempts} previousFailures=.atelier/stitch-failures.json`;
+            continue; // outer while re-runs wave-2-design
+          }
+          // Plan B: budget exhausted.
+          requiresHumanReview = true;
+          await opts.emit({
+            type: "wave.paused",
+            wave: wave.name,
+            reason: `stitch-completeness still flagging after 2 reprompts — plan B: stitchHealth=degraded, requires_human_review`,
+          });
+          // Run continues. Visual Adapter (wave-4-frontend) will substitute
+          // placeholders for the pages in stitch-failures.json.
+        }
       }
 
       if (!opts.approvalResolver) {
@@ -741,6 +800,7 @@ export async function runGenerationV3(
     qa,
     gateViolations,
     skippedWaves,
+    ...(requiresHumanReview ? { requiresHumanReview: true as const } : {}),
     ...(lastApproval ? { lastApproval } : {}),
   };
 }

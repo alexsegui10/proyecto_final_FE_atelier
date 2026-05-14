@@ -3,78 +3,37 @@ import { z } from "zod";
 /**
  * `.atelier/stitch-analysis.json` — Layout Architect (v3 wave 2).
  *
- * Parsed (NOT literal) representation of the Stitch design output. The HTML
- * Stitch returns is processed through cheerio + heuristics into a clean
- * hierarchical structure that UI Components (v3 future) consumes to emit
- * JSX with the right primitives + tokens.
+ * MANIFEST of the Stitch design output. Stitch produces HTML/CSS that IS
+ * the canonical look of the generated app; this artifact records WHERE
+ * that HTML lives on disk, plus the minimal metadata downstream agents
+ * need to adapt it without re-authoring.
  *
- * Section is recursive — we declare the TypeScript shape explicitly with
- * `z.ZodType<Section>` so consumers (UI Components) get full type safety
- * instead of the `unknown` that `z.lazy()` alone produces.
+ * The HTML is persisted LITERALLY under `.atelier/stitch-html/<slug>.html`
+ * and the Visual Adapter (wave-4-frontend) consumes it directly, preserving
+ * Stitch's CSS as-is.
  *
- * Authoritative reference: `ROADMAP_V3.md` § 3.2 + § 4.1.
+ * Why colorTokens[] and typographyTokens[] still exist:
+ * ─────────────────────────────────────────────────────
+ * They are KEPT here SOLELY to theme the handful of shadcn primitives that
+ * the Visual Adapter may inject as last-resort replacements (e.g. when a
+ * Stitch <input> genuinely cannot fulfil its function). They are NOT used
+ * to reconstruct the app's theme / Tailwind config — that would be the
+ * old "parse the HTML and re-author in shadcn" model that this rework
+ * explicitly retires. The canonical style of the generated app is the
+ * preserved CSS of Stitch, not these tokens.
+ *
+ * What this schema deliberately DROPPED in the rework:
+ * ─────────────────────────────────────────────────────
+ * - The recursive `Section` tree + `LayoutPrimitive` enum + `SectionPadding`.
+ *   Nobody consumes a semantic decomposition anymore; the Adapter reads
+ *   the HTML directly.
+ * - The `rootSection` field per page. Replaced by `rawHtmlPath`.
+ *
+ * Authoritative reference: `ROADMAP_V3.md` § 3.2 + § 4.1 (re-interpreted
+ * post-rework: "Stitch HTML is preserved, not parsed-and-discarded").
  */
 
-// ─── Section (recursive, explicitly typed) ──────────────────────────
-
-export type LayoutPrimitive = "stack" | "grid" | "flex-row" | "flex-col" | "absolute";
-
-export interface SectionPadding {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
-
-export interface Section {
-  /** Stable id used by cross-references + test-id derivation. */
-  id: string;
-  /** Semantic intent: "hero" | "feature-grid" | "pricing-table" | ... */
-  purpose: string;
-  /** Layout primitive Stitch chose (mapped from CSS classes). */
-  layoutPrimitive: LayoutPrimitive;
-  /** Grid column count when layoutPrimitive === "grid". */
-  columns?: number;
-  /** Inter-child gap in pixels. */
-  gapPx?: number;
-  paddingPx?: SectionPadding;
-  /** Children sections — recursive. */
-  children?: Section[];
-}
-
-const paddingSchema = z
-  .object({
-    top: z.number().int().nonnegative(),
-    right: z.number().int().nonnegative(),
-    bottom: z.number().int().nonnegative(),
-    left: z.number().int().nonnegative(),
-  })
-  .strict();
-
-const layoutPrimitiveSchema = z.enum([
-  "stack",
-  "grid",
-  "flex-row",
-  "flex-col",
-  "absolute",
-]);
-
-// Explicit ZodType<Section> so the consumer side gets the inference correctly.
-export const sectionSchema: z.ZodType<Section> = z.lazy(() =>
-  z
-    .object({
-      id: z.string().regex(/^[a-z][a-z0-9-]*$/, "section id must be kebab-case"),
-      purpose: z.string().min(3),
-      layoutPrimitive: layoutPrimitiveSchema,
-      columns: z.number().int().min(1).max(12).optional(),
-      gapPx: z.number().int().nonnegative().optional(),
-      paddingPx: paddingSchema.optional(),
-      children: z.array(sectionSchema).optional(),
-    })
-    .passthrough(),
-);
-
-// ─── Tokens ─────────────────────────────────────────────────────────
+// ─── Tokens (theming-only, see header) ──────────────────────────────
 
 const colorTokenSchema = z
   .object({
@@ -117,18 +76,38 @@ const typographyTokenSchema = z
   })
   .strict();
 
-// ─── Page analysis ──────────────────────────────────────────────────
+// ─── Page entry ─────────────────────────────────────────────────────
 
 const pageAnalysisSchema = z
   .object({
     pageRoute: z.string().regex(/^\/.*/),
-    /** Path inside the workDir (POSIX-style). */
+    /** Mockup PNG path under .atelier/stitch-mockups/<slug>.png. */
     mockupPath: z
       .string()
-      .regex(/^\.atelier\/stitch-mockups\/.+\.png$/, "mockupPath must live under .atelier/stitch-mockups/"),
+      .regex(
+        /^\.atelier\/stitch-mockups\/.+\.png$/,
+        "mockupPath must live under .atelier/stitch-mockups/",
+      ),
+    /**
+     * Literal HTML Stitch returned for this page, persisted to disk so the
+     * Visual Adapter can read it directly. Path is POSIX-style relative to
+     * workDir, under .atelier/stitch-html/<slug>.html.
+     */
+    rawHtmlPath: z
+      .string()
+      .regex(
+        /^\.atelier\/stitch-html\/.+\.html$/,
+        "rawHtmlPath must live under .atelier/stitch-html/",
+      ),
     /** Stitch screen id (for re-fetching via get_screen). */
     stitchScreenId: z.string().min(1),
-    rootSection: sectionSchema,
+    /**
+     * URLs of <link rel="stylesheet"> entries (typically Google Fonts) that
+     * Stitch embedded in this screen. The Visual Adapter MUST preserve these
+     * in the corresponding Next.js layout.tsx <head> so web fonts load.
+     * Empty array is valid only when Stitch used 100% system fonts.
+     */
+    linkedFonts: z.array(z.string().url()),
   })
   .strict();
 
@@ -139,6 +118,19 @@ export const stitchAnalysisSchema = z
     generatedAt: z.string().datetime(),
     stitchProjectId: z.string().min(1),
     designVibe: z.enum(["Linear", "Stripe", "Notion", "Vercel", "Calm"]),
+    /**
+     * Re-prompt attempt counter (0 = first attempt, 1 = first reprompt,
+     * 2 = second reprompt / final). Persisted to support the completeness
+     * loop. Max is 2 — see `stitch-completeness-scanner.ts` plan B.
+     */
+    stitchAttempt: z.number().int().min(0).max(2),
+    /**
+     * Health flag set when the completeness scanner kept finding gaps after
+     * max reprompts. When `degraded`, the orchestrator marks the run with
+     * `requires_human_review: true` and the Visual Adapter generates
+     * <StitchFailurePlaceholder> components for missing pages.
+     */
+    stitchHealth: z.enum(["clean", "degraded"]),
     colorTokens: z
       .array(colorTokenSchema)
       .min(5, "at least 5 color tokens (background, foreground, primary, muted, border)"),

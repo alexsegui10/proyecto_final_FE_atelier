@@ -1,15 +1,27 @@
 /**
- * visual-regression-scanner — Gate 6.
+ * visual-regression-scanner — Gate 6 (post-rework Punto E).
  *
  * Compares the screenshots Visual QA captured (`.atelier/screenshots/*.png`)
  * against the mockups Stitch produced (`.atelier/stitch-mockups/*.png`)
  * using pixelmatch + pngjs. Emits violations when divergence exceeds
  * configurable tolerances.
  *
- * Routing rule:
- *   - diff > 25% of pixels  → `visual-regression-major`, agent `layout-architect`, severity `error`
- *   - 10% < diff <= 25%     → `visual-regression-minor`, agent `ui-components`,    severity `warn`
- *   - diff <= 10%           → no violation
+ * Post-rework thresholds + routing:
+ *   - diff > 5%  of pixels      → `visual-regression-major`, agent `visual-adapter`, severity `error`
+ *   - 1% < diff <= 5%           → `visual-regression-minor`, agent `visual-adapter`, severity `warn`
+ *   - diff <= 1%                → no violation (this is the expected baseline)
+ *
+ * Why thresholds dropped dramatically (from 25%/10% to 5%/1%):
+ * The Visual Adapter now preserves Stitch's HTML/CSS literally — the
+ * generated app should be a near-pixel-perfect copy of the mockup PLUS
+ * dynamic data. Pixels that diverge are attributable to:
+ *   1. Dynamic data (empty list vs populated, form with validation errors).
+ *   2. `replaced-with-shadcn` swaps the Adapter did as last resort.
+ *   3. Hydration mismatch / FOUC of web fonts loading late.
+ * None of these should exceed 5% in a healthy adaptation. >5% means the
+ * Adapter mishandled preservation — routing goes to it, not to Layout
+ * Architect (Layout Architect already delivered fidelity HTML; the
+ * `stitch-completeness-scanner` post-wave-2 owns that contract).
  *
  * Designed to run as a postWaveGate of `wave-7-runtime-qa` (needs Visual
  * QA output to exist on disk).
@@ -31,9 +43,9 @@ export interface RunVisualRegressionOptions {
   workDir: string;
   stitchAnalysis: StitchAnalysis;
   visualQaReport: VisualQaReport;
-  /** Major threshold (0..1). Default 0.25. */
+  /** Major threshold (0..1). Default 0.05 (post-rework — was 0.25 pre-rework). */
   majorThreshold?: number;
-  /** Minor threshold (0..1). Default 0.10. */
+  /** Minor threshold (0..1). Default 0.01 (post-rework — was 0.10 pre-rework). */
   minorThreshold?: number;
   /** Pixelmatch sensitivity (0..1, lower is stricter). Default 0.1. */
   pixelMatchThreshold?: number;
@@ -54,8 +66,8 @@ export interface VisualRegressionReport {
 export async function runVisualRegression(
   opts: RunVisualRegressionOptions,
 ): Promise<VisualRegressionReport> {
-  const majorTh = opts.majorThreshold ?? 0.25;
-  const minorTh = opts.minorThreshold ?? 0.10;
+  const majorTh = opts.majorThreshold ?? 0.05;
+  const minorTh = opts.minorThreshold ?? 0.01;
   const pmThreshold = opts.pixelMatchThreshold ?? 0.1;
   const readFn = opts._readFile ?? ((p: string) => readFile(p));
   const diffFn = opts._diff ?? makeDefaultDiff(pmThreshold);
@@ -131,23 +143,23 @@ export async function runVisualRegression(
       violations.push({
         rule: "visual-regression-major",
         severity: "error",
-        agent: "layout-architect",
+        agent: "visual-adapter",
         file: mockupRel,
         message:
-          `${page.pageRoute}: visual regression major — ${(ratio * 100).toFixed(1)}% of pixels diverge from the Stitch mockup (threshold ${(majorTh * 100).toFixed(0)}%).`,
+          `${page.pageRoute}: visual regression major — ${(ratio * 100).toFixed(1)}% of pixels diverge from the Stitch mockup (threshold ${(majorTh * 100).toFixed(1)}%).`,
         recommendedFix:
-          "Compare the Stitch mockup at the same path with the actual screenshot. Likely cause: page composed under the wrong layout group (bug class E) or the layout-tree doesn't match what was designed.",
+          "Visual Adapter delivered a screenshot >5% divergent from the Stitch mockup. Likely causes: (1) Adapter mishandled HTML preservation (rewrote sections that should have been kept literal); (2) excessive replaced-with-shadcn swaps; (3) preserved fonts didn't load (check runtime-smoke-gate). Inspect page-adaptations.json for this route.",
       });
     } else if (ratio > minorTh) {
       violations.push({
         rule: "visual-regression-minor",
         severity: "warn",
-        agent: "ui-components",
+        agent: "visual-adapter",
         file: mockupRel,
         message:
           `${page.pageRoute}: visual regression minor — ${(ratio * 100).toFixed(1)}% pixel divergence vs Stitch mockup.`,
         recommendedFix:
-          "Inspect the screenshot: usually a microcopy difference, token mismatch (color, spacing) or missing icon. UI Components owns these surface details.",
+          "Usually one of: dynamic data populating differently than mockup, an isolated replaced-with-shadcn swap that diverges slightly, or web font late-loading FOUC. Acceptable baseline if rationale exists in page-adaptations.json.",
       });
     }
   }

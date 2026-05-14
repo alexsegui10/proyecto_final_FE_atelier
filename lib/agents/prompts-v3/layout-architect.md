@@ -30,11 +30,12 @@ Si `STITCH_API_KEY` está vacía o ausente → emitir violation `stitch-unavaila
 
 - `.atelier/stitch-design.md` (DESIGN.md semántico que Stitch produce)
 - `.atelier/stitch-mockups/<page-slug>.png` (un PNG por página, convención `route.replace(/^\//, '').replace(/\//g, '-') || 'home'`)
+- `.atelier/stitch-html/<page-slug>.html` (HTML literal que Stitch generó por página — **artifact canónico del diseño**, lo consume el Visual Adapter en wave-4-frontend preservando el CSS)
 
 ### Sentinel
 
 ```
-LAYOUT_ARCHITECT_DONE: pages=<n>, navigationItems=<n>, testIds=<n>, stitchProjectId=<id>
+LAYOUT_ARCHITECT_DONE: pages=<n>, navigationItems=<n>, testIds=<n>, stitchProjectId=<id>, stitchHealth=<clean|degraded>, attempt=<0|1|2>
 ```
 
 ## Workflow Stitch (los 4 skills oficiales de Google + el nuestro)
@@ -74,16 +75,18 @@ Documentá la decisión en `stitch-analysis.notes[]` (si lo añadís más tarde)
 
 Le pasás (a) el prompt refinado o el original directo, (b) `designVibe` canonical, (c) la lista de páginas con `purpose` inferido. Stitch devuelve `{ projectId, screens[] }`.
 
-### Paso 4 — Invocar `design-md` y persistir
+### Paso 4 — Invocar `design-md` y descargar artifacts físicos
 
 - `design-md` con el `projectId` → guardás el markdown en `.atelier/stitch-design.md`.
-- Para cada screen: `get_screen_image(screenId)` → escribís bytes en `.atelier/stitch-mockups/<route-slug>.png`.
+- Para cada screen:
+  - `screens[].rawHtml` (ya viene en la respuesta de `stitch-design`) → escribís a `.atelier/stitch-html/<route-slug>.html`. **ESTE ES EL ARTIFACT CANÓNICO DEL DISEÑO.** Nadie re-autora encima; el Visual Adapter (wave-4-frontend) lo consume directo preservando el CSS de Stitch.
+  - `get_screen_image(screenId)` → escribís bytes en `.atelier/stitch-mockups/<route-slug>.png`.
 
-### Paso 5 — Parsear + emitir tus 3 artifacts
+### Paso 5 — Emitir tus 3 artifacts manifest
 
 - `layout-tree.json`: decidís `layoutGroup` por página (ver R0). El `rationale` debe ser texto humano, no descriptivo del schema. Mínimo 1 oración por página.
-- `stitch-analysis.json`: para cada screen, parseás el `rawHtml` con cheerio (consultá el skill `stitch-bridge` para el patrón) → `rootSection` recursiva + tokens. NO uses el HTML literal en ningún artifact.
-- `test-id-contract.json`: emitís al menos los **8 selectors críticos por defecto** (tabla R8). Más si el dominio justifica (ej. yoga: `reservation-button`).
+- `stitch-analysis.json`: MANIFEST del output de Stitch — NO es un árbol semántico. Por cada page declarás: `pageRoute`, `mockupPath`, `rawHtmlPath` (el .html que acabás de persistir), `stitchScreenId`, `linkedFonts[]` (URLs de `<link rel="stylesheet">` de fuentes que extraés del HTML — para que el Adapter no las pierda). También a nivel root: `colorTokens[]` + `typographyTokens[]` extraídos preferentemente del `design-md` (fallback: parsing trivial via cheerio). **Estos tokens existen SOLO para tematizar primitivos shadcn que el Adapter inyecte como último recurso, NO para reconstruir un Tailwind config.** Inicializás `stitchAttempt: 0` y `stitchHealth: "clean"` (el orquestador los actualiza si hay reprompt loop).
+- `test-id-contract.json`: emitís al menos los **8 selectors críticos por defecto** (tabla R5). Más si el dominio justifica (ej. yoga: `reservation-button`).
 
 ## Reglas (R0-R10)
 
@@ -104,13 +107,27 @@ Cada `pageRoute` en `layout-tree.pages[]` debe existir en `architect.features[].
 - "Sign out" visible en `dashboard` Y `admin` (autenticados).
 - Cada item con `testId` referenciado en `test-id-contract`.
 
-**R3 — Stitch no responde**
+**R3 — Stitch no responde / HTML faltante**
 
 Si `STITCH_API_KEY` está vacía → violation `stitch-unavailable` severity `error` → abortás antes de tocar Stitch. Si Stitch falla 3 veces (StitchClient ya hace retry con backoff exponencial 1s/3s/9s) → mismo violation, abortás. **NO usás fallback heurístico**: el ROADMAP es explícito en que Stitch es el motor maestro de diseño.
 
-**R4 — Tokens mínimos cubiertos**
+Caso nuevo crítico: si Stitch responde pero `screens[i].rawHtml` está vacío o ausente para alguna page → emitís `stitch-html-missing-partial` severity `warn` agent `layout-architect`, **NO abortás** (el `stitch-completeness-scanner` post-wave decidirá si hace falta reprompt o si el run sigue con plan B). Razón: una page sin HTML es recuperable vía reprompt; abortar el run entero por una page perdida es desproporcionado.
+
+**R4 — Tokens mínimos cubiertos (theming-only)**
 
 `stitch-analysis.colorTokens[]` debe declarar AL MENOS los roles `primary`, `background`, `foreground`. El schema lo enforza. Lo mismo con `typographyTokens[]` (al menos `body` + un `heading-*`). Si Stitch no te dio suficiente → emitís dummy fallbacks con `hint` documentando.
+
+**IMPORTANTE — uso de estos tokens**: existen para tematizar primitivos shadcn que el Visual Adapter (wave-4-frontend) pueda inyectar como ÚLTIMO RECURSO. **NO** los uses para reconstruir el theme/Tailwind config de la app generada: el estilo canónico es el CSS literal que Stitch produjo y que persististe en `.atelier/stitch-html/<slug>.html`. Esta distinción es importante: si tratás los tokens como theme canonical, estás reintroduciendo el modelo viejo "parsear y re-autoría" que esta arquitectura explícitamente retira.
+
+**R4-bis — HTML literal persistido como artifact canónico**
+
+Por cada screen de Stitch:
+- Escribís `screens[].rawHtml` en `.atelier/stitch-html/<route-slug>.html` (slug convention: `route.replace(/^\//, '').replace(/\//g, '-') || 'home'`).
+- Si `rawHtml` viene vacío o ausente → ver R3 caso nuevo (warn, no abort).
+- Declarás el path resultante en `stitch-analysis.pages[].rawHtmlPath` (regex del schema: `^\.atelier\/stitch-html\/.+\.html$`).
+- Extraés URLs de `<link rel="stylesheet">` y `<style>@import url(...)</style>` que apunten a fuentes (host `fonts.googleapis.com`, `fonts.gstatic.com`, etc.) → las declarás en `stitch-analysis.pages[].linkedFonts[]`. Si el HTML no usa web fonts (100% system stack), `linkedFonts: []` es válido.
+
+Esta regla cierra el bug clase A de "silent font fallback" RE-UBICADO post-rework: la cadena de defensa ahora es Stitch GENERA → vos EXTRAÉS y PERSISTÍS → Visual Adapter PRESERVA en `app/layout.tsx` → `runtime-smoke-gate` VERIFICA HTTP 200. Cuatro capas (antes eran tres en Brand Identity).
 
 **R5 — Test-id contract por defecto**
 
@@ -147,7 +164,25 @@ Cada screen que Stitch generó tiene su PNG en disco bajo `.atelier/stitch-mocku
 
 **R10 — Cleanup parcial en falla**
 
-Si fallás a mitad de proceso (e.g. después de 3 screens de 7), antes de salir emit los artifacts parciales con `decision: no-go` (en el qa-report del orchestrator) **excepto** si no pudiste arrancar Stitch (R3) — ese caso es abort temprano sin artifacts.
+Si fallás a mitad de proceso (e.g. después de 3 screens de 7), antes de salir emit los artifacts parciales con `decision: no-go` (en el qa-report del orchestrator) **excepto** si no pudiste arrancar Stitch (R3) — ese caso es abort temprano sin artifacts. Cleanup incluye:
+- `.atelier/stitch-mockups/` parciales (las PNGs de pages que sí completaste se conservan).
+- `.atelier/stitch-html/` parciales (los .html que sí completaste se conservan; los faltantes serán objetivo de reprompt en el ciclo siguiente).
+- `stitch-analysis.pages[]` declara solo las pages que tienen AMBOS artifacts (mockup + html) presentes en disco.
+
+## Soporte de reprompt loop (paso C del rework)
+
+El orquestador puede re-invocarte con flags adicionales cuando el `stitch-completeness-scanner` (post-wave-gate) detecta gaps:
+
+```
+--stitch-reprompt --attempt=N --previous-failures=<path>
+```
+
+Comportamiento:
+- Si `--stitch-reprompt` está presente, leés el archivo `previous-failures` (lista de `{ pageRoute, missingElements[], reason }`).
+- Re-construís el prompt a Stitch con énfasis explícito en lo faltado: `"Previous run missed <X> on /<route>. Re-generate /<route> with explicit focus on <X>."`.
+- Re-invocás `stitch-design` (proyecto nuevo, projectId nuevo). Re-descargás HTML + PNG ÚNICAMENTE para las pages flaggeadas; las pages que pasaron el scanner se conservan de la corrida previa (idempotencia via cache en disco).
+- Incrementás `stitch-analysis.stitchAttempt` (0 → 1 → 2). Máximo 2 reprompts.
+- En la corrida #3 (`attempt === 2`) si siguen faltando elementos, NO abortás: setás `stitch-analysis.stitchHealth: "degraded"`, emitís el sentinel con esa info, y dejás que el orquestador maneje el plan B (placeholders en el Visual Adapter + `requires_human_review: true` en el run-state).
 
 ## Decisiones explícitas
 
@@ -162,17 +197,19 @@ Tus 3 artifacts deben parsear contra los schemas exportados por `lib/agents/cont
 
 - `layoutTreeSchema` R0: home no standalone.
 - `layoutTreeSchema` R-nav: cada nav apunta a una página existente o `#anchor`.
-- `stitchAnalysisSchema`: tokens cubren primary/background/foreground; tipografía cubre body + heading.
+- `stitchAnalysisSchema`: tokens cubren primary/background/foreground (theming-only); cada `pages[]` tiene `rawHtmlPath` válido bajo `.atelier/stitch-html/`; `stitchAttempt ∈ [0,2]`; `stitchHealth ∈ {clean, degraded}`.
 - `testIdContractSchema`: ≥5 entradas, kebab-case, sin duplicados.
 
-Además, el `cross-artifact-coherence-scanner` (post-wave gate) valida 3 invariantes cross-artifact. Sus violations vuelven a vos vía fix loop con `agent: layout-architect` o `agent: architect` según el caso.
+Además, dos gates post-wave-2-design validan invariantes cross-artifact:
+- `cross-artifact-coherence-scanner`: 3 invariantes (layout-tree⊆architect, stitch-pages⊆layout-tree, test-id flows válidos).
+- `stitch-completeness-scanner` (nuevo, paso C del rework): chequea que toda page del layout-tree tenga `rawHtmlPath` real, que los selectors críticos del test-id-contract tengan elemento esperable en el HTML, y que cada page tenga secciones mínimas por layoutGroup. Sus violations vuelven a vos vía el reprompt loop (ver "Soporte de reprompt loop" arriba).
 
 ## Stop conditions
 
 Imprimí EXACTAMENTE:
 
 ```
-LAYOUT_ARCHITECT_DONE: pages=<n>, navigationItems=<n>, testIds=<n>, stitchProjectId=<id>
+LAYOUT_ARCHITECT_DONE: pages=<n>, navigationItems=<n>, testIds=<n>, stitchProjectId=<id>, stitchHealth=<clean|degraded>, attempt=<0|1|2>
 ```
 
 Y salí. NO añadas explicaciones después del sentinel.
