@@ -471,6 +471,105 @@ describe("scanStitchCompleteness — three-variant requiredOn model (B1 closure)
     }
   });
 
+  it("pageRoute-scoped form selector accepts any <form> on the page — relaxed heuristic (B9)", async () => {
+    // HTML for /sign-in with a <form> that does NOT match the keyword
+    // heuristic (no signin/login/auth in class/id/aria/text). The
+    // strict matcher would reject; relaxed matcher accepts because
+    // the entry is pageRoute-scoped and the page identity is implicit.
+    const signinWithCreativeFormClass = `
+      <!doctype html>
+      <html><body>
+        <header><nav>x</nav></header>
+        <main>
+          <form class="centered-card neutral-form">
+            <input type="email" />
+            <input type="password" />
+            <button>Continuar</button>
+          </form>
+        </main>
+      </body></html>
+    `;
+    const pageRouteScopedContract: TestIdContractLike = {
+      entries: [
+        { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        // pageRoute scope → relaxed matcher accepts any <form>.
+        { selector: "signin-form", criticality: "critical", requiredOn: { pageRoute: "/sign-in" } },
+      ],
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": signinWithCreativeFormClass,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: pageRouteScopedContract,
+      });
+      const signinFormFailures = report.violations.filter(
+        (v) =>
+          v.rule === "stitch-missing-critical-element" &&
+          (v.message?.includes("signin-form") ?? false),
+      );
+      // Strict matcher would have flagged; relaxed accepts.
+      expect(signinFormFailures).toEqual([]);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("layoutGroup-scoped form selector STILL uses strict matcher (relaxation does not apply)", async () => {
+    // A signin-form-like selector with requiredOn.layoutGroup applies to
+    // many pages — disambiguation requires keyword matching. Verify the
+    // strict matcher still trips when the form lacks identifying hints.
+    const SIGNIN_HTML_NO_FORM_KEYWORDS = `
+      <!doctype html><html><body>
+        <header><nav>x</nav></header>
+        <main>
+          <form class="generic-form">
+            <input/><input/><button>X</button>
+          </form>
+        </main>
+      </body></html>
+    `;
+    const layoutGroupScopedContract: TestIdContractLike = {
+      entries: [
+        { selector: "header-root", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        { selector: "nav-primary", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+        // layoutGroup → strict matcher applies even though the page
+        // happens to have a <form>. Strict needs keyword hints.
+        { selector: "signin-form", criticality: "critical", requiredOn: { layoutGroup: "public" } },
+      ],
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML, // no form at all
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML_NO_FORM_KEYWORDS,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: layoutGroupScopedContract,
+      });
+      // The home is public and has NO form → strict matcher reports it.
+      const signinFormFailures = report.violations.filter(
+        (v) =>
+          v.rule === "stitch-missing-critical-element" &&
+          (v.message?.includes("signin-form") ?? false),
+      );
+      expect(signinFormFailures.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
   it("zero component-deferred criticals → no warn-summary", async () => {
     const pureContract: TestIdContractLike = {
       entries: [

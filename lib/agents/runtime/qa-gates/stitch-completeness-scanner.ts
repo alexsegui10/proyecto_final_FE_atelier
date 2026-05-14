@@ -228,7 +228,18 @@ export async function scanStitchCompleteness(
     const criticalForThisPage = [...fromLayoutGroup, ...fromPageRoute];
 
     for (const entry of criticalForThisPage) {
-      if (!hasExpectedElement($, entry.selector)) {
+      // B9 — when the entry is pageRoute-scoped we already know exactly
+      // which page we're inspecting; the heuristic doesn't need to be
+      // paranoid about identifying "the right" form/button/list among
+      // many. Relax the matcher to "any plausible candidate on this
+      // page" for scope-narrowed entries. layoutGroup-scoped entries
+      // still use the strict heuristic — they apply to many pages and
+      // can't tell which form on the page is the one they mean.
+      const isPageRouteScoped = entry.requiredOn.pageRoute !== undefined;
+      const found = isPageRouteScoped
+        ? hasExpectedElementRelaxed($, entry.selector)
+        : hasExpectedElement($, entry.selector);
+      if (!found) {
         failure.missingCriticalElements.push(entry.selector);
         violations.push({
           rule: "stitch-missing-critical-element",
@@ -291,6 +302,50 @@ export async function scanStitchCompleteness(
 // ─── Heuristics ─────────────────────────────────────────────────────
 
 type Cheerio$ = ReturnType<typeof loadHtml>;
+
+/**
+ * Relaxed variant used when the entry is `requiredOn: { pageRoute }` and
+ * the scanner already knows it's inspecting the right page.
+ *
+ * For form/button/list selectors, the strict matcher does keyword-based
+ * intent matching (`signin-form` → form whose class contains "signin").
+ * That's appropriate when verifying against EVERY page of a layoutGroup
+ * (the form's identity disambiguates). For a pageRoute-scoped entry,
+ * intent is implicit — if we're on /sign-in and the page has a form,
+ * that IS the signin form. The relaxed matcher drops the keyword check
+ * and accepts any element of the expected kind.
+ *
+ * Selectors with structural intent (header-root → <header>; nav-primary
+ * → <nav>) fall through to the strict matcher since their identity is
+ * structural, not keyword-based.
+ */
+function hasExpectedElementRelaxed($: Cheerio$, selector: string): boolean {
+  // Form-intent selectors → any <form>.
+  if (selector === "signin-form" || selector === "signup-form" || /-form$/.test(selector)) {
+    return $("form").length > 0;
+  }
+  // Button-intent selectors → any <button> or input[type=submit]/[type=button].
+  if (
+    selector === "signout-button" ||
+    /-button$/.test(selector) ||
+    /^admin-create-/.test(selector) ||
+    selector === "reservation-button" ||
+    selector === "hero-cta"
+  ) {
+    return (
+      $("button, a[role=button], input[type=submit], input[type=button]").length > 0
+    );
+  }
+  // List/container-intent → any list or table or repeated section.
+  if (selector === "public-list-root" || /-list-root$/.test(selector) || selector.endsWith("-grid")) {
+    return (
+      $("ul, ol, table, [role=list]").length > 0 ||
+      $("section, article").length >= 2
+    );
+  }
+  // Everything else: fall back to the strict matcher.
+  return hasExpectedElement($, selector);
+}
 
 /**
  * Does the parsed HTML contain a reasonable element for this critical

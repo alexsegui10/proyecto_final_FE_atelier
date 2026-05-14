@@ -681,6 +681,29 @@ describe("runGenerationV3 — Stitch reprompt loop (rework Punto C)", () => {
     expect(callsPerAgent.get("qa-reviewer")).toBe(1);
   });
 
+  it("plan B path produces requiresHumanReview=true AND downstream waves continue — NOT skippedWaves (B7 fix)", async () => {
+    // This is the F3-retry bug regression test. Pre-B7 the plan B path
+    // could finish in skippedWaves[wave-2-design] with requiresHumanReview
+    // unset, because a pre-gate replay would emit a blocking violation
+    // and trigger wave-skip BEFORE plan B activated. After B7 + B8, the
+    // budget-exhaust path lands cleanly on requiresHumanReview.
+    const { runner } = repromptRunner();
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: {
+        "wave-2-design": [gateThatFailsNTimes(99)],
+      },
+    });
+    expect(result.requiresHumanReview).toBe(true);
+    // wave-2-design must NOT be in skippedWaves — it completed, plan B
+    // is the outcome. Skip would mean "downstream loses the wave's
+    // outputs"; we want them, even degraded.
+    expect(result.skippedWaves).not.toContain("wave-2-design");
+    // failedAt should be undefined — plan B is not a failure.
+    expect(result.failedAt).toBeUndefined();
+  });
+
   it("does NOT reprompt when the gate is clean on first pass", async () => {
     const { runner, callsPerAgent } = repromptRunner();
     const result = await runGenerationV3({

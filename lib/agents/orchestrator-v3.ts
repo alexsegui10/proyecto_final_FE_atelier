@@ -765,12 +765,44 @@ export async function runGenerationV3(
       }
 
       // ─── Stitch reprompt loop (rework Punto C) ────────────────────
-      // Only relevant to wave-2-design. If the stitch-completeness-scanner
-      // emitted any of the 3 stitch-* rules AND we have not exhausted
-      // the reprompt budget (max 2), re-run the wave with feedback that
-      // points Layout Architect at `.atelier/stitch-failures.json`.
-      // After 2 attempts plan B: set requires_human_review and proceed
-      // (the Visual Adapter will substitute placeholders for missing pages).
+      //
+      // Flow at the cap, with concrete attempt numbers:
+      //
+      //   stitchRepromptAttempts = 0
+      //   wave runs attempt 0
+      //   scanner flags violations
+      //   ─→ 0 < 2: increment to 1, persist run-state(1), replay preWave
+      //             (preparer materialises attempt 1), continue
+      //
+      //   wave runs attempt 1
+      //   scanner flags violations
+      //   ─→ 1 < 2: increment to 2, persist run-state(2), replay preWave
+      //             (preparer materialises attempt 2, or clamps to max
+      //             declared per B8 if fixture has fewer entries), continue
+      //
+      //   wave runs attempt 2
+      //   scanner flags violations
+      //   ─→ 2 < 2 = false: PLAN B
+      //             requiresHumanReview = true
+      //             waveSettled = true; break
+      //             downstream waves proceed; Visual Adapter renders
+      //             placeholders for pages in .atelier/stitch-failures.json
+      //
+      // Key distinction (B7 fix):
+      //   - "increment + replay" path = stitchRepromptAttempts is < 2
+      //     after a failed scan. We're INSIDE the budget.
+      //   - "post-cap → plan B immediate" path = stitchRepromptAttempts
+      //     is already == 2 when a failed scan happens. The 3rd attempt
+      //     used everything we had. plan B activates without replay.
+      //
+      // Note: pre-B8, a preWave replay that emitted a blocking violation
+      // (e.g. fixture had no entry for the requested attempt) caused a
+      // wave-skip, NOT plan B. That was the F3-retry bug: plan B paths
+      // ended in `skippedWaves` instead of `requiresHumanReview`. With
+      // B8 the preparer no longer fails on attempt-out-of-range; if
+      // preWave still emits a blocking violation here, it's a genuine
+      // configuration error (fixture missing on disk, permissions, etc.)
+      // and skip-with-violation is the right outcome.
       if (wave.name === "wave-2-design") {
         const STITCH_REPROMPT_RULES = new Set([
           "stitch-missing-page",

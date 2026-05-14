@@ -118,10 +118,53 @@ describe("prepareStitchFixtureForAttempt", () => {
     ).rejects.toThrow(/Invalid Stitch fixture/);
   });
 
-  it("throws when the requested attempt is not declared", async () => {
+  it("CLAMPS gracefully when requested attempt is ABOVE max declared (B8)", async () => {
+    // Fixture has attempts 0 and 1. Orchestrator can ask for 2.
+    const result = await prepareStitchFixtureForAttempt({
+      workDir,
+      fixturePath,
+      attempt: 2,
+    });
+    expect(result.attempt).toBe(1); // clamped to max declared
+    expect(result.clampedFromMissing).toBe(true);
+
+    // Content materialised matches attempt 1 (not attempt 0).
+    const html = readFileSync(join(workDir, ".atelier/stitch-html/home.html"), "utf8");
+    expect(html).toContain("Home v1");
+
+    // State file records the EFFECTIVE attempt, not the requested one.
+    const state = JSON.parse(
+      readFileSync(join(workDir, ".atelier/stitch-fixture-state.json"), "utf8"),
+    );
+    expect(state.attempt).toBe(1);
+  });
+
+  it("does NOT clamp when requested attempt exists (clampedFromMissing=false)", async () => {
+    const result = await prepareStitchFixtureForAttempt({
+      workDir,
+      fixturePath,
+      attempt: 1,
+    });
+    expect(result.attempt).toBe(1);
+    expect(result.clampedFromMissing).toBe(false);
+  });
+
+  it("throws when requested attempt is BELOW max but the gap is real (e.g. fixture has 0 and 2 but not 1)", async () => {
+    // Skip-numbered attempts are a malformed fixture, NOT a clamp case.
+    // (Note: stitchFixtureSchema's consecutive-attempts refinement already
+    //  blocks this; the test asserts the preparer would also catch it if
+    //  somehow validation slipped.)
+    const malformed = {
+      ...VALID_FIXTURE,
+      attempts: VALID_FIXTURE.attempts.map((a, i) =>
+        i === 1 ? { ...a, attempt: 2 } : a,
+      ),
+    };
+    // Schema-level validation will trip first.
+    writeFileSync(fixturePath, JSON.stringify(malformed), "utf8");
     await expect(
-      prepareStitchFixtureForAttempt({ workDir, fixturePath, attempt: 2 }),
-    ).rejects.toThrow(/no entry for attempt=2/);
+      prepareStitchFixtureForAttempt({ workDir, fixturePath, attempt: 1 }),
+    ).rejects.toThrow(); // either "Invalid Stitch fixture" or "no entry for attempt=1"
   });
 });
 

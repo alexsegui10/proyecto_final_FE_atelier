@@ -58,7 +58,11 @@ export interface PrepareStitchFixtureOptions {
 }
 
 export interface PrepareStitchFixtureResult {
+  /** The attempt actually materialised (may differ from requested if clamped). */
   attempt: number;
+  /** When true, the requested attempt was above the max declared and we
+   *  fell back to the highest available — see preparer JSDoc. */
+  clampedFromMissing: boolean;
   filesWritten: string[];
   fixtureStatePath: string;
 }
@@ -109,12 +113,41 @@ export async function prepareStitchFixtureForAttempt(
   }
   const fixture = parsed as StitchFixture;
 
-  // 2. Pick the right attempt.
-  const attemptEntry = fixture.attempts.find((a) => a.attempt === opts.attempt);
+  // 2. Pick the right attempt — with graceful degradation (B8 fix).
+  //
+  // The orchestrator's reprompt loop can request up to attempt=2 (after
+  // 2 reprompts). A fixture is allowed to declare fewer attempts (e.g.
+  // the recorder default produces only attempts 0 and 1). When the
+  // requested attempt exceeds what the fixture declares, we clamp to
+  // the highest available — the recorded "best Stitch could do" content
+  // is the same regardless of how many times we'd re-prompt the real
+  // service. This is NOT silent: the result records the clamp so the
+  // caller can surface it in logs / run-state.
+  let attemptEntry = fixture.attempts.find((a) => a.attempt === opts.attempt);
+  let effectiveAttempt = opts.attempt;
+  let clampedFromMissing = false;
   if (!attemptEntry) {
-    throw new Error(
-      `Stitch fixture has no entry for attempt=${opts.attempt}; declared attempts: ${fixture.attempts.map((a) => a.attempt).join(", ")}.`,
-    );
+    const declared = fixture.attempts.map((a) => a.attempt).sort((a, b) => a - b);
+    const maxDeclared = declared[declared.length - 1];
+    if (maxDeclared === undefined) {
+      throw new Error(`Stitch fixture declares zero attempts; cannot materialise.`);
+    }
+    if (opts.attempt > maxDeclared) {
+      // Clamp.
+      effectiveAttempt = maxDeclared;
+      attemptEntry = fixture.attempts.find((a) => a.attempt === maxDeclared);
+      clampedFromMissing = true;
+    } else {
+      // Requested attempt is below the highest declared — that's an
+      // actual gap (e.g. fixture has [0, 2] but not 1). Fail loudly;
+      // it's not a degradation, it's a malformed fixture.
+      throw new Error(
+        `Stitch fixture has no entry for attempt=${opts.attempt}; declared attempts: ${declared.join(", ")}.`,
+      );
+    }
+  }
+  if (!attemptEntry) {
+    throw new Error(`Could not resolve attempt entry for ${opts.attempt}`);
   }
 
   // 3. Ensure target directories exist.
@@ -167,7 +200,7 @@ export async function prepareStitchFixtureForAttempt(
   // 6. Persist state file the agent reads.
   const state: StitchFixtureState = {
     mode: "fixture",
-    attempt: opts.attempt,
+    attempt: effectiveAttempt,
     stitchProjectId: fixture.stitchProjectId,
     designVibe: fixture.designVibe,
     designMdPath: designMdRel,
@@ -179,7 +212,12 @@ export async function prepareStitchFixtureForAttempt(
   await writeFn(stateAbs, JSON.stringify(state, null, 2));
   filesWritten.push(stateRel);
 
-  return { attempt: opts.attempt, filesWritten, fixtureStatePath: stateRel };
+  return {
+    attempt: effectiveAttempt,
+    clampedFromMissing,
+    filesWritten,
+    fixtureStatePath: stateRel,
+  };
 }
 
 // ─── Attempt reader (from .atelier/run-state.json) ──────────────────
