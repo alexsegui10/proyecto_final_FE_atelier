@@ -198,12 +198,54 @@ export class StitchClient {
   }
 }
 
-// ─── Default invoke (placeholder until real SDK wiring) ─────────────
+// ─── Default invoke (wired to @google/stitch-sdk) ───────────────────
+//
+// IMPORTANT NAMING CAVEAT (read before using in production):
+//
+// The four StitchTool literals declared above (`enhance_prompt`,
+// `design_screens`, `fetch_design_md`, `get_screen_image`) were modeled
+// against an EARLIER design of the Stitch MCP surface. The real MCP tools
+// exposed by @google/stitch-sdk 0.3.x are different:
+//
+//   create_project, get_project, list_projects, list_screens, get_screen,
+//   generate_screen_from_text, edit_screens, generate_variants,
+//   create_design_system, update_design_system, list_design_systems,
+//   apply_design_system
+//
+// `defaultInvoke` connects this client to the SDK's `StitchToolClient`
+// (lazy singleton) and forwards `tool` + `params` AS-IS. Callers that use
+// `StitchClient.enhancePrompt()` / `.designScreens()` etc. will hit the
+// SDK with names the MCP does NOT recognise and receive a tool-not-found
+// error. That's expected: in v3 real runs the Stitch interaction happens
+// either (a) inside claude.exe via .mcp.json, or (b) from a dedicated
+// recorder script that calls the SDK directly using the real tool names.
+// `StitchClient` itself remains valuable as a contract for unit tests
+// (callers pass `_invokeStitch` to mock). The wiring here lets future
+// callers point `StitchClient` at the real SDK if they decide to remap
+// the tool names — but no current path does so.
 
-const defaultInvoke: InvokeStitch = async () => {
-  throw new Error(
-    "StitchClient defaultInvoke is a placeholder. " +
-      "The real Stitch MCP wiring lands when the Layout Architect runtime is built. " +
-      "Until then, pass `_invokeStitch` explicitly (tests do this).",
-  );
+let _toolClient: import("@google/stitch-sdk").StitchToolClient | null = null;
+
+async function getToolClient(): Promise<import("@google/stitch-sdk").StitchToolClient> {
+  if (_toolClient) return _toolClient;
+  const apiKey = process.env["STITCH_API_KEY"];
+  if (!apiKey || apiKey.length === 0) {
+    throw new StitchAuthError();
+  }
+  const sdk = await import("@google/stitch-sdk");
+  _toolClient = new sdk.StitchToolClient({ apiKey });
+  return _toolClient;
+}
+
+/** Closes the singleton StitchToolClient. Tests and scripts should call this on teardown. */
+export async function closeStitchToolClient(): Promise<void> {
+  if (_toolClient) {
+    await _toolClient.close();
+    _toolClient = null;
+  }
+}
+
+const defaultInvoke: InvokeStitch = async (tool, params) => {
+  const client = await getToolClient();
+  return await client.callTool<unknown>(tool, params);
 };
