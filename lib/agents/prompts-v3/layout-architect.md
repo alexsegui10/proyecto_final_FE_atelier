@@ -38,6 +38,28 @@ Si `STITCH_API_KEY` está vacía o ausente → emitir violation `stitch-unavaila
 LAYOUT_ARCHITECT_DONE: pages=<n>, navigationItems=<n>, testIds=<n>, stitchProjectId=<id>, stitchHealth=<clean|degraded>, attempt=<0|1|2>
 ```
 
+## Modo fixture (STITCH_MODE=fixture)
+
+Cuando el orquestador prepara una corrida en modo fixture (para tests, primeros runs reales sin quemar cuota de Stitch, o validación del bucle reprompt), encontrarás en disco:
+
+```
+.atelier/stitch-fixture-state.json  ← metadata estructurada
+.atelier/stitch-html/<slug>.html    ← un .html por screen del attempt actual
+.atelier/stitch-mockups/<slug>.png  ← un .png por screen
+.atelier/stitch-design.md           ← el DESIGN.md del fixture
+```
+
+**Cómo detectarlo**: existe el archivo `.atelier/stitch-fixture-state.json`. Si existe, NO invoces el MCP de Stitch — los archivos ya están listos. Tu trabajo se reduce a:
+
+1. Leer `.atelier/stitch-fixture-state.json` para obtener `{ stitchProjectId, designVibe, attempt, screens: [{ screenId, pageRoute, routeSlug, rawHtmlPath, mockupPath }] }`.
+2. Para cada screen, opcionalmente abrir `rawHtmlPath` para extraer `linkedFonts[]` (los `<link rel="stylesheet">` que apuntan a Google Fonts u otras CDNs).
+3. Emitir tus 3 artifacts JSON normalmente, usando los paths del fixture state como `mockupPath` y `rawHtmlPath` de cada `stitch-analysis.pages[]`.
+4. Copiar `stitchProjectId`, `designVibe`, `stitchAttempt` (el `attempt` del fixture-state), `stitchHealth: "clean"` al nivel raíz.
+
+**NO invoques** `stitch-design`, `design-md`, `get_screen_image` ni `enhance-prompt` cuando estás en modo fixture. La pre-condición R3 sobre `STITCH_API_KEY` NO aplica (modo fixture no requiere el API key).
+
+**Reprompt en modo fixture**: el orquestador, cada vez que entra a wave-2-design (incluyendo reprompts), regenera `.atelier/stitch-html/` y `.atelier/stitch-fixture-state.json` para el `attempt` correspondiente. Tu detección de modo fixture se basa en la existencia del state file en cada corrida — no cachees nada del attempt anterior, releé siempre.
+
 ## Workflow Stitch (los 4 skills oficiales de Google + el nuestro)
 
 Tu runner tiene los 7 skills oficiales de Stitch disponibles vía MCP (`stitch-design`, `stitch-loop`, `design-md`, `enhance-prompt`, `react-components`, `remotion`, `shadcn-ui`). Usás 4:

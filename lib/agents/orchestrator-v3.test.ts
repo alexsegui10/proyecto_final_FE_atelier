@@ -724,3 +724,173 @@ describe("runGenerationV3 — Stitch reprompt loop (rework Punto C)", () => {
     expect(result.gateViolations.some((v) => v.rule === "layout-tree-orphan")).toBe(true);
   });
 });
+
+// ─── Critical severity early-exit (deuda #10) ──────────────────────
+
+/**
+ * `severity: "critical"` bypasses the fix loop and the reprompt loop —
+ * it represents contract-level breaches retries cannot recover from.
+ * Tests cover the three injection sites: preWaveGate, postWaveGate,
+ * qa-reviewer violations.
+ */
+describe("runGenerationV3 — critical severity early-exit", () => {
+  it("preWaveGate critical violation fails the generation immediately", async () => {
+    const { runner, callsPerAgent } = (() => {
+      const calls = new Map<string, number>();
+      const r: AgentRunnerV3 = async (input) => {
+        calls.set(input.agent, (calls.get(input.agent) ?? 0) + 1);
+        return {
+          artifact:
+            input.agent === "qa-reviewer"
+              ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+              : { agent: input.agent },
+          filesCreated: [],
+          summary: `${input.agent.toUpperCase()}_DONE`,
+        };
+      };
+      return { runner: r, callsPerAgent: calls };
+    })();
+
+    const criticalPreGate: PreWaveGate = {
+      name: "policy-invariant",
+      async run() {
+        return [
+          {
+            rule: "policy-breach",
+            severity: "critical",
+            agent: "architect",
+            file: ".atelier/architect.json",
+            message: "architect violated a non-recoverable policy invariant",
+          },
+        ];
+      },
+    };
+
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      preWaveGates: { "wave-1-planning": [criticalPreGate] },
+    });
+
+    expect(result.failedAt?.wave).toBe("wave-1-planning");
+    expect(result.failedAt?.reason).toContain("policy-breach");
+    expect(callsPerAgent.get("architect")).toBeUndefined(); // wave didn't run
+    expect(callsPerAgent.get("qa-reviewer")).toBeUndefined(); // downstream skipped
+  });
+
+  it("postWaveGate critical violation fails the generation immediately", async () => {
+    let architectCalls = 0;
+    let qaCalls = 0;
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.agent === "architect") architectCalls++;
+      if (input.agent === "qa-reviewer") qaCalls++;
+      return {
+        artifact:
+          input.agent === "qa-reviewer"
+            ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+            : { agent: input.agent },
+        filesCreated: [],
+        summary: `${input.agent.toUpperCase()}_DONE`,
+      };
+    };
+
+    const criticalPostGate: PostWaveGate = {
+      name: "post-architect-policy",
+      async run() {
+        return [
+          {
+            rule: "architect-emitted-forbidden-route",
+            severity: "critical",
+            agent: "architect",
+            file: ".atelier/architect.json",
+            message: "forbidden /admin/super-root route declared",
+          },
+        ];
+      },
+    };
+
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: { "wave-1-planning": [criticalPostGate] },
+    });
+
+    expect(result.failedAt?.wave).toBe("wave-1-planning");
+    expect(result.failedAt?.reason).toContain("architect-emitted-forbidden-route");
+    expect(architectCalls).toBe(1); // wave DID run, gate caught it after
+    expect(qaCalls).toBe(0); // downstream skipped
+  });
+
+  it("qa-reviewer critical violation skips the fix loop and fails immediately", async () => {
+    let fixRoundCalls = 0;
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.fixRound > 0) fixRoundCalls++;
+      if (input.agent === "qa-reviewer") {
+        return {
+          artifact: {
+            decision: "no-go",
+            violations: [
+              {
+                rule: "non-recoverable-policy-breach",
+                severity: "critical",
+                agent: "architect",
+                file: ".atelier/architect.json",
+                message: "architecture violates compliance invariant — manual intervention required",
+              },
+            ],
+          } satisfies QaArtifactV3,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return {
+        artifact: { agent: input.agent },
+        filesCreated: [],
+        summary: "DONE",
+      };
+    };
+
+    const result = await runGenerationV3({ ...base(), runner });
+
+    expect(result.failedAt).toBeUndefined(); // qa critical doesn't carry a wave
+    expect(fixRoundCalls).toBe(0); // fix loop was bypassed
+    expect(result.qa?.decision).toBe("no-go");
+  });
+
+  it("preserves error/warn semantics — non-critical violations still go through the regular paths", async () => {
+    let fixRoundCalls = 0;
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.fixRound > 0) fixRoundCalls++;
+      if (input.agent === "qa-reviewer") {
+        return {
+          artifact: {
+            decision: input.fixRound === 0 ? "no-go" : "go",
+            violations:
+              input.fixRound === 0
+                ? [
+                    {
+                      rule: "ordinary-error",
+                      severity: "error",
+                      agent: "architect",
+                      file: "x",
+                      message: "fixable",
+                    },
+                  ]
+                : [],
+          } satisfies QaArtifactV3,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return {
+        artifact: { agent: input.agent },
+        filesCreated: [],
+        summary: "DONE",
+      };
+    };
+
+    const result = await runGenerationV3({ ...base(), runner, maxFixRounds: 1 });
+    expect(fixRoundCalls).toBeGreaterThan(0); // fix loop DID run for severity=error
+    expect(result.qa?.decision).toBe("go");
+  });
+});

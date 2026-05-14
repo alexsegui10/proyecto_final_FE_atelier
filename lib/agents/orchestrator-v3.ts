@@ -38,6 +38,9 @@
  *
  * Agents within a wave run in PARALLEL via Promise.allSettled.
  */
+import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
+import { dirname as pathDirname, join as pathJoin } from "node:path";
+
 import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, type AgentNameV3 } from "./contracts-v3/agent-names";
 import { routeViolationToAgentV3 } from "./violations-router-v3";
 
@@ -183,9 +186,25 @@ export type AgentRunnerV3 = (input: AgentRunInputV3) => Promise<AgentRunResultV3
 
 export type QaDecisionV3 = "go" | "no-go";
 
+/**
+ * Severity of a violation, in increasing order of impact:
+ *
+ *   - `warn`     — informational, no orchestrator action. Accumulated and
+ *                  surfaced in the final report.
+ *   - `error`    — blocks the wave (preWaveGate) or feeds the fix loop
+ *                  (qa-reviewer). Routine recoverable failure.
+ *   - `critical` — unrecoverable defect at the contract level (e.g. a
+ *                  policy invariant the orchestrator MUST NOT silently
+ *                  tolerate). The orchestrator emits `generation.failed`
+ *                  immediately, bypassing the fix loop. Use sparingly —
+ *                  reserve for invariants whose breach indicates a bug in
+ *                  an upstream agent that retries cannot solve.
+ */
+export type QaSeverityV3 = "warn" | "error" | "critical";
+
 export interface QaViolationV3 {
   rule: string;
-  severity: "error" | "warn";
+  severity: QaSeverityV3;
   where?: string;
   file?: string;
   /** 1-based line number when the gate can anchor the violation precisely. */
@@ -476,16 +495,58 @@ export async function runGenerationV3(
   let stitchRepromptAttempts = 0;
   let requiresHumanReview = false;
 
-  for (let i = 0; i < waves.length; i++) {
-    const wave = waves[i];
-    if (!wave) continue;
+  /**
+   * Persist the orchestrator's mutable state (stitch reprompt counter,
+   * current wave, human-review flag) to `.atelier/run-state.json` so
+   * preWaveGates can observe it. The Stitch fixture preparer reads
+   * `stitchAttempt` from here to materialise the right attempt's HTML.
+   * Best-effort: failure to write is non-fatal.
+   */
+  async function persistRunState(currentWave: WaveNameV3): Promise<void> {
+    const target = pathJoin(opts.workDir, ".atelier", "run-state.json");
+    try {
+      await fsMkdir(pathDirname(target), { recursive: true });
+      await fsWriteFile(
+        target,
+        JSON.stringify(
+          {
+            generatedAt: new Date().toISOString(),
+            currentWave,
+            stitchAttempt: stitchRepromptAttempts,
+            ...(requiresHumanReview ? { requiresHumanReview: true } : {}),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    } catch {
+      // Non-fatal: gates that need the state will fall back to attempt=0.
+    }
+  }
 
-    // ─── Pre-wave gates ──────────────────────────────────────────────
-    // Run each configured gate sequentially. If any returns a violation
-    // with severity error/critical, skip the wave (do not invoke agents).
+  /**
+   * Runs the pre-wave gates for a given wave. Extracted so the Stitch
+   * reprompt loop can re-invoke it after incrementing the attempt
+   * counter (the fixture preparer gate re-materialises the next
+   * attempt's HTML on each call).
+   *
+   * Returns:
+   *   - `{ kind: "ok" }` when the wave should proceed.
+   *   - `{ kind: "skip" }` when a non-critical error violation blocks the wave.
+   *   - `{ kind: "fatal", reason }` when a gate threw OR emitted critical.
+   */
+  async function runPreWaveGatesForWave(
+    wave: WaveV3,
+  ): Promise<
+    | { kind: "ok" }
+    | { kind: "skip"; blockingCount: number }
+    | { kind: "fatal"; reason: string; critical?: QaViolationV3 }
+  > {
     const gates = opts.preWaveGates?.[wave.name] ?? [];
     let waveBlockedByGate = false;
     let blockingCount = 0;
+    const gateViolationsBeforeIdx = gateViolations.length;
     for (const gate of gates) {
       await opts.emit({ type: "gate.started", gate: gate.name, wave: wave.name });
       let gateOutcome: readonly QaViolationV3[] = [];
@@ -497,20 +558,7 @@ export async function runGenerationV3(
         });
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        await opts.emit({
-          type: "generation.failed",
-          generationId: opts.generationId,
-          reason: `preWaveGate '${gate.name}' threw: ${reason}`,
-        });
-        return {
-          durationMs: Date.now() - startedAt,
-          artifacts,
-          files,
-          qa,
-          gateViolations,
-          skippedWaves,
-          ...(lastApproval ? { lastApproval } : {}),
-        };
+        return { kind: "fatal", reason: `preWaveGate '${gate.name}' threw: ${reason}` };
       }
       gateViolations.push(...gateOutcome);
       const blocking = gateOutcome.filter((v) => v.severity === "error").length;
@@ -526,13 +574,61 @@ export async function runGenerationV3(
         passed: blocking === 0,
       });
     }
+    // Critical detected among the violations emitted in THIS pre-gate pass.
+    const newViolations = gateViolations.slice(gateViolationsBeforeIdx);
+    const critical = newViolations.find((v) => v.severity === "critical");
+    if (critical) {
+      return {
+        kind: "fatal",
+        reason: `critical preWaveGate violation '${critical.rule}' at ${wave.name}: ${critical.message ?? "(no message)"}`,
+        critical,
+      };
+    }
+    if (waveBlockedByGate) return { kind: "skip", blockingCount };
+    return { kind: "ok" };
+  }
 
-    if (waveBlockedByGate) {
+  for (let i = 0; i < waves.length; i++) {
+    const wave = waves[i];
+    if (!wave) continue;
+
+    // Persist run-state so any preWaveGate that depends on it sees the
+    // current attempt (0 on the first entry to wave-2-design).
+    await persistRunState(wave.name);
+
+    // ─── Pre-wave gates ──────────────────────────────────────────────
+    const preResult = await runPreWaveGatesForWave(wave);
+    if (preResult.kind === "fatal") {
+      await opts.emit({
+        type: "generation.failed",
+        generationId: opts.generationId,
+        reason: preResult.reason,
+      });
+      return {
+        durationMs: Date.now() - startedAt,
+        artifacts,
+        files,
+        qa,
+        gateViolations,
+        skippedWaves,
+        ...(preResult.critical
+          ? {
+              failedAt: {
+                wave: wave.name,
+                agent: (preResult.critical.agent as AgentNameV3 | undefined) ?? wave.agents[0]!,
+                reason: preResult.reason,
+              },
+            }
+          : {}),
+        ...(lastApproval ? { lastApproval } : {}),
+      };
+    }
+    if (preResult.kind === "skip") {
       await opts.emit({
         type: "wave.skipped",
         wave: wave.name,
-        reason: `preWaveGate emitted ${blockingCount} blocking violation(s)`,
-        blockingViolations: blockingCount,
+        reason: `preWaveGate emitted ${preResult.blockingCount} blocking violation(s)`,
+        blockingViolations: preResult.blockingCount,
       });
       skippedWaves.push(wave.name);
       continue; // Next wave — no agents run for this one
@@ -638,6 +734,36 @@ export async function runGenerationV3(
         });
       }
 
+      // ─── Critical violation early-exit (deuda #10) ────────────────
+      // Any violation marked `severity: "critical"` in this wave's
+      // gates bypasses the fix loop and fails the run immediately.
+      // Use case: gates that enforce contract-level invariants whose
+      // breach indicates a bug retries cannot solve.
+      const criticalGate = gateViolations.find((v) => v.severity === "critical");
+      if (criticalGate) {
+        const reason = `critical gate violation '${criticalGate.rule}' at ${wave.name}: ${criticalGate.message ?? "(no message)"}`;
+        await opts.emit({
+          type: "generation.failed",
+          generationId: opts.generationId,
+          reason,
+        });
+        return {
+          durationMs: Date.now() - startedAt,
+          artifacts,
+          files,
+          qa,
+          gateViolations,
+          skippedWaves,
+          failedAt: {
+            wave: wave.name,
+            agent: (criticalGate.agent as AgentNameV3 | undefined) ?? wave.agents[0]!,
+            reason,
+          },
+          ...(requiresHumanReview ? { requiresHumanReview: true as const } : {}),
+          ...(lastApproval ? { lastApproval } : {}),
+        };
+      }
+
       // ─── Stitch reprompt loop (rework Punto C) ────────────────────
       // Only relevant to wave-2-design. If the stitch-completeness-scanner
       // emitted any of the 3 stitch-* rules AND we have not exhausted
@@ -673,6 +799,51 @@ export async function runGenerationV3(
             delete artifacts["layout-architect"];
             // The runner reads humanFeedback; we use it to signal reprompt.
             humanFeedback = `STITCH_REPROMPT_ATTEMPT=${stitchRepromptAttempts} previousFailures=.atelier/stitch-failures.json`;
+            // Persist new attempt + re-run preWaveGates so the Stitch
+            // fixture preparer (if registered) re-materialises HTML for
+            // the next attempt. The reprompt loop is the only path that
+            // can change run-state mid-wave, so we re-fire pre-gates here.
+            await persistRunState(wave.name);
+            const preReplay = await runPreWaveGatesForWave(wave);
+            if (preReplay.kind === "fatal") {
+              await opts.emit({
+                type: "generation.failed",
+                generationId: opts.generationId,
+                reason: preReplay.reason,
+              });
+              return {
+                durationMs: Date.now() - startedAt,
+                artifacts,
+                files,
+                qa,
+                gateViolations,
+                skippedWaves,
+                ...(preReplay.critical
+                  ? {
+                      failedAt: {
+                        wave: wave.name,
+                        agent: (preReplay.critical.agent as AgentNameV3 | undefined) ?? wave.agents[0]!,
+                        reason: preReplay.reason,
+                      },
+                    }
+                  : {}),
+                ...(lastApproval ? { lastApproval } : {}),
+              };
+            }
+            // If pre-gates emitted a non-critical blocking violation on
+            // replay (e.g. fixture preparer can't find attempt=N), bail
+            // out cleanly: skip the wave for the remaining downstream.
+            if (preReplay.kind === "skip") {
+              await opts.emit({
+                type: "wave.skipped",
+                wave: wave.name,
+                reason: `preWaveGate replay after reprompt emitted ${preReplay.blockingCount} blocking violation(s)`,
+                blockingViolations: preReplay.blockingCount,
+              });
+              skippedWaves.push(wave.name);
+              waveSettled = true;
+              break;
+            }
             continue; // outer while re-runs wave-2-design
           }
           // Plan B: budget exhausted.
@@ -738,6 +909,31 @@ export async function runGenerationV3(
       }
 
       if (needsRerun) continue; // outer loop re-runs the wave
+    }
+  }
+
+  // ─── Critical qa violation early-exit (deuda #10) ───────────────
+  // If qa-reviewer surfaced a critical violation, fail immediately —
+  // the fix loop cannot recover from contract-level breaches.
+  if (qa) {
+    const criticalQa = qa.violations?.find((v) => v.severity === "critical");
+    if (criticalQa) {
+      const reason = `critical qa violation '${criticalQa.rule}': ${criticalQa.message ?? "(no message)"}`;
+      await opts.emit({
+        type: "generation.failed",
+        generationId: opts.generationId,
+        reason,
+      });
+      return {
+        durationMs: Date.now() - startedAt,
+        artifacts,
+        files,
+        qa,
+        gateViolations,
+        skippedWaves,
+        ...(requiresHumanReview ? { requiresHumanReview: true as const } : {}),
+        ...(lastApproval ? { lastApproval } : {}),
+      };
     }
   }
 
