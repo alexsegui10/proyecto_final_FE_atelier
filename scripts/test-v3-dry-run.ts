@@ -40,6 +40,18 @@ import {
   validateVisualQaReport,
   type VisualQaReport,
 } from "../lib/agents/contracts-v3/visual-qa.schema";
+import {
+  validateLayoutTree,
+  type LayoutTree,
+} from "../lib/agents/contracts-v3/layout-tree.schema";
+import {
+  validateStitchAnalysis,
+  type StitchAnalysis,
+} from "../lib/agents/contracts-v3/stitch-analysis.schema";
+import {
+  validateTestIdContract,
+  type TestIdContract,
+} from "../lib/agents/contracts-v3/test-id-contract.schema";
 
 // ─── Synthetic Bootstrap fixture (the only v3 agent with full schema today) ─
 
@@ -209,11 +221,235 @@ const VISUAL_QA_FIXTURE: VisualQaReport = {
   playwrightScriptPath: ".atelier/visual-qa-script.spec.ts",
 };
 
+// ─── Layout Architect fixtures (yoga-flavored, schema-valid) ─────────
+
+const LAYOUT_TREE_FIXTURE: LayoutTree = {
+  pages: [
+    {
+      pageRoute: "/",
+      layoutGroup: "public",
+      headerVariant: "full",
+      footerVariant: "full",
+      esQuestionable: false,
+      rationale: "Public marketing landing with full header (logo + nav + Sign in CTA) and full footer.",
+      breadcrumbs: false,
+      requiresAuth: false,
+    },
+    {
+      pageRoute: "/sign-in",
+      layoutGroup: "public",
+      headerVariant: "compact",
+      footerVariant: "minimal",
+      esQuestionable: false,
+      rationale: "Auth-focused page; compact header to reduce distraction.",
+      breadcrumbs: false,
+      requiresAuth: false,
+    },
+    {
+      pageRoute: "/shop",
+      layoutGroup: "public",
+      headerVariant: "full",
+      footerVariant: "full",
+      esQuestionable: false,
+      rationale: "Public class catalogue; same layout as home so navigation is consistent.",
+      breadcrumbs: false,
+      requiresAuth: false,
+    },
+    {
+      pageRoute: "/my/classes",
+      layoutGroup: "dashboard",
+      headerVariant: "compact",
+      footerVariant: "hidden",
+      esQuestionable: false,
+      rationale: "Authenticated student view; dashboard sidebar + compact header.",
+      breadcrumbs: true,
+      requiresAuth: true,
+    },
+    {
+      pageRoute: "/admin/classes",
+      layoutGroup: "admin",
+      headerVariant: "compact",
+      footerVariant: "hidden",
+      esQuestionable: false,
+      rationale: "Admin CRUD; admin sidebar + breadcrumbs.",
+      breadcrumbs: true,
+      requiresAuth: true,
+    },
+  ],
+  navigationItems: [
+    { label: "Atelier Yoga", href: "/", showOnGroups: ["public", "dashboard", "admin"], cta: false, testId: "nav-logo" },
+    { label: "Shop", href: "/shop", showOnGroups: ["public"], cta: false, testId: "nav-shop" },
+    { label: "Sign in", href: "/sign-in", showOnGroups: ["public"], cta: true, testId: "nav-signin" },
+    { label: "My classes", href: "/my/classes", showOnGroups: ["dashboard"], cta: false, testId: "nav-my-classes" },
+    { label: "Sign out", href: "/sign-in", showOnGroups: ["dashboard", "admin"], cta: false, testId: "nav-signout" },
+  ],
+  defaultHeaderVariant: "full",
+  layoutCompositions: {
+    public: { slots: ["header", "main", "footer"], sidebarPosition: "none" },
+    dashboard: { slots: ["header", "sidebar", "main", "breadcrumbs"], sidebarPosition: "left" },
+    admin: { slots: ["header", "sidebar", "main", "breadcrumbs"], sidebarPosition: "left" },
+  },
+};
+
+const STITCH_ANALYSIS_FIXTURE: StitchAnalysis = {
+  generatedAt: "2026-05-14T09:00:00.000Z",
+  stitchProjectId: "stitch-yoga-001",
+  designVibe: "Calm",
+  // Yoga-coherent salvia greens (not greys) per user request.
+  colorTokens: [
+    { role: "primary", value: "#4a7c59", hint: "salvia" },
+    { role: "background", value: "#fafaf7", hint: "warm-off-white" },
+    { role: "foreground", value: "#1f1f1f", hint: "near-black" },
+    { role: "muted", value: "#e8e8e3", hint: "soft-stone" },
+    { role: "border", value: "#d4d4cf", hint: "stone-200" },
+    { role: "accent", value: "#c39b6d", hint: "amber-warm" },
+  ],
+  typographyTokens: [
+    { role: "heading-1", family: "Inter, system-ui, sans-serif", sizePx: 48, weight: 700, lineHeightPx: 56 },
+    { role: "heading-2", family: "Inter, system-ui, sans-serif", sizePx: 32, weight: 600, lineHeightPx: 40 },
+    { role: "body", family: "Inter, system-ui, sans-serif", sizePx: 16, weight: 400, lineHeightPx: 24 },
+    { role: "caption", family: "Inter, system-ui, sans-serif", sizePx: 13, weight: 400 },
+  ],
+  pages: [
+    {
+      pageRoute: "/",
+      mockupPath: ".atelier/stitch-mockups/home.png",
+      stitchScreenId: "scr-yoga-home",
+      // Hero (stack) + feature grid (3 cols) + footer (stack)
+      rootSection: {
+        id: "home-root",
+        purpose: "page-root",
+        layoutPrimitive: "stack",
+        gapPx: 96,
+        paddingPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        children: [
+          {
+            id: "hero",
+            purpose: "hero",
+            layoutPrimitive: "stack",
+            gapPx: 24,
+            paddingPx: { top: 96, right: 24, bottom: 96, left: 24 },
+          },
+          {
+            id: "features",
+            purpose: "feature-grid",
+            layoutPrimitive: "grid",
+            columns: 3,
+            gapPx: 32,
+            paddingPx: { top: 64, right: 24, bottom: 64, left: 24 },
+          },
+          {
+            id: "footer",
+            purpose: "footer",
+            layoutPrimitive: "stack",
+            gapPx: 16,
+            paddingPx: { top: 48, right: 24, bottom: 48, left: 24 },
+          },
+        ],
+      },
+    },
+    {
+      pageRoute: "/shop",
+      mockupPath: ".atelier/stitch-mockups/shop.png",
+      stitchScreenId: "scr-yoga-shop",
+      rootSection: {
+        id: "shop-root",
+        purpose: "page-root",
+        layoutPrimitive: "stack",
+        gapPx: 32,
+        children: [
+          {
+            id: "shop-grid",
+            purpose: "catalogue-grid",
+            layoutPrimitive: "grid",
+            columns: 3,
+            gapPx: 24,
+          },
+        ],
+      },
+    },
+  ],
+  designMdPath: ".atelier/stitch-design.md",
+};
+
+const TEST_ID_CONTRACT_FIXTURE: TestIdContract = {
+  generatedAt: "2026-05-14T09:00:00.000Z",
+  entries: [
+    {
+      selector: "header-root",
+      purpose: "Root <header> rendered by every layout group",
+      requiredOn: { layoutGroup: "public" },
+      criticality: "critical",
+      consumedByFlow: ["client-anonymous", "client-authenticated", "admin"],
+    },
+    {
+      selector: "nav-primary",
+      purpose: "Primary navigation list inside the header",
+      requiredOn: { layoutGroup: "public" },
+      criticality: "critical",
+      consumedByFlow: ["client-anonymous"],
+    },
+    {
+      selector: "signin-form",
+      purpose: "Sign-in form root element on /sign-in",
+      requiredOn: { component: "SignInForm" },
+      criticality: "critical",
+      consumedByFlow: ["client-anonymous", "client-authenticated"],
+    },
+    {
+      selector: "signup-form",
+      purpose: "Sign-up form root element on /sign-up",
+      requiredOn: { component: "SignUpForm" },
+      criticality: "critical",
+      consumedByFlow: ["client-anonymous"],
+    },
+    {
+      selector: "signout-button",
+      purpose: "Sign-out CTA in authenticated layouts",
+      requiredOn: { layoutGroup: "dashboard" },
+      criticality: "critical",
+      consumedByFlow: ["client-authenticated", "admin"],
+    },
+    {
+      selector: "admin-create-class",
+      purpose: "Create button on /admin/classes",
+      requiredOn: { component: "AdminCreateButton" },
+      criticality: "critical",
+      consumedByFlow: ["admin"],
+    },
+    {
+      selector: "public-list-root",
+      purpose: "Root container of the public catalogue listing on /shop",
+      requiredOn: { component: "ShopGrid" },
+      criticality: "critical",
+      consumedByFlow: ["client-anonymous"],
+    },
+    {
+      selector: "hero-cta",
+      purpose: "Hero CTA on the home page (entry point of the main flow)",
+      requiredOn: { component: "HomeHero" },
+      criticality: "recommended",
+      consumedByFlow: ["client-anonymous"],
+    },
+  ],
+};
+
 // ─── Fake runner — synthesises an artifact per agent ────────────────
 
 function fakeArtifactFor(agent: AgentNameV3): unknown {
   if (agent === "bootstrap-devops") return BOOTSTRAP_FIXTURE;
   if (agent === "visual-qa") return VISUAL_QA_FIXTURE;
+  if (agent === "layout-architect") {
+    // Layout Architect produces 3 separate artifacts; we surface them as
+    // a single bag of artifacts. The orchestrator's `artifacts` map stores
+    // the primary one per agent name; the other two are accessible via the
+    // workDir on disk in a real run. For the dry-run, we expose all 3.
+    return {
+      layoutTree: LAYOUT_TREE_FIXTURE,
+      stitchAnalysis: STITCH_ANALYSIS_FIXTURE,
+      testIdContract: TEST_ID_CONTRACT_FIXTURE,
+    };
+  }
   if (agent === "qa-reviewer") {
     return {
       decision: "go",
@@ -341,6 +577,21 @@ async function main(): Promise<number> {
   const visualQaErr = validateVisualQaReport(visualQaArtifact);
   if (visualQaErr) {
     failures.push(`visual-qa artifact in result.artifacts fails schema: ${visualQaErr}`);
+  }
+
+  // layout-architect produces 3 artifacts; validate each (new in step 5).
+  const layoutBundle = result.artifacts["layout-architect"] as
+    | { layoutTree?: unknown; stitchAnalysis?: unknown; testIdContract?: unknown }
+    | undefined;
+  if (!layoutBundle) {
+    failures.push(`layout-architect artifact missing from result.artifacts`);
+  } else {
+    const ltErr = validateLayoutTree(layoutBundle.layoutTree);
+    if (ltErr) failures.push(`layout-tree.json fails schema: ${ltErr}`);
+    const saErr = validateStitchAnalysis(layoutBundle.stitchAnalysis);
+    if (saErr) failures.push(`stitch-analysis.json fails schema: ${saErr}`);
+    const tcErr = validateTestIdContract(layoutBundle.testIdContract);
+    if (tcErr) failures.push(`test-id-contract.json fails schema: ${tcErr}`);
   }
 
   log(

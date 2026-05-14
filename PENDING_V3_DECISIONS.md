@@ -10,62 +10,59 @@ funciona con la interpretación documentada acá, pero podría requerir refactor
 artifact `api-contract.json` que produce sigue llamándose así. La cuenta
 17 v2 + 6 nuevos = 23 cuadra. (Confirmado por el usuario.) -->
 
-## D3 — Gate 6 (visual regression) bloqueado por integración Stitch
+<!-- D2 (contrato test-id) RESUELTA en paso 5 (commit 7d140ac + 5b5cc80):
+- Schema `lib/agents/contracts-v3/test-id-contract.schema.ts` declara la
+  shape canonical (selector kebab-case, requiredOn { component | layoutGroup },
+  criticality enum critical/recommended/optional, consumedByFlow narrowed
+  to the 3 v3 flows).
+- Prompt `lib/agents/prompts-v3/layout-architect.md` R5 enumera los 8
+  selectors críticos por defecto que el agente DEBE emitir.
+- Visual QA Agent (prompt paso 3) ya hereda el fallback role/label/text
+  cuando un test-id es flaky, emitiendo `selector-flaky` severity warn. -->
 
-**Fecha**: 2026-05-13 (Paso 4, gates 5/6/7)
+<!-- D3 (Gate 6 visual regression) RESUELTA en paso 5 (commit 7d140ac):
+- `lib/agents/runtime/qa-gates/visual-regression-scanner.ts` implementa
+  el diff PNG-vs-PNG via pixelmatch + pngjs.
+- Postwave gate de `wave-7-runtime-qa`: necesita screenshots de Visual QA.
+- Routing: diff > 25% → visual-regression-major agent layout-architect,
+  10-25% → visual-regression-minor agent ui-components warn, ≤10% no
+  violation. -->
 
-Gate 6 del ROADMAP § 5.2 hace pixel diff entre screenshots de la app generada
-y mockups producidos por Stitch (vía Layout Architect del paso 5). Sin
-Layout Architect + Stitch MCP, no hay mockups contra los que diferir.
+## D4 — Rework UI Components v3 para consumir contratos visuales
 
-**Estado: BLOQUEADO hasta paso 5.**
+**Fecha**: 2026-05-14 (Paso 5, Layout Architect kickoff)
 
-Cuando llegue paso 5:
+Hoy UI Components v2 genera JSX sin consumir contratos visuales explícitos.
+En v3, debe leer:
+- `.atelier/test-id-contract.json` (D2 cerrada en paso 5)
+- `.atelier/stitch-analysis.json` (paso 5)
+- `.atelier/brand-identity.json` (paso 6, futuro)
+- `.atelier/animations.json` (paso 7, futuro)
 
-- Layout Architect produce `stitch-analysis.json` + screenshots PNG en
-  `.atelier/stitch-mockups/`.
-- Gate 6 se implementa como módulo paralelo a `runtime-smoke-scanner`:
-  `lib/agents/runtime/qa-gates/visual-regression-scanner.ts`.
-- Usa `pixelmatch` (npm) + `pngjs` para diff PNG-vs-PNG con tolerancia
-  configurable.
-- Probes: cada pantalla declarada en `screens-map.json` con su mockup
-  correspondiente.
-- Violations: `visual-regression` severity `warn` (no bloquea — la
-  divergencia visual es subjetiva); routea a `ui-components` o
-  `layout-architect` según el área afectada.
+**Estado: BLOQUEADO hasta paso 10 (rework UI Components v3).**
 
-Hasta entonces, Visual QA captura screenshots pero NO los compara con
-mockups. El humano puede revisar `.atelier/screenshots/` durante
-step-by-step.
+**Razón**: hace falta que Brand Identity (paso 6) y Animation Choreographer
+(paso 7) existan para definir el contrato completo de inputs.
 
-## D2 — Contrato test-id entre Layout Architect y UI Components
+Cuando llegue paso 10:
 
-**Fecha**: 2026-05-13 (Paso 3, Visual QA Agent kickoff)
+- Nuevo prompt en `lib/agents/prompts-v3/ui-components.md`.
+- Schema componentSpecs ampliado con consumo de los 4 contratos
+  (test-id, stitch-analysis, brand-identity, animations).
+- Tests cross-artifact que validan que cada test-id `critical` aparece
+  en el JSX emitido por UI Components.
+- v2 ui-components queda intacto.
 
-**Origen**: Visual QA selecciona elementos del DOM con jerarquía
-`data-testid → getByRole → getByLabel → getByText`. Sin `data-testid` en
-elementos críticos, los flows Playwright son frágiles: rompen cuando UI
-Components cambia microcopy o estructura.
+**Impacto si NO se decide**: ninguno hasta paso 10. Mientras tanto:
 
-**Propuesta**: Layout Architect produce artifact `test-id-contract.json`
-declarando los selectors críticos que UI Components debe añadir como
-`data-testid` en su output. Visual QA lo consume para generar el script
-Playwright robusto.
+- Visual QA usa fallback role/label/text (emite `selector-flaky` warn).
+- Visual regression scanner compara screenshots vs stitch-mockups con la
+  divergencia esperada (la UI generada hoy no respeta exactamente lo que
+  Stitch propuso porque UI Components v2 no consume `stitch-analysis`).
 
-**Resolución**: cuando construyamos Layout Architect (paso 5 del orden de
-implementación de § 9 del ROADMAP), formalizamos:
-- Schema `test-id-contract.json` con `{ selectorId, semanticRole, requiredOn: <component-name> }`.
-- Regla en UI Components: cada componente listado en el contrato debe
-  llevar `data-testid={selectorId}` en su elemento root.
-- Regla en QA Reviewer: gate programático que verifica la presencia de
-  todos los `data-testid` esperados; cada miss = violation routada a
-  `ui-components` o `layout-architect` según ownership.
+Estos warnings + minor regressions están aceptados como deuda transitoria
+hasta cerrar D4.
 
-Hasta entonces, Visual QA usa selectores fallback (`getByRole` /
-`getByLabel` / `getByText`) — más frágiles pero funcionales. Las
-violations de Visual QA por flakiness de selector NO se rutean a
-`ui-components` mientras esta deuda esté abierta; se documentan como
-`selector-flaky` con `severity: warn` (no bloquean go/no-go).
+---
 
-**Impacto si NO se decide**: ninguno hasta paso 5. Visual QA funciona con
-selectores fallback. La deuda se cierra en su momento.
+_Sin más decisiones pendientes. D1, D2, D3 RESUELTAS. D4 pendiente hasta paso 10._
