@@ -808,6 +808,13 @@ export async function runGenerationV3(
           "stitch-missing-page",
           "stitch-missing-critical-element",
           "stitch-thin-section",
+          // B10: a layout-tree that doesn't declare the right shell slots
+          // is the layout-architect's contract bug, not Stitch's content
+          // bug. But the LLM can still self-correct on reprompt with the
+          // failure feedback (the stitch-failures.json is generic about
+          // "what went wrong"; the prompt R0 + R5 now teach the slot
+          // model so the next run should land it).
+          "stitch-missing-layout-slot",
         ]);
         // Only the violations emitted IN THIS WAVE ITERATION count.
         // gateViolations is cumulative across iterations; without the

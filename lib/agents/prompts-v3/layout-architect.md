@@ -112,11 +112,22 @@ Le pasás (a) el prompt refinado o el original directo, (b) `designVibe` canonic
 
 ## Reglas (R0-R10)
 
-**R0 — Home siempre con layout group (cierre del bug clase E) + auth=standalone aceptable**
+**R0 — Home siempre con layout group (cierre del bug clase E) + auth=standalone aceptable + layoutCompositions declaran el shell**
 
 La página `/` (home) **NO PUEDE** tener `layoutGroup: "standalone"`. El schema bloquea esa shape. Tu decisión válida es `public` (lo normal), `dashboard` (apps con landing autenticado) o `admin` (raro). Si en duda → `public`.
 
 **Auth pages (`/sign-in`, `/sign-up`) Y páginas de error (`/404`, `/500`) PUEDEN ser `layoutGroup: "standalone"`** — es decisión UX válida (compact header + minimal footer reduce form abandon; las páginas de error no necesitan nav primario). Cuando elegís standalone para auth, documentá la razón en `rationale` y asegurate de que las navigation/test-id entries que apliquen a esas pages usen `requiredOn: { pageRoute: "/sign-in" }` en vez de `requiredOn: { layoutGroup: "public" }`, porque el scanner de wave-2-design verifica criticals por la combinación correcta.
+
+**`layoutCompositions` declara los slots que el Visual Adapter va a renderizar** en el shell wrapper de cada group. Para cada layoutGroup que usás en `pages[]` (excepto standalone, que es chromeless por diseño), DEBÉS declarar la composition con al menos `header` y `main`:
+
+| layoutGroup | slots mínimos | slots típicos |
+|---|---|---|
+| `public` | `header`, `main` | `header`, `main`, `footer` |
+| `dashboard` | `header`, `main` | `header`, `main` (signout dentro del header) |
+| `admin` | `header`, `main` | `header`, `sidebar`, `main`, `breadcrumbs` |
+| `standalone` | NO declarar | (sin shell — auth pages chromeless) |
+
+El `header` slot es donde el Visual Adapter va a inyectar el shell (logo, nav, signout-button). NO declares signout-button por page — vive en el shell. El scanner verifica que el header está DECLARADO acá (wave-2); la implementación real del `<SignoutButton/>` la hace el Visual Adapter en wave-4-presentation.
 
 **R1 — Correspondencia layout-tree ↔ architect**
 
@@ -167,11 +178,11 @@ Emitís al menos estos 8 selectors críticos:
 
 | selector | requiredOn sugerido | criticality | consumedByFlow |
 |---|---|---|---|
-| `header-root` | `{ layoutGroup: "public" }` + entries análogas para dashboard y admin | critical | client-anonymous |
-| `nav-primary` | `{ layoutGroup: "public" }` + dashboard + admin | critical | client-anonymous |
+| `header-root` | `{ component: "AppHeader" }` — shell element, deferido a wave-4 | critical | client-anonymous |
+| `nav-primary` | `{ component: "NavPrimary" }` — shell element, deferido a wave-4 | critical | client-anonymous |
 | `signin-form` | `{ pageRoute: "/sign-in" }` | critical | client-anonymous, client-authenticated |
 | `signup-form` | `{ pageRoute: "/sign-up" }` | critical | client-anonymous |
-| `signout-button` | `{ layoutGroup: "dashboard" }` + admin | critical | client-authenticated, admin |
+| `signout-button` | `{ component: "SignoutButton" }` — shell element, vive en AppHeader, deferido a wave-4 | critical | client-authenticated, admin |
 | `admin-create-<entity>` (lowercase) | `{ pageRoute: "/admin/<entities>" }` si la page existe; si el botón vive en un modal transversal, `{ component: "AdminCreateButton" }` (se diferida a wave-4 con warn-summary) | critical | admin |
 | `public-list-root` | `{ pageRoute: "/classes" }` (o la route principal del listado público que el architect declare) | critical | client-anonymous |
 | `hero-cta` | `{ pageRoute: "/" }` | recommended | client-anonymous |
@@ -179,6 +190,8 @@ Emitís al menos estos 8 selectors críticos:
 Selectors siempre kebab-case lowercase (`admin-create-class`, NO `admin-create-Class`). El schema regex lo enforza.
 
 **Regla operativa**: si terminás con muchos selectors críticos `requiredOn.component` (e.g. >50% del total), revisá la elección — la mayoría son normalmente locales a una page y deberían usar `pageRoute`. El warn-summary del scanner te lo va a recordar en el reporte, pero es preferible elegir bien desde el origen.
+
+**Excepción legítima — shell elements**: `header-root`, `nav-primary`, `signout-button` y similares VIVEN EN EL SHELL del layout group, no en cada page individual. Stitch produce page CONTENT, no shell wrappers. Esos selectors deben usar `requiredOn: { component: "AppHeader"|"NavPrimary"|"SignoutButton" }` y se deferirán a wave-4 con el warn-summary. El scanner verifica que `layoutCompositions[group].slots` incluye `header` (donde el Visual Adapter inyectará el shell) — eso es lo que wave-2 puede verificar; la renderización real del shell se valida en wave-4.
 
 **R6 — Flag `esQuestionable`**
 

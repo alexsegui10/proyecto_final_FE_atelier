@@ -40,12 +40,27 @@ import type { PostWaveGate, QaViolationV3 } from "../../orchestrator-v3";
 
 export type LayoutGroupV3 = "public" | "dashboard" | "admin" | "standalone";
 
+export type LayoutSlot = "header" | "sidebar" | "main" | "footer" | "breadcrumbs";
+
+export interface LayoutCompositionLike {
+  slots: ReadonlyArray<LayoutSlot>;
+  sidebarPosition?: "left" | "right" | "none";
+}
+
 export interface LayoutTreePageLike {
   pageRoute: string;
   layoutGroup: LayoutGroupV3;
 }
 export interface LayoutTreeLike {
   pages: ReadonlyArray<LayoutTreePageLike>;
+  /**
+   * Optional per-group slot composition. The scanner's check 4 (B10
+   * fix) verifies that for every layoutGroup actually used by pages,
+   * the composition declares the minimum slots required by the shell
+   * (header + main). Standalone pages have no composition and are
+   * excluded — they intentionally render without a shell wrapper.
+   */
+  layoutCompositions?: Partial<Record<"public" | "dashboard" | "admin", LayoutCompositionLike>>;
 }
 
 export interface StitchPageLike {
@@ -271,6 +286,52 @@ export async function scanStitchCompleteness(
     ) {
       failure.reason = describeFailureReason(failure);
       pageFailures.push(failure);
+    }
+  }
+
+  // ── Check 4 (B10 closure): layoutCompositions declare the slots ───
+  //
+  // Shell elements (signout-button, header, nav) are NOT page content —
+  // they live in the layout group's shell wrapper that the Visual Adapter
+  // renders. wave-2 verifies that the CONTRACT declares the right slots
+  // for that wrapper; wave-4 will verify the actual JSX renders them.
+  //
+  // For every layoutGroup actually used by pages in the layout-tree,
+  // the corresponding composition (if declared) must include at least
+  // `header` and `main`. Standalone is excluded (no composition needed
+  // by design — auth pages are intentionally chromeless).
+  const EXPECTED_SLOTS_BY_GROUP: Record<"public" | "dashboard" | "admin", ReadonlyArray<LayoutSlot>> = {
+    public: ["header", "main"],
+    dashboard: ["header", "main"],
+    admin: ["header", "main"],
+  };
+  const usedGroups = new Set<LayoutGroupV3>(opts.layoutTree.pages.map((p) => p.layoutGroup));
+  for (const group of ["public", "dashboard", "admin"] as const) {
+    if (!usedGroups.has(group)) continue;
+    const composition = opts.layoutTree.layoutCompositions?.[group];
+    if (!composition) {
+      violations.push({
+        rule: "stitch-missing-layout-slot",
+        severity: "error",
+        agent: "layout-architect",
+        file: ".atelier/layout-tree.json",
+        message: `Layout group '${group}' is used by ${opts.layoutTree.pages.filter((p) => p.layoutGroup === group).length} page(s) but has no entry in layoutCompositions.`,
+        recommendedFix: `Declare layoutCompositions.${group} with at least slots: ['header', 'main'] so the Visual Adapter knows how to wrap pages of that group.`,
+      });
+      continue;
+    }
+    const expected = EXPECTED_SLOTS_BY_GROUP[group];
+    const declared = new Set(composition.slots);
+    const missing = expected.filter((s) => !declared.has(s));
+    if (missing.length > 0) {
+      violations.push({
+        rule: "stitch-missing-layout-slot",
+        severity: "error",
+        agent: "layout-architect",
+        file: ".atelier/layout-tree.json",
+        message: `Layout group '${group}' is missing required slot(s): ${missing.join(", ")}. Declared: [${composition.slots.join(", ")}].`,
+        recommendedFix: `Add the missing slot(s) to layoutCompositions.${group}.slots. The shell wrapper for ${group} needs header+main at minimum — header hosts the signout/nav/logo, main hosts the page content.`,
+      });
     }
   }
 

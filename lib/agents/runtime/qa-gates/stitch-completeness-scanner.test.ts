@@ -81,6 +81,11 @@ const LAYOUT_TREE: LayoutTreeLike = {
     { pageRoute: "/dashboard", layoutGroup: "dashboard" },
     { pageRoute: "/admin/classes", layoutGroup: "admin" },
   ],
+  layoutCompositions: {
+    public: { slots: ["header", "main", "footer"] },
+    dashboard: { slots: ["header", "main"] },
+    admin: { slots: ["header", "sidebar", "main", "breadcrumbs"] },
+  },
 };
 
 const STITCH_ANALYSIS_OK: StitchAnalysisLike = {
@@ -593,6 +598,173 @@ describe("scanStitchCompleteness — three-variant requiredOn model (B1 closure)
       });
       expect(
         report.violations.find((v) => v.rule === "stitch-completeness-component-deferred"),
+      ).toBeUndefined();
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── Check 4: layoutCompositions slot coverage (B10) ───────────────
+
+describe("scanStitchCompleteness — check 4: layout-composition slot coverage (B10)", () => {
+  it("passes when every used layoutGroup declares header + main", async () => {
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE, // declares header+main for public, dashboard, admin
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      expect(
+        report.violations.find((v) => v.rule === "stitch-missing-layout-slot"),
+      ).toBeUndefined();
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("flags missing header slot in dashboard composition", async () => {
+    const ltMissingHeader: LayoutTreeLike = {
+      pages: [
+        { pageRoute: "/", layoutGroup: "public" },
+        { pageRoute: "/dashboard", layoutGroup: "dashboard" },
+      ],
+      layoutCompositions: {
+        public: { slots: ["header", "main"] },
+        dashboard: { slots: ["main", "footer"] }, // <-- no header
+      },
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: ltMissingHeader,
+        stitchAnalysis: {
+          ...STITCH_ANALYSIS_OK,
+          pages: [
+            { pageRoute: "/", rawHtmlPath: ".atelier/stitch-html/home.html" },
+            { pageRoute: "/dashboard", rawHtmlPath: ".atelier/stitch-html/dashboard.html" },
+          ],
+        },
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      const slotViolations = report.violations.filter(
+        (v) => v.rule === "stitch-missing-layout-slot",
+      );
+      expect(slotViolations.length).toBeGreaterThanOrEqual(1);
+      expect(slotViolations[0]?.severity).toBe("error");
+      expect(slotViolations[0]?.message).toContain("dashboard");
+      expect(slotViolations[0]?.message).toContain("header");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("flags a missing composition entry entirely (group used by pages but not in layoutCompositions)", async () => {
+    const ltMissingAdmin: LayoutTreeLike = {
+      pages: [
+        { pageRoute: "/", layoutGroup: "public" },
+        { pageRoute: "/admin/classes", layoutGroup: "admin" },
+      ],
+      layoutCompositions: {
+        public: { slots: ["header", "main"] },
+        // admin missing entirely
+      },
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: ltMissingAdmin,
+        stitchAnalysis: {
+          ...STITCH_ANALYSIS_OK,
+          pages: [
+            { pageRoute: "/", rawHtmlPath: ".atelier/stitch-html/home.html" },
+            { pageRoute: "/admin/classes", rawHtmlPath: ".atelier/stitch-html/admin-classes.html" },
+          ],
+        },
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      const slotViolations = report.violations.filter(
+        (v) => v.rule === "stitch-missing-layout-slot",
+      );
+      expect(slotViolations.length).toBeGreaterThanOrEqual(1);
+      expect(slotViolations[0]?.message).toContain("admin");
+      expect(slotViolations[0]?.message).toContain("no entry in layoutCompositions");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does NOT flag groups that have no pages (admin missing fine if no admin pages)", async () => {
+    const ltPublicOnly: LayoutTreeLike = {
+      pages: [{ pageRoute: "/", layoutGroup: "public" }],
+      layoutCompositions: {
+        public: { slots: ["header", "main"] },
+        // admin not declared, but also no admin pages exist
+      },
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": PUBLIC_HOME_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: ltPublicOnly,
+        stitchAnalysis: {
+          ...STITCH_ANALYSIS_OK,
+          pages: [{ pageRoute: "/", rawHtmlPath: ".atelier/stitch-html/home.html" }],
+        },
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      expect(
+        report.violations.find((v) => v.rule === "stitch-missing-layout-slot"),
+      ).toBeUndefined();
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("standalone-only pages do NOT require a composition (auth pages are chromeless by design)", async () => {
+    const ltStandaloneOnly: LayoutTreeLike = {
+      pages: [
+        { pageRoute: "/sign-in", layoutGroup: "standalone" },
+        { pageRoute: "/sign-up", layoutGroup: "standalone" },
+      ],
+      // no compositions at all — fine because standalone wants none
+    };
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/sign-up.html": SIGNIN_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: ltStandaloneOnly,
+        stitchAnalysis: {
+          ...STITCH_ANALYSIS_OK,
+          pages: [
+            { pageRoute: "/sign-in", rawHtmlPath: ".atelier/stitch-html/sign-in.html" },
+            { pageRoute: "/sign-up", rawHtmlPath: ".atelier/stitch-html/sign-up.html" },
+          ],
+        },
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      expect(
+        report.violations.find((v) => v.rule === "stitch-missing-layout-slot"),
       ).toBeUndefined();
     } finally {
       rmSync(workDir, { recursive: true, force: true });

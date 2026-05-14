@@ -68,6 +68,15 @@ const YOGA_LAYOUT_TREE: LayoutTreeLike = {
     { pageRoute: "/admin/classes", layoutGroup: "admin" },
     { pageRoute: "/admin/memberships", layoutGroup: "admin" },
   ],
+  // Verbatim from F3-retry's layout-tree.json output — the agent did
+  // declare header+main for every group it used. Check 4 (B10) should
+  // pass against this. If a future regression breaks the check 4 logic,
+  // this golden trips first.
+  layoutCompositions: {
+    public: { slots: ["header", "main", "footer"] },
+    dashboard: { slots: ["header", "main", "footer"] },
+    admin: { slots: ["header", "sidebar", "main", "breadcrumbs"] },
+  },
 };
 
 const YOGA_STITCH_ANALYSIS: StitchAnalysisLike = {
