@@ -110,6 +110,20 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-2-design",
     "wave-2-domain",
   ],
+  // Further extension that adds wave-3-app-security (service-layer +
+  // auth-security + rbac-authorization, all v2-reused). Known intra-wave
+  // race anticipated (R4, analogous to R2 in wave-2-domain):
+  // rbac-authorization reads services.json that service-layer produces
+  // concurrently. Accepted as benign-or-debt by precedent until F3-run-9
+  // shows it explodes or produces incoherent output.
+  "wave-1-3": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+  ],
   all: WAVES_V3.map((w) => w.name),
 };
 
@@ -222,6 +236,23 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   "seeds-shape": {
     promptRel: "lib/agents/prompts-v2/seeds-shape.md",
     artifactFile: "seeds-shape.json",
+  },
+  // ─── wave-3-app-security (v2-reused) ────────────────────────────
+  // service-layer reads persistence.json (from wave-2-domain, already
+  // settled). auth-security reads persistence.json too — both safe.
+  // rbac-authorization reads services.json from service-layer in the
+  // SAME wave — intra-wave race R4, accepted as benign by precedent.
+  "service-layer": {
+    promptRel: "lib/agents/prompts-v2/service-layer.md",
+    artifactFile: "services.json",
+  },
+  "auth-security": {
+    promptRel: "lib/agents/prompts-v2/auth-security.md",
+    artifactFile: "auth-mechanics.json",
+  },
+  "rbac-authorization": {
+    promptRel: "lib/agents/prompts-v2/rbac-authorization.md",
+    artifactFile: "rbac-policy.json",
   },
 };
 
