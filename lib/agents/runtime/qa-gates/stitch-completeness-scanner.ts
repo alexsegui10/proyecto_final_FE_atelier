@@ -478,31 +478,44 @@ function findHeroSection($: Cheerio$) {
 }
 
 /**
- * Minimum-section check per layoutGroup. Heuristic; deliberately loose to
- * avoid blocking on stylistic variation. We're checking "Stitch generated
- * a plausible page for this group", not "Stitch matched our exact template".
+ * Minimum-section check per layoutGroup. Heuristic, deliberately loose to
+ * avoid blocking on stylistic variation.
+ *
+ * Key calibration (B13, post F3-run-6): Stitch typically renders admin and
+ * dashboard pages with navigation INSIDE the <header> (CRUD pattern: the
+ * top-bar hosts logo + nav + signout). The previous heuristic demanded
+ * <nav>/<aside> as a separate sibling — F3-run-6 flagged 5 legitimate
+ * pages as "thin sections" because Stitch put nav inside header. We now
+ * accept EITHER form factor as "chrome present".
+ *
+ * Differential per group:
+ *   - public:    header REQUIRED + a content region. Marketing/landing.
+ *                Header carries the brand + primary CTA hook.
+ *   - dashboard: chrome (header OR nav/aside) + main. Inner user-facing
+ *                pages — Stitch's variation between top-bar-only and
+ *                sidebar-only is acceptable.
+ *   - admin:     chrome (header OR nav/aside) + main. CRUD is legitimately
+ *                sparse — a single table or form IS the page. No separate
+ *                action-button requirement (read-only admin views exist).
+ *   - standalone: any body content (auth/error pages).
  */
 function hasMinimumSections($: Cheerio$, group: LayoutGroupV3): boolean {
+  const hasChrome =
+    $("header, [role=banner]").length > 0 ||
+    $("nav, [role=navigation], aside").length > 0;
+  const hasMain = $("main, [role=main]").length > 0;
+
   switch (group) {
     case "public": {
       const hasHeader = $("header, [role=banner]").length > 0;
-      const hasMain = $("main, [role=main], section").length > 0;
-      return hasHeader && hasMain;
+      const hasContent = $("main, [role=main], section").length > 0;
+      return hasHeader && hasContent;
     }
-    case "dashboard": {
-      const hasNav = $("nav, [role=navigation], aside").length > 0;
-      const hasMain = $("main, [role=main]").length > 0;
-      return hasNav && hasMain;
-    }
-    case "admin": {
-      const hasNav = $("nav, [role=navigation], aside").length > 0;
-      const hasMain = $("main, [role=main]").length > 0;
-      const hasAction =
-        $("button, a[role=button]").length > 0 || $("[class*='action']").length > 0;
-      return hasNav && hasMain && hasAction;
-    }
+    case "dashboard":
+      return hasChrome && hasMain;
+    case "admin":
+      return hasChrome && hasMain;
     case "standalone":
-      // Single-purpose pages — anything with body content is acceptable.
       return $("body").children().length > 0;
   }
 }
@@ -510,11 +523,11 @@ function hasMinimumSections($: Cheerio$, group: LayoutGroupV3): boolean {
 function explainExpectedSections(group: LayoutGroupV3): string {
   switch (group) {
     case "public":
-      return "Public pages need at least <header> and <main>/<section>. Re-prompt Stitch to include the full marketing layout.";
+      return "Public pages need at least <header> and a content region (<main> or <section>). Re-prompt Stitch to include the full marketing layout.";
     case "dashboard":
-      return "Dashboard pages need at least a nav/sidebar (<nav> or <aside>) and <main>. Re-prompt Stitch to include the authenticated app shell.";
+      return "Dashboard pages need chrome (either <header> with embedded nav, or a separate <nav>/<aside>) and <main>. Re-prompt Stitch to include the authenticated app shell.";
     case "admin":
-      return "Admin pages need nav/sidebar + <main> + at least one action button. Re-prompt Stitch to include the admin shell.";
+      return "Admin pages need chrome (either <header> with embedded nav, or a separate <nav>/<aside>) and <main>. A table/form alone IS valid CRUD content; we don't require a separate action area. Re-prompt Stitch to include the admin shell.";
     case "standalone":
       return "Standalone pages still need a non-empty <body>. Re-prompt Stitch.";
   }

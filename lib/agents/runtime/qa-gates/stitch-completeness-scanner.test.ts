@@ -299,6 +299,147 @@ describe("scanStitchCompleteness — check 3: thin sections", () => {
       rmSync(workDir, { recursive: true, force: true });
     }
   });
+
+  // ─── B13 — per-layoutGroup chrome flexibility ────────────────────
+  //
+  // F3-run-6 surfaced 5 false positives: Stitch renders admin/dashboard
+  // pages with navigation embedded INSIDE the <header>, not as a sibling
+  // <nav>/<aside>. The previous heuristic demanded a sibling nav, so
+  // pages with header+main+buttons were flagged "thin". These tests use
+  // the exact HTML shapes from out/yoga-regen-v3-2026-05-15T08-57-06 as
+  // golden — same structure, fewer attributes, same conclusion.
+  //
+  // Contract under test:
+  //   - admin + dashboard: chrome = (<header> OR <nav>/<aside>) + <main>
+  //   - public: keeps strict header + content (unchanged)
+  //   - empty/chromeless pages of any group still fail
+
+  const F3_ADMIN_HTML_HEADER_NAV_EMBEDDED = `
+    <!doctype html>
+    <html><body>
+      <header>
+        <a href="/">Logo</a>
+        <a href="/admin/classes">Classes</a>
+        <button>Sign out</button>
+      </header>
+      <main>
+        <h1>Classes</h1>
+        <section><table><tr><th>Name</th></tr></table></section>
+        <button>Create class</button>
+      </main>
+    </body></html>
+  `;
+
+  const F3_DASHBOARD_HTML_HEADER_NAV_EMBEDDED = `
+    <!doctype html>
+    <html><body>
+      <header>
+        <a href="/">Logo</a>
+        <a href="/my/membership">Membership</a>
+        <button>Sign out</button>
+      </header>
+      <main>
+        <h1>My membership</h1>
+        <ul><li>Plan: Monthly</li></ul>
+      </main>
+    </body></html>
+  `;
+
+  const F3_ADMIN_TEST_ID_CONTRACT: TestIdContractLike = {
+    entries: [
+      // Minimal — keep only what these pages actually need + 1 deferred so
+      // the test doesn't co-fire with check 2 noise. signout-button is the
+      // sole layoutGroup critical and both pages have a Sign out button.
+      { selector: "signout-button", criticality: "critical", requiredOn: { layoutGroup: "dashboard" } },
+      { selector: "signout-button-admin", criticality: "critical", requiredOn: { layoutGroup: "admin" } },
+    ],
+  };
+
+  const F3_LAYOUT_TREE: LayoutTreeLike = {
+    pages: [
+      { pageRoute: "/admin/classes", layoutGroup: "admin" },
+      { pageRoute: "/my/membership", layoutGroup: "dashboard" },
+    ],
+    layoutCompositions: {
+      dashboard: { slots: ["header", "main"] },
+      admin: { slots: ["header", "main"] },
+    },
+  };
+
+  const F3_STITCH_ANALYSIS: StitchAnalysisLike = {
+    stitchAttempt: 0,
+    stitchHealth: "clean",
+    pages: [
+      { pageRoute: "/admin/classes", rawHtmlPath: ".atelier/stitch-html/admin-classes.html" },
+      { pageRoute: "/my/membership", rawHtmlPath: ".atelier/stitch-html/my-membership.html" },
+    ],
+  };
+
+  it("admin pages with header-embedded nav (no sibling <nav>) are NOT thin — B13 golden from F3-run-6", async () => {
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/admin-classes.html": F3_ADMIN_HTML_HEADER_NAV_EMBEDDED,
+      ".atelier/stitch-html/my-membership.html": F3_DASHBOARD_HTML_HEADER_NAV_EMBEDDED,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: F3_LAYOUT_TREE,
+        stitchAnalysis: F3_STITCH_ANALYSIS,
+        testIdContract: F3_ADMIN_TEST_ID_CONTRACT,
+      });
+      const thin = report.violations.filter((v) => v.rule === "stitch-thin-section");
+      // Pre-B13 this returned 2 violations (one per page). Post-B13: 0.
+      expect(thin).toHaveLength(0);
+      expect(report.pageFailures.filter((f) => f.thinSections)).toEqual([]);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("admin pages with NEITHER header NOR nav DO fail (regression guard — escalada honesta sigue activa)", async () => {
+    const chromelessHtml = `<html><body><main><h1>Admin</h1><button>Save</button></main></body></html>`;
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/admin-classes.html": chromelessHtml,
+      ".atelier/stitch-html/my-membership.html": chromelessHtml,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: F3_LAYOUT_TREE,
+        stitchAnalysis: F3_STITCH_ANALYSIS,
+        testIdContract: F3_ADMIN_TEST_ID_CONTRACT,
+      });
+      const thin = report.violations.filter((v) => v.rule === "stitch-thin-section");
+      // Both admin and dashboard demand chrome. No header AND no nav → thin.
+      expect(thin).toHaveLength(2);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("public pages still need header explicitly (regression guard — no permisividad indebida)", async () => {
+    const navOnlyPublicHtml = `<html><body><nav><a href="/">x</a></nav><main><h1>x</h1></main></body></html>`;
+    const workDir = setupTmpWorkDir({
+      ".atelier/stitch-html/home.html": navOnlyPublicHtml,
+      ".atelier/stitch-html/sign-in.html": SIGNIN_HTML,
+      ".atelier/stitch-html/dashboard.html": DASHBOARD_HTML,
+      ".atelier/stitch-html/admin-classes.html": ADMIN_CLASSES_HTML,
+    });
+    try {
+      const report = await scanStitchCompleteness({
+        workDir,
+        layoutTree: LAYOUT_TREE,
+        stitchAnalysis: STITCH_ANALYSIS_OK,
+        testIdContract: TEST_ID_CONTRACT,
+      });
+      const thinForHome = report.violations.find(
+        (v) => v.rule === "stitch-thin-section" && (v.message?.includes("'/'") ?? false),
+      );
+      expect(thinForHome).toBeDefined();
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ─── Reprompt budget ───────────────────────────────────────────────
