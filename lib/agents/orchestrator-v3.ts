@@ -514,6 +514,15 @@ export async function runGenerationV3(
   // exist on disk.
   let stitchRepromptAttempts = 0;
   let requiresHumanReview = false;
+  // Honesty escalation (B12): per-wave error-severity violation count
+  // emitted by THIS WAVE's post-gates in its LAST iteration. Overwritten
+  // on every iteration of the inner while loop; the final value is the
+  // residual count when the wave settles. End-of-run check: any wave
+  // with a positive count means the run carried unremediated errors —
+  // requiresHumanReview is flipped on. (Stitch reprompt convergence
+  // overwrites to 0; plan B already sets the flag elsewhere — this is
+  // idempotent there. Waves without post-gates never get an entry.)
+  const finalIterationResidualErrors: Map<WaveNameV3, number> = new Map();
 
   /**
    * Persist the orchestrator's mutable state (stitch reprompt counter,
@@ -712,6 +721,12 @@ export async function runGenerationV3(
       // accumulated set across previous iterations).
       const gateViolationsBeforeIdx = gateViolations.length;
       const postGates = opts.postWaveGates?.[wave.name] ?? [];
+      // Honesty escalation accumulator — counts error-severity violations
+      // emitted by THIS iteration's post-gates. Overwritten in the map
+      // each iteration; the final value reflects the wave's last pass
+      // (B12). Only set when there ARE post-gates; otherwise the wave
+      // has no residual concept.
+      let thisIterationErrorCount = 0;
       for (const postGate of postGates) {
         await opts.emit({ type: "gate.started", gate: postGate.name, wave: wave.name });
         let postOutcome: readonly QaViolationV3[] = [];
@@ -745,6 +760,7 @@ export async function runGenerationV3(
         }
         gateViolations.push(...postOutcome);
         const blocking = postOutcome.filter((v) => v.severity === "error").length;
+        thisIterationErrorCount += blocking;
         await opts.emit({
           type: "gate.completed",
           gate: postGate.name,
@@ -752,6 +768,14 @@ export async function runGenerationV3(
           violations: postOutcome.length,
           passed: blocking === 0,
         });
+      }
+      // Record THIS iteration's residual error count (B12). Overwritten
+      // each pass — the final value, captured when the wave settles,
+      // is what the end-of-run honesty check inspects. Only set when
+      // post-gates were configured; waves without post-gates have no
+      // residual concept.
+      if (postGates.length > 0) {
+        finalIterationResidualErrors.set(wave.name, thisIterationErrorCount);
       }
 
       // ─── Critical violation early-exit (deuda #10) ────────────────
@@ -1078,6 +1102,41 @@ export async function runGenerationV3(
       artifacts["qa-reviewer"] = currentQa;
       qa = currentQa;
       if (currentQa.decision === "go") break;
+    }
+  }
+
+  // ─── Honesty escalation (B12) ───────────────────────────────────────
+  //
+  // A run cannot honestly report success (failedAt undefined,
+  // requiresHumanReview unset) while carrying error-severity gate
+  // violations that no recovery mechanism addressed.
+  //
+  // Recovery paths the orchestrator HAS:
+  //   - Stitch reprompt loop: rules in STITCH_REPROMPT_RULES; up to 2
+  //     reprompts; budget-exhaust path already flips requiresHumanReview.
+  //   - qa-reviewer fix loop: addresses `qa.violations`, NOT gate
+  //     violations (they live in `gateViolations`, a separate field).
+  //
+  // So any error-severity entry surviving the FINAL iteration of a wave's
+  // post-gates is by construction unremediated. We tracked the per-wave
+  // count of such errors via `finalIterationResidualErrors`, overwritten
+  // on every iteration so the final value reflects the wave's last pass.
+  //
+  // Why "final iteration" and not "cumulative":
+  //   `gateViolations` is cumulative. A wave that diverges on attempt 0
+  //   with error-severity violations and converges on attempt 1 (clean)
+  //   leaves the attempt-0 entries in gateViolations — but those WERE
+  //   remediated via reprompt. The per-iteration counter resets and
+  //   gives 0 for the convergent case.
+  //
+  // Critical-severity bypassed (already early-exited with failedAt).
+  // Plan B already set requiresHumanReview; this check is idempotent.
+  if (!requiresHumanReview) {
+    for (const [, count] of finalIterationResidualErrors) {
+      if (count > 0) {
+        requiresHumanReview = true;
+        break;
+      }
     }
   }
 

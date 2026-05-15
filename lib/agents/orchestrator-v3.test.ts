@@ -756,7 +756,16 @@ describe("runGenerationV3 — Stitch reprompt loop (rework Punto C)", () => {
     expect(callsPerAgent.get("brand-identity")).toBe(1);
   });
 
-  it("does NOT reprompt when a non-stitch rule triggers a violation", async () => {
+  it("does NOT reprompt when a non-stitch rule triggers a violation — but escalates via honesty check (B12)", async () => {
+    // Pre-B12 this test asserted requiresHumanReview was undefined: a
+    // non-Stitch error-severity violation would silently survive to the
+    // final return. That assumption was the bug — F3-run-4 surfaced 2
+    // layout-tree-orphan errors and the run still reported success.
+    //
+    // Post-B12 the honesty catch-all flips requiresHumanReview = true
+    // whenever a wave's final iteration leaves error-severity gate
+    // violations unremediated. Reprompt behaviour is unchanged: the
+    // Stitch loop is rule-scoped, the catch-all is severity-scoped.
     const { runner, callsPerAgent } = repromptRunner();
     const unrelatedGate: PostWaveGate = {
       name: "unrelated-coherence-scanner",
@@ -778,10 +787,148 @@ describe("runGenerationV3 — Stitch reprompt loop (rework Punto C)", () => {
       runner,
       postWaveGates: { "wave-2-design": [unrelatedGate] },
     });
-    expect(result.requiresHumanReview).toBeUndefined();
+    // No reprompt: the rule isn't in STITCH_REPROMPT_RULES.
     expect(callsPerAgent.get("layout-architect")).toBe(1);
-    // The violation is accumulated, but the reprompt loop is rule-specific.
     expect(result.gateViolations.some((v) => v.rule === "layout-tree-orphan")).toBe(true);
+    // Honesty escalation: unremediated error-severity → human review.
+    expect(result.requiresHumanReview).toBe(true);
+    // It's an escalation, not a failure — failedAt stays undefined.
+    expect(result.failedAt).toBeUndefined();
+  });
+});
+
+// ─── Honesty escalation catch-all (B12) ────────────────────────────
+//
+// Contract: a run cannot honestly report success while carrying error-
+// severity gate violations from the FINAL iteration of any wave. The
+// existing Stitch reprompt loop covers stitch-* rules; this catch-all
+// covers any other rule (coherence, custom gates) that emits errors
+// the orchestrator has no recovery path for.
+//
+// Failure mode this prevents: F3-run-4 finished with 2 layout-tree-orphan
+// error-severity violations from cross-artifact-coherence-scanner AND
+// requiresHumanReview=no, failedAt=—. False success. The catch-all turns
+// that into requiresHumanReview=true while keeping the run "complete".
+
+describe("runGenerationV3 — honesty escalation (B12)", () => {
+  it("residual error-severity gate violation on final iteration flips requiresHumanReview", async () => {
+    // Reproduces F3-run-4: 2 layout-tree-orphan errors emitted by a
+    // post-gate at wave-2-design, no Stitch reprompt (rule out of scope),
+    // run otherwise completes happily. The catch-all must flip the flag.
+    const { runner } = makeRunner({
+      artifactFor: (agent) =>
+        agent === "qa-reviewer"
+          ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+          : { agent },
+    });
+    const coherenceLikeGate: PostWaveGate = {
+      name: "cross-artifact-coherence-scanner",
+      async run() {
+        return [
+          {
+            rule: "layout-tree-orphan",
+            severity: "error",
+            agent: "architect",
+            file: ".atelier/layout-tree.json",
+            message:
+              "Page '/my/classes' in layout-tree.json has no matching route in architect.json.",
+            recommendedFix: "Declare /my/classes in architect.features[].privateRoutes.",
+          },
+          {
+            rule: "layout-tree-orphan",
+            severity: "error",
+            agent: "architect",
+            file: ".atelier/layout-tree.json",
+            message:
+              "Page '/admin/memberships' in layout-tree.json has no matching route in architect.json.",
+            recommendedFix:
+              "Declare /admin/memberships in architect.features[].adminRoutes.",
+          },
+        ];
+      },
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: { "wave-2-design": [coherenceLikeGate] },
+    });
+    expect(result.requiresHumanReview).toBe(true);
+    expect(result.failedAt).toBeUndefined();
+    expect(result.gateViolations.filter((v) => v.rule === "layout-tree-orphan").length).toBe(2);
+  });
+
+  it("warnings-only do NOT trigger the escalation", async () => {
+    const { runner } = makeRunner({
+      artifactFor: (agent) =>
+        agent === "qa-reviewer"
+          ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+          : { agent },
+    });
+    const warningOnlyGate: PostWaveGate = {
+      name: "warning-only-gate",
+      async run() {
+        return [
+          {
+            rule: "informational",
+            severity: "warning",
+            agent: "architect",
+            file: ".atelier/something.json",
+            message: "FYI only",
+          },
+        ];
+      },
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: { "wave-2-design": [warningOnlyGate] },
+    });
+    expect(result.requiresHumanReview).toBeUndefined();
+    expect(result.gateViolations.some((v) => v.severity === "warning")).toBe(true);
+  });
+
+  it("convergence via Stitch reprompt does NOT trigger the escalation (the per-iteration counter resets)", async () => {
+    // Wave-2-design fails on attempt 0 with stitch-missing-critical-element
+    // (error), reprompts, then passes on attempt 1. The per-iteration
+    // residual counter is overwritten — attempt 1's count is 0, so the
+    // honesty check stays silent.
+    const { runner } = makeRunner({
+      artifactFor: (agent) =>
+        agent === "qa-reviewer"
+          ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+          : { agent },
+    });
+    let calls = 0;
+    const flakyStitchGate: PostWaveGate = {
+      name: "stitch-completeness-scanner",
+      async run() {
+        calls++;
+        if (calls === 1) {
+          return [
+            {
+              rule: "stitch-missing-critical-element",
+              severity: "error",
+              agent: "layout-architect",
+              file: ".atelier/stitch-failures.json",
+              message: "signin-form missing on /sign-in",
+            },
+          ];
+        }
+        return [];
+      },
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      postWaveGates: { "wave-2-design": [flakyStitchGate] },
+    });
+    expect(result.requiresHumanReview).toBeUndefined();
+    expect(result.failedAt).toBeUndefined();
+    // The attempt-0 violation IS in gateViolations (cumulative) but the
+    // final iteration was clean, which is what the catch-all checks.
+    expect(
+      result.gateViolations.some((v) => v.rule === "stitch-missing-critical-element"),
+    ).toBe(true);
   });
 });
 
