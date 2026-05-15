@@ -12,6 +12,8 @@ V3 se implementa **paso a paso, con validación humana entre pasos**, en la rama
 
 Hasta el momento (cierre paso 5): **233 tests verde, 14 commits limpios en v3, dry-run impecable, v2 sin regresiones**.
 
+Hasta el momento (cierre F3 — primer run real wave-1-2): **slice wave-1-2-design verificado end-to-end con LLMs reales, B1-B13 cerrados, F3-run-7 limpio honesto (`requiresHumanReview=no`, `failedAt=—`, 0 errors residuales en iteración final)**.
+
 ---
 
 ## Estado por pasos
@@ -126,6 +128,67 @@ Hasta el momento (cierre paso 5): **233 tests verde, 14 commits limpios en v3, d
 **Decisión D4 abierta**: Rework UI Components v3 para consumir los 4 contratos visuales (test-id + stitch-analysis + brand-identity + animations). Bloqueada hasta paso 10 (necesita Brand Identity del paso 6 y Animation Choreographer del paso 7 primero).
 
 **Deps añadidas al `package.json` raíz (NO al skeleton)**: cheerio@^1.0.0, pixelmatch@^7.2.0, pngjs@^7.0.0, @types/pngjs.
+
+---
+
+### ✅ F3 — Primer run real wave-1-2-design (CERRADO)
+
+**Qué hace**: ejercitar el slice wave-1-discovery → wave-1-bootstrap → wave-1-planning → wave-2-design contra LLMs reales (Anthropic + Stitch via fixture cacheado), con todos los gates (cross-artifact-coherence + stitch-completeness) corriendo, y verificar end-to-end que el orquestador convierte un PRD coherente en `.atelier/` poblado sin reportar éxito falso.
+
+**Pipeline ejercitado**:
+1. `scripts/record-stitch-yoga-fixture.ts` — graba el fixture Stitch UNA vez: corre architect agent, deriva pages, genera 8-15 screens via `@google/stitch-sdk`, persiste `fixtures/stitch-yoga.json` (attempt-aware) + `fixtures/stitch-yoga.architect.json` (sibling cacheado).
+2. `scripts/full-yoga-regen-v3.ts --real --stitch-mode fixture --stitch-fixture fixtures/stitch-yoga.json` — corre el slice contra el fixture. Architect agent se saltea (B11) usando el sibling cacheado; las 3 agentes de wave-2-design corren con LLM real.
+3. Pre-wave gate `stitch-fixture-preparer` materialises HTMLs del fixture a `<workDir>/.atelier/stitch-html/<slug>.html` por attempt.
+4. Post-wave gates `cross-artifact-coherence-scanner` + `stitch-completeness-scanner` ejercitan el contrato.
+
+**Bugs encontrados y cerrados (B1-B13)**:
+
+| ID | Commit | Qué cerró |
+|----|--------|-----------|
+| B1 | b080a7b | `requiredOn.component` causaba silent-skip en stitch-completeness check 2 — ahora emite warn-summary explícita al cierre del scan. |
+| B2 | b080a7b | `requiredOn` ahora three-variant (`layoutGroup` \| `pageRoute` \| `component`) con precedencia explícita pageRoute>layoutGroup>component. |
+| B3 | 3bd2a9f | Recorder derivaba pages de memoria del PRD (rutas obsoletas). Ahora corre architect agent y deriva pages de su output verbatim. |
+| B4 | 3bd2a9f | `layout-architect.json` summary file se absorbe en el bundle de orchestrator cuando existe (no es error si no se emite). |
+| B5/B6 | 6b4b8d2 | `canonicalRouteSlug` exportado como única fuente de verdad — recorder, scanner y preparer dejaron de mantener variantes paralelas. |
+| B7 | e0ca12f | Cap del Stitch reprompt loop: budget exhaust path ya no termina en `skippedWaves`; plan B (`requiresHumanReview=true`) es el outcome correcto. |
+| B8 | e0ca12f | Preparer clampea al `max declared attempt` del fixture si la attempt solicitada excede — no falla, no skip-with-violation. |
+| B9 | e0ca12f | `hasExpectedElementRelaxed()` para entries `requiredOn.pageRoute` — el matcher ya sabe qué página inspecciona, no necesita keyword paranoia. |
+| B10 | 0e4afd8 | Shell DECLARATION (layoutCompositions) se verifica en wave-2 via stitch-completeness check 4; shell RENDERING se difiere a wave-4. |
+| B11 | f6f3eae | Recorder persiste `<fixture>.architect.json` adyacente al fixture; regen lo seedea via nueva opción `seedArtifacts` del orquestador. Modo fixture genuinamente determinista: architect agent NO se invoca; ahorra ~1 min LLM por run + elimina drift architect-vs-fixture. |
+| B12 | 87cb220 | Honesty escalation en orchestrator-v3 end-of-slice: si quedan `severity:error` en `gateViolations` de la iteración FINAL de cualquier wave, `requiresHumanReview = true`. Cierra el patrón "DONE silencioso con errors latentes" que F3-run-4 mostró. Contador per-iteración (no acumulativo) — Stitch reprompt convergente lo deja en 0. |
+| B13 | 49dbf05 | Stitch-completeness check 3 (thin sections) ahora acepta chrome=`<header>` O `<nav>/<aside>` para `admin`+`dashboard`. Stitch suele embeber nav DENTRO del header para CRUD pages, exigir sibling era ruido. `public` mantiene exigencia estricta de header explícito. |
+
+**Verificación end-to-end (F3-run-4 → F3-run-7)**:
+
+| | F3-run-4 (2026-05-14) | F3-run-5 | F3-run-6 | F3-run-7 (2026-05-15) |
+|---|---|---|---|---|
+| duration | 838s | 802s | 1919s | 861s |
+| agents | 6 | 5 (architect skipped, B11) | 6 | 5 |
+| reprompts stitch | 1 (converge) | 1 (converge) | 2 (plan B) | 1 (converge) |
+| coherence errors final | 2 (silentes) | 2 (B12 los expone) | 0 | 0 |
+| stitch errors final | 0 | 0 | 5 (plan B) | 0 |
+| **requiresHumanReview** | **no (mentira)** | **YES** (B12 catch-all) | **YES** (plan B) | **no (honesto)** |
+| **failedAt** | — | — | — | — |
+| sentencia | falso success | escalado | escalado | **CLEAN** |
+
+**Lección recurrente capturada en B11 + B13**: cada vez que un fixture es la fuente de verdad de algo, el invariante exacto del fixture importa. B11 surgió porque el fixture Stitch y el architect.json venían de runs distintos del architect agent (incoherentes). B13 surgió porque la heurística del scanner asumía un perfil de página (sibling nav) que pages reales CRUD legítimamente no cumplen. Ambos son la misma clase de bug: modelo del verificador desalineado del modelo del subject. La solución estructural es la misma: hacer el modelo más explícito (B11: seed determinístico; B13: thresholds-by-layoutGroup), no más estricto.
+
+**Tests añadidos** (cumulativo F3): 
+- `lib/agents/orchestrator-v3.test.ts` — +1 test B11 (seedArtifacts auto-skip) + 3 tests B12 (residual error flips flag, warnings-only no, Stitch convergence no) + 1 viejo actualizado (no reprompt + sí escalada honesta).
+- `lib/agents/runtime/qa-gates/stitch-completeness-scanner.test.ts` — +3 tests B13 (admin header-embedded nav pasa, chromeless falla, public requiere header explícito).
+
+**Artifacts agregados en F3**:
+- `fixtures/stitch-yoga.json` (recorder output, attempt-aware)
+- `fixtures/stitch-yoga.architect.json` (recorder sibling, alimenta seedArtifacts en regen)
+- `scripts/record-stitch-yoga-fixture.ts` (recorder Stitch)
+- `scripts/full-yoga-regen-v3.ts` (regen orchestrator-v3 sobre slice wave-1-2-design)
+
+**Lo que NO se ejercitó en F3** (queda para slices posteriores):
+- Wave 2 domain (api-backend, ui-components, domain-modeler)
+- Waves 3 (content), 4 (presentation con visual-adapter), 5 (accessibility), 6 (static-qa con qa-reviewer), 7 (runtime-qa con visual-qa).
+- Gate 5 runtime-smoke en wave-7 (requiere app levantada — no aplica al slice F3).
+- Gate 6 visual-regression (requiere screenshots de Visual QA — wave-7).
+- Fix-loop con qa-reviewer real (el qa-reviewer agent no corre en este slice).
 
 ---
 
