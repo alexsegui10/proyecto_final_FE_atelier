@@ -1,5 +1,7 @@
 # ROADMAP V3 — Atelier
 
+> ⚠️ **Plan histórico** — `V3_PROGRESS.md` es la fuente de verdad actual del estado. Las desviaciones materiales se listan en la sección **Deviations** al final de este documento.
+
 > Documento de planificación técnica para la siguiente iteración del sistema multi-agente Atelier. Se redacta tras la validación end-to-end de la versión 2 con el dominio yoga, y motivado por los hallazgos concretos detectados durante esa validación.
 
 ---
@@ -590,3 +592,32 @@ Estas no son tareas de v3, pero forman el horizonte natural del proyecto.
 V3 es la consecuencia directa de lo aprendido en v2. No es ambición desordenada, no es feature creep. Es respuesta concreta a cinco clases de bugs identificados y reproducibles en la validación E2E del dominio yoga. Cada agente nuevo, cada gate nuevo, cada MCP integrado responde a un bug específico que v2 no detectó.
 
 El sistema resultante mantendrá la arquitectura clara y modular de v2 pero cerrará la brecha entre "código sintácticamente correcto" y "aplicación funcionalmente operativa", completando el ciclo de validación end-to-end y acercando la calidad del output al nivel de un equipo humano senior trabajando con buenas prácticas.
+
+---
+
+## Deviations
+
+Cambios materiales entre este plan y la implementación real. Para detalle por bug y verificación end-to-end, ver `V3_PROGRESS.md`.
+
+1. **Stitch arch pivot — parse-and-rebuild → preserve literal HTML + Visual Adapter.** [§3.2, §4.1] dicen *"el HTML de Stitch no se usa literalmente; Layout Architect parsea (...); UI Components codifica los componentes en la arquitectura real"*. Código actual: el HTML se conserva literal en `.atelier/stitch-html/<slug>.html` y un agente Visual Adapter (NUEVO) lo transforma a JSX preservando look. Commits ea94c19, 4a2f10e, e8f5bc0.
+
+2. **Brand Identity REDUCED.** [§3.3] dice que Brand Identity decide *"paleta de colores final (los tokens concretos) (...) tipografía: familias, escalas, pesos"*. Código actual: schema `brand-identity.schema.ts` solo expone `tentativePaletteHints` (un seed + vibeMood) y `tentativeFontHints` (sansSuggestion + displaySuggestion opcional). Stitch decide paleta y tipografía en el HTML; el Visual Adapter las preserva. El prompt mismo se titula *"REDUCED post-rework"*. Commit ea94c19.
+
+3. **Visual Adapter — agente NUEVO no en plan.** [§6 esquema de waves] enumera Wave 4 con 5 agentes. Código actual: `wave-4-presentation` tiene 7 agentes incluyendo `visual-adapter` (que no aparece en el ROADMAP). El test `orchestrator-v3.test.ts:88` asserta `expect(counts.size).toBe(24)` — total real 24 agentes, no 23. Commit ea94c19.
+
+4. **Font loading — 4 capas de defensa no documentadas.** [ROADMAP] no menciona estrategia de font loading. Código actual: capa 1 Stitch embebe `<link>` web fonts; capa 2 Layout Architect los declara en `stitch-analysis.pages[].linkedFonts[]`; capa 3 Visual Adapter los preserva en `app/layout.tsx`; capa 4 runtime-smoke-gate verifica HTTP 200 (pendiente cableado). Mencionado en `lib/agents/prompts-v3/visual-adapter.md:75`. Commit ea94c19.
+
+5. **Schemas nuevos/modificados.** [ROADMAP] no enumera schemas con detalle. Cambios materiales actuales:
+   - `layout-tree.schema.ts` añade `layoutCompositions: Record<group, { slots, sidebarPosition }>` (commit 0e4afd8, B10) + refinement R0 home-no-standalone + `requiresAuth`.
+   - `stitch-analysis.schema.ts` añade `linkedFonts: URL[]`, `stitchHealth: clean|degraded`, `stitchAttempt: 0|1|2`.
+   - `test-id-contract.schema.ts` `requiredOn` ahora three-variant (`layoutGroup`|`pageRoute`|`component`) con refinement de "al menos uno" (commit b080a7b, B2).
+   - `page-adaptation.schema.ts` NUEVO — artifact del Visual Adapter, 5 tipos en `ADAPTATION_CHANGE_TYPES`.
+   - `stitch-fixture.schema.ts` NUEVO — fixture attempt-aware para grabar Stitch.
+
+6. **B1-B13 — bugs descubiertos en F3 no anticipados.** [§2] enumera 5 clases de bugs (A: env names, B: endpoints, C: hydration, D: bootstrap, E: home huérfana). El primer run real F3 destapó 13 bugs adicionales del orquestador + scanner + fixture (B1-B13) no anticipados. Documentados en `V3_PROGRESS.md` sección "F3 — Primer run real wave-1-2-design". Commits b080a7b → 49dbf05.
+
+7. **Waves — 10 slices vs 7 wave-bloques.** [§6] describe 7 waves (Discovery&Arch, Design&Domain, Backend, Frontend, Data&Polish, Static QA, Runtime QA). Código actual: 10 dependency-ordered slices (`wave-1-discovery|bootstrap|planning`, `wave-2-design|domain`, `wave-3-app-security`, `wave-4-presentation`, `wave-5-data-tests`, `wave-6-static-qa`, `wave-7-runtime-qa`). Backend Foundation (ROADMAP Wave 3) está disuelto: persistence en `wave-2-domain`, auth+rbac+service-layer en `wave-3-app-security`, api-backend fusionado con frontend foundation en `wave-4-presentation`. `api-contract` resuelto como artifact emitido por `api-backend` (D1). Commit caa7c68.
+
+8. **D2/D3 contract drift por Visual Adapter.** [§3.6] dice Visual QA *"comparar screenshots con mockups de Stitch para detectar regresiones visuales mayores"*, asumiendo que UI Components re-codifica desde stitch-analysis (causa de regresiones). Con Visual Adapter (`visual-adapter.md:9`) la regresión visual contra Stitch debería caer <5% por construcción. `visual-regression-scanner.ts` sigue siendo defensa pero la causa original (UI Components re-autora) está resuelta arquitecturalmente. Commits 7d140ac (scanner) + ea94c19 (pivot).
+
+9. **seeds-fixtures rework pendiente.** [§3.7] describe ampliación con volumen 50/30/200 + casos edge + `seed-manifest.json` para coordinar con Visual QA. Código actual: el agente `seeds-fixtures` está en `wave-5-data-tests` pero NO tiene schema v3 ni prompt v3 (`lib/agents/contracts-v3/` y `lib/agents/prompts-v3/` no contienen entradas). El agente es v2-reused; la "ampliación" del §3.7 no está implementada.

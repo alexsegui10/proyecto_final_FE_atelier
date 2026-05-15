@@ -28,7 +28,9 @@ artifact `api-contract.json` que produce sigue llamándose así. La cuenta
   10-25% → visual-regression-minor agent ui-components warn, ≤10% no
   violation. -->
 
-## D4 — Rework UI Components v3 para consumir contratos visuales
+## D4 — Rework UI Components v3 para consumir contratos visuales **[OBSOLETA]**
+
+> ⚠️ **OBSOLETA por rework Stitch (commit ea94c19).** Visual Adapter (NUEVO agente, `lib/agents/prompts-v3/visual-adapter.md`) tomó la responsabilidad de inyectar test-ids (R4), microcopy (R3) y preservar font links (R2) directamente sobre el HTML literal de Stitch. UI Components solo emite primitivos shadcn para el "último recurso" del Adapter (R5 INVERTED: preservar `<input>`/`<select>`/`<textarea>` de Stitch por default, swap a shadcn solo cuando el elemento original genuinamente no cumple). El rework v3 original descrito abajo (UI Components consume 4 contratos visuales) ya NO aplica: stitch-analysis no se decompone para re-síntesis de JSX. Decisión queda como referencia histórica.
 
 **Fecha**: 2026-05-14 (Paso 5, Layout Architect kickoff)
 
@@ -65,4 +67,4 @@ hasta cerrar D4.
 
 ---
 
-_Sin más decisiones pendientes. D1, D2, D3 RESUELTAS. D4 pendiente hasta paso 10._
+_Sin más decisiones pendientes. D1, D2, D3 RESUELTAS. D4 OBSOLETA por rework Stitch (Visual Adapter absorbió las responsabilidades)._

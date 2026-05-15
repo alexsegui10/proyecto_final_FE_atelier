@@ -192,6 +192,18 @@ Hasta el momento (cierre F3 — primer run real wave-1-2): **slice wave-1-2-desi
 
 ---
 
+## Cambios arquitecturales no-bug
+
+Pivots arquitecturales aplicados después del cierre de paso 5, NO motivados por bugs F3. Conviven con la línea principal del ROADMAP pero la divergen materialmente. Ver `ROADMAP_V3 (2).md` sección **Deviations** para citas exactas.
+
+- **Stitch pivot — parse-and-rebuild → preserve literal HTML.** Stitch genera HTML que se conserva en `.atelier/stitch-html/<slug>.html`; un agente Visual Adapter (NUEVO, ver abajo) lo transforma a JSX preservando look. Cierra el bug arquitectónico de v2 donde UI Components re-autoría diseño y Visual QA encontraba 25%+ de regresión visual contra mockups. Commits ea94c19, 4a2f10e, e8f5bc0.
+- **Brand Identity REDUCED.** Schema `brand-identity.schema.ts` ya NO declara paleta canonical de 17 slots ni tipografía canonical (`fontFamilies`, `scale`, `weights`). Solo `tentativePaletteHints` (seed + vibeMood) + `tentativeFontHints` (sansSuggestion + displaySuggestion opcional) + microcopy. Stitch decide paleta y tipografía en el HTML; el Visual Adapter las preserva. Prompt titulado *"REDUCED post-rework"*. Commit ea94c19.
+- **Visual Adapter — agente NUEVO en wave-4-presentation.** `lib/agents/prompts-v3/visual-adapter.md` + `lib/agents/contracts-v3/page-adaptation.schema.ts`. Total agentes ahora 24, no 23 (ver `orchestrator-v3.test.ts:88`). Commit ea94c19.
+- **Font loading — 4 capas de defensa.** (1) Stitch embebe `<link>` web fonts; (2) Layout Architect declara URLs en `stitch-analysis.pages[].linkedFonts[]`; (3) Visual Adapter preserva en `app/layout.tsx`; (4) runtime-smoke-gate verifica HTTP 200 (pendiente cableado). Documentado en `visual-adapter.md:75`. Commit ea94c19.
+- **Schemas nuevos/modificados.** `layout-tree.schema.ts` añade `layoutCompositions` (B10, commit 0e4afd8). `stitch-analysis.schema.ts` añade `linkedFonts`, `stitchHealth`, `stitchAttempt`. `test-id-contract.schema.ts` `requiredOn` three-variant (B2, commit b080a7b). `page-adaptation.schema.ts` y `stitch-fixture.schema.ts` NUEVOS. Commits varios.
+
+---
+
 ## Deudas técnicas pendientes — cableado al runtime real
 
 Los módulos del paso 5 están **escritos, testeados y dry-run-validados**, pero como en pasos anteriores, hay capas de cableado al runtime real que aún no existen. Cuando un paso futuro construya el "wave-N runtime hook" (que arranca subprocess `claude.exe`, gestiona ciclo de vida de la app, llama a los gates programáticos), todas estas deudas se cierran juntas.
@@ -240,6 +252,8 @@ Inventario actual de deudas de cableado:
     - **Opción B — eliminar**: si el script F2.2 demuestra que el acceso directo al SDK (`stitch.createProject(...)`, `screen.generate(...)`) basta para el uso productivo del proyecto, `StitchClient` es redundante. En ese caso eliminar el archivo + los 12 tests + las referencias en `skills/stitch-bridge/SKILL.md` y `lib/agents/prompts-v3/layout-architect.md`.
 
     **Trigger de resolución**: después de F3 (primer run real), evaluar si en algún momento del pipeline había necesidad legítima de un cliente TypeScript de Stitch para producción. Si la respuesta es no → Opción B. Si hay un caller productivo plausible (e.g. recorder script más sofisticado, gate que verifica disponibilidad de Stitch antes de wave-2) → Opción A.
+
+12. **seeds-fixtures rework pendiente (ROADMAP §3.7).** El ROADMAP §3.7 describe ampliación del agente con volumen realista (50/30/200), casos edge explícitos por enum, distribución temporal, y `seed-manifest.json` para coordinar con Visual QA. Código actual: el agente está en `wave-5-data-tests` pero NO tiene schema v3 (`lib/agents/contracts-v3/seeds-fixtures.*` no existe) ni prompt v3 (`lib/agents/prompts-v3/seeds-fixtures.md` no existe). Es v2-reused. La ampliación del §3.7 sigue pendiente.
 
 ---
 
