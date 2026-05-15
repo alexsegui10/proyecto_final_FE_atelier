@@ -255,6 +255,8 @@ Inventario actual de deudas de cableado:
 
 12. **seeds-fixtures rework pendiente (ROADMAP §3.7).** El ROADMAP §3.7 describe ampliación del agente con volumen realista (50/30/200), casos edge explícitos por enum, distribución temporal, y `seed-manifest.json` para coordinar con Visual QA. Código actual: el agente está en `wave-5-data-tests` pero NO tiene schema v3 (`lib/agents/contracts-v3/seeds-fixtures.*` no existe) ni prompt v3 (`lib/agents/prompts-v3/seeds-fixtures.md` no existe). Es v2-reused. La ampliación del §3.7 sigue pendiente.
 
+13. **R2 race wave-2-domain: seeds-shape y domain-modeler paralelos; dependencia declarada pero aspiracional (seeds-shape deriva de discovery+architect, no necesita domain-model.json hoy). Benigno actualmente, frágil ante futuras refactorizaciones. Referencia: F3-run-8, out/yoga-regen-v3-2026-05-15T13-43-48.**
+
 ---
 
 ## Estado pendiente — pasos 6 a 13
