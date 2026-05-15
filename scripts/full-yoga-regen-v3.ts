@@ -98,6 +98,18 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-1-planning",
     "wave-2-design",
   ],
+  // Extension of `wave-1-2-design` that also includes wave-2-domain
+  // (domain-modeler + persistence + seeds-shape). The 3 wave-2-domain
+  // agents are v2-reused (no v3 prompts exist) so this slice validates
+  // v2↔v3 integration: same orchestrator wiring, same gate fabric, with
+  // 3 agents whose prompts predate the rework.
+  "wave-1-2-full": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+  ],
   all: WAVES_V3.map((w) => w.name),
 };
 
@@ -138,6 +150,14 @@ interface AgentSlotV3 {
    * files (Layout Architect) or when the primary artifact needs reshaping.
    */
   bundleLoader?: (workDir: string) => Promise<unknown>;
+  /**
+   * Optional sibling filename to mirror `artifactFile` to, post-run.
+   * Ported from v2 (`scripts/full-yoga-regen.ts`) to keep downstream
+   * v2-reused prompts working when they reference the legacy filename
+   * (e.g. domain-modeler writes `domain-modeler.json` but persistence
+   * + seeds-shape v2 prompts read `domain-model.json`).
+   */
+  aliasFile?: string;
 }
 
 const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
@@ -184,6 +204,24 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   "brand-identity": {
     promptRel: "lib/agents/prompts-v3/brand-identity.md",
     artifactFile: "brand-identity.json",
+  },
+  // ─── wave-2-domain (v2-reused) ──────────────────────────────────
+  // The 3 agents below are v2-reused; their prompts predate the v3 rework.
+  // domain-modeler emits `domain-modeler.json` but downstream v2 prompts
+  // (persistence, seeds-shape) read `domain-model.json` — mirror via
+  // `aliasFile`. Convention from `scripts/full-yoga-regen.ts:148-153`.
+  "domain-modeler": {
+    promptRel: "lib/agents/prompts-v2/domain-modeler.md",
+    artifactFile: "domain-modeler.json",
+    aliasFile: "domain-model.json",
+  },
+  persistence: {
+    promptRel: "lib/agents/prompts-v2/persistence.md",
+    artifactFile: "persistence.json",
+  },
+  "seeds-shape": {
+    promptRel: "lib/agents/prompts-v2/seeds-shape.md",
+    artifactFile: "seeds-shape.json",
   },
 };
 
@@ -320,6 +358,22 @@ function makeRealRunner(): AgentRunnerV3 {
     }
     if (result.status === "timeout" && result.artifact === null) {
       throw new Error(`agent ${input.agent} timed out without artifact`);
+    }
+
+    // Mirror artifactFile to aliasFile when declared. Ported from v2 so
+    // downstream v2-reused prompts can keep referencing the legacy filename
+    // (e.g. domain-modeler.json → domain-model.json for persistence +
+    // seeds-shape). Best-effort: failure is non-fatal (log + continue).
+    if (slot.aliasFile && typeof slot.artifactFile === "string") {
+      const src = join(input.workDir, ".atelier", slot.artifactFile);
+      const dst = join(input.workDir, ".atelier", slot.aliasFile);
+      try {
+        await cp(src, dst);
+      } catch {
+        // alias copy failed — downstream prompts may not find the legacy
+        // filename. The orchestrator's runner doesn't depend on it; only
+        // the LLM context does.
+      }
     }
 
     // Bundle composition for agents that emit multiple sibling files.
