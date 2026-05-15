@@ -338,6 +338,47 @@ function makeRealRunner(): AgentRunnerV3 {
 
 // ─── PRD → discovery shim ───────────────────────────────────────────
 
+/**
+ * B11 — load the architect fixture adjacent to the Stitch fixture, when
+ * `--stitch-mode=fixture` and a `<fixture>.architect.json` sibling exists.
+ *
+ * Side effect: stages the architect JSON to `<workDir>/.atelier/architect.json`
+ * so downstream agent runners (ux-ui-designer, layout-architect, brand-
+ * identity) see it as a context artifact on disk. The returned value is the
+ * parsed artifact — the caller wires it through `seedArtifacts` so the
+ * orchestrator's skip-resume auto-skips the architect agent.
+ *
+ * Returns `null` when there's no architect fixture to seed (regen runs
+ * architect normally — same behaviour as pre-B11).
+ */
+async function maybeLoadArchitectSeed(opts: {
+  stitchMode: string;
+  stitchFixture: string | null;
+  workDir: string;
+}): Promise<unknown | null> {
+  if (opts.stitchMode !== "fixture" || !opts.stitchFixture) return null;
+  // Convention: <fixture>.json → <fixture>.architect.json sibling.
+  const fixturePath = resolve(opts.stitchFixture);
+  const architectFixturePath = fixturePath.replace(/\.json$/, ".architect.json");
+  if (!existsSync(architectFixturePath)) {
+    await log(
+      "init",
+      `no architect fixture sibling at '${architectFixturePath}' — architect agent will run normally`,
+    );
+    return null;
+  }
+  const raw = await readFile(architectFixturePath, "utf8");
+  const architect: unknown = JSON.parse(raw);
+  const target = join(opts.workDir, ".atelier", "architect.json");
+  await mkdir(join(opts.workDir, ".atelier"), { recursive: true });
+  await writeFile(target, raw, "utf8");
+  await log(
+    "init",
+    `architect.json seeded from '${architectFixturePath}' — architect agent SKIPPED in fixture mode`,
+  );
+  return architect;
+}
+
 async function loadDiscoveryFromPrd(workDir: string): Promise<void> {
   if (!existsSync(PRD_FIXTURE)) {
     throw new Error(
@@ -433,6 +474,19 @@ async function main(): Promise<number> {
   await loadDiscoveryFromPrd(workDir);
   await log("init", "discovery.json injected from fixtures/yoga-prd.json");
 
+  // 3b. (B11) Architect seed for --stitch-mode=fixture. The recorder writes
+  // `<fixture>.architect.json` adjacent to the Stitch fixture; if present,
+  // we stage it to .atelier/architect.json (so downstream agent runners see
+  // it as context) AND seed it into the orchestrator's artifact map (so the
+  // architect agent slot is auto-skipped via skip-resume). Result: fixture
+  // mode is genuinely deterministic — no LLM call for architect, no per-run
+  // route drift.
+  const architectSeed = await maybeLoadArchitectSeed({
+    stitchMode: STITCH_MODE,
+    stitchFixture: STITCH_FIXTURE,
+    workDir,
+  });
+
   // 4. Resolve slice + build gates.
   const waves = resolveSlice();
   await log("init", `slice resolves to ${waves.length} waves: [${waves.map((w) => w.name).join(", ")}]`);
@@ -468,6 +522,7 @@ async function main(): Promise<number> {
       },
       waves,
       ...gates,
+      ...(architectSeed ? { seedArtifacts: { architect: architectSeed } } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

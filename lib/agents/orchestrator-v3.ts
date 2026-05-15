@@ -345,6 +345,22 @@ export interface RunGenerationV3Options {
    * Future wave-7 lifecycle hooks will own boot/teardown.
    */
   appUrl?: string;
+  /**
+   * Pre-existing agent artifacts to seed the run with. Any agent listed
+   * here is treated as already produced: its artifact is placed in the
+   * orchestrator's artifact map BEFORE wave execution, and the skip-resume
+   * logic (`artifacts[agent] !== undefined`) auto-skips it.
+   *
+   * Use case (B11): `--stitch-mode=fixture` records `architect.json`
+   * adjacent to the Stitch fixture. The regen script reads it, seeds it
+   * here, and the architect agent slot is bypassed — the recorded artifact
+   * is the source of truth for the deterministic fixture mode.
+   *
+   * Callers are responsible for ALSO staging the artifact to disk
+   * (`.atelier/<agent>.json`) when downstream agents need to read it as
+   * a context file. Seeding `artifacts[]` is in-memory only.
+   */
+  seedArtifacts?: Partial<Record<AgentNameV3, unknown>>;
 }
 
 export interface GenerationV3Result {
@@ -477,7 +493,11 @@ export async function runGenerationV3(
   const waves = opts.waves ?? WAVES_V3;
   ensureWavesAreInDependencyOrder(waves);
   const startedAt = Date.now();
-  const artifacts: Partial<Record<AgentNameV3, unknown>> = {};
+  // Seed artifacts (B11): callers can pre-populate this map so agents
+  // whose artifact is already known (e.g. a recorded architect.json in
+  // --stitch-mode=fixture) are auto-skipped via the skip-resume logic
+  // below (`artifacts[agent] !== undefined`).
+  const artifacts: Partial<Record<AgentNameV3, unknown>> = { ...(opts.seedArtifacts ?? {}) };
   const files: GenerationV3Result["files"] = [];
   let qa: QaArtifactV3 | null = null;
   let lastApproval: GenerationV3Result["lastApproval"];

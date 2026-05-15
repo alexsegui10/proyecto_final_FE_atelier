@@ -296,13 +296,18 @@ function mutateForAttempt0(screens: GeneratedScreen[]): GeneratedScreen[] {
 async function main(): Promise<number> {
   const repoRoot = resolve(__dirname, "..");
   const fixtureOutPath = join(repoRoot, "fixtures", "stitch-yoga.json");
+  // B11 — architect.json is persisted adjacent to the fixture so the regen
+  // script can seed it via `seedArtifacts` and bypass the architect agent
+  // entirely. Naming convention: <fixture>.architect.json (sibling).
+  const architectFixturePath = join(repoRoot, "fixtures", "stitch-yoga.architect.json");
   const rawHtmlDir = join(repoRoot, ".atelier-fixtures", "stitch-yoga-raw");
 
   log("init", "yoga PRD fixture exists check...");
   await readFile(join(repoRoot, "fixtures", "yoga-prd.json"), "utf8"); // throws if missing
 
-  log("init", `output fixture path: ${fixtureOutPath}`);
-  log("init", `raw HTML debug dir:  ${rawHtmlDir}`);
+  log("init", `output fixture path:           ${fixtureOutPath}`);
+  log("init", `output architect fixture path: ${architectFixturePath}`);
+  log("init", `raw HTML debug dir:            ${rawHtmlDir}`);
 
   // B3 fix — derive page list from the actual architect output, not from
   // a hardcoded memory of the yoga PRD. This guarantees the fixture's
@@ -313,6 +318,15 @@ async function main(): Promise<number> {
   const pages = flattenArchitectRoutes(architect);
   log("init", `pages derived from architect: ${pages.length}`);
   for (const p of pages) log("init", `  ${p.route}  (slug=${p.routeSlug})`);
+
+  // B11 — persist the architect artifact adjacent to the fixture. The
+  // regen script picks it up via `seedArtifacts` so the architect agent
+  // is bypassed in `--stitch-mode=fixture`. Writing it BEFORE the Stitch
+  // generations means a quota-exhausted run still leaves the architect
+  // half on disk for inspection / partial re-records.
+  await mkdir(join(repoRoot, "fixtures"), { recursive: true });
+  await writeFile(architectFixturePath, JSON.stringify(architect, null, 2), "utf8");
+  log("recorder", `architect fixture written: ${architectFixturePath}`);
 
   // Generate all screens (attempt 1 = corrected set).
   const { projectId, designMd, screens } = await generateAllScreens(pages);

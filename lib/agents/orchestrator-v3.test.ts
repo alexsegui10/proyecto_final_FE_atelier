@@ -203,6 +203,43 @@ describe("runGenerationV3 — auto mode", () => {
     expect(events.some((e) => e.type === "qa.fix_round")).toBe(true);
     expect(events.filter((e) => e.type === "agent.fix_started").length).toBe(2);
   });
+
+  // ─── B11 — seedArtifacts ──────────────────────────────────────────
+  //
+  // `--stitch-mode=fixture` records the architect artifact adjacent to
+  // the Stitch fixture and feeds it through `seedArtifacts`. The
+  // orchestrator must place the seed in the artifact map BEFORE waves
+  // run, so the existing skip-resume logic (`artifacts[agent] !==
+  // undefined`) auto-skips the seeded agent.
+  it("seedArtifacts: a pre-seeded agent is auto-skipped and its artifact propagates", async () => {
+    const recordedArchitect = {
+      features: [
+        {
+          name: "Classes",
+          publicRoutes: ["/classes"],
+          privateRoutes: ["/my/agenda"],
+          adminRoutes: [],
+        },
+      ],
+    };
+    const { runner, calls } = makeRunner({
+      artifactFor: (agent) =>
+        agent === "qa-reviewer"
+          ? ({ decision: "go", violations: [] } satisfies QaArtifactV3)
+          : { agent },
+    });
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      seedArtifacts: { architect: recordedArchitect },
+    });
+    // architect was NOT invoked by the runner — it was seeded.
+    expect(calls.some((c) => c.agent === "architect")).toBe(false);
+    // The seeded artifact landed in result.artifacts verbatim.
+    expect(result.artifacts.architect).toEqual(recordedArchitect);
+    // Other agents still ran (24 - 1 seeded = 23 calls).
+    expect(calls.length).toBe(23);
+  });
 });
 
 // ─── runGenerationV3 — step-by-step ─────────────────────────────────
