@@ -300,6 +300,8 @@ Inventario actual de deudas de cableado:
 
 17. **Self-reference de hash en docs (cosmético).** Las entradas de `V3_PROGRESS.md` "Cambios arquitecturales no-bug" y `ROADMAP_V3 (2).md` Deviations #10 citan el commit `63d0f4b` (pre-amend) en lugar de `27b5e17` (HEAD final). Contenido idéntico — `63d0f4b` es el objeto previo al `--amend` que rellenó el hash en los docs (paradoja inevitable del hash auto-referenciado en single-commit). Corregir en el próximo pase de docs reemplazando `63d0f4b` → `27b5e17` en ambos archivos.
 
+18. **6 tests pre-existentes fallan en suite `lib/agents/` (schemas).** auth-security (2: rejects unknown JWT algorithms, rejects rate-limit keys non api/app), rbac-authorization (1: rejects abilities entries for unknown roles), phase1-complete/tests-writer (2: rejects test files outside tests/, counts.total === unit+integration+e2e), wave4-agents/forms-validations (1: rejects mutation names non use*-style). Confirmado **pre-existente vía stash en HEAD** (fallan idénticos sin ningún cambio aplicado). El comportamiento de los agentes en los F3-runs es verde — NO son bugs reales, solo tests de schema desalineados con el schema actual. Análogo a deuda #16. Arreglo acotado en sesión de limpieza futura, no urgente, no bloqueante para F3-run-10. Descubierto durante la validación post-sub-division de wave-4 (commit 3e56fe47).
+
 ---
 
 ## Estado pendiente — pasos 6 a 13
