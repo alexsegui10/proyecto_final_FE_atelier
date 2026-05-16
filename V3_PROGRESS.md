@@ -12,7 +12,7 @@ V3 se implementa **paso a paso, con validación humana entre pasos**, en la rama
 
 Hasta el momento (cierre paso 5): **233 tests verde, 14 commits limpios en v3, dry-run impecable, v2 sin regresiones**.
 
-Hasta el momento (cierre F3 — primer run real wave-1-2): **slice wave-1-2-design verificado end-to-end con LLMs reales, B1-B13 cerrados, F3-run-7 limpio honesto (`requiresHumanReview=no`, `failedAt=—`, 0 errors residuales en iteración final)**.
+Hasta el momento (cierre F3-run-9 — extensión wave-1-3): **slice wave-1-3 verificado end-to-end con LLMs reales (wave-1 → wave-2-design → wave-2-domain → wave-3-app-security), B1-B13 cerrados, F3-run-9 limpio honesto (`requiresHumanReview=no`, `failedAt=—`, única residual = warn `component-deferred` aceptado por precedente). R2/R4 registradas como categoría de deuda latente _race-but-survive_. Listo para extender a wave-4-presentation (decidir antes animation-choreographer fantasma).**
 
 ---
 
@@ -192,6 +192,37 @@ Hasta el momento (cierre F3 — primer run real wave-1-2): **slice wave-1-2-desi
 
 ---
 
+### ✅ F3-run-9 — extensión wave-1-3 (CERRADO)
+
+**Qué hace**: extiende el slice F3 verificado a `wave-1-3` = wave-1-discovery → wave-1-bootstrap → wave-1-planning → wave-2-design → wave-2-domain → **wave-3-app-security**. Añade los 3 agentes v2-reused (service-layer, auth-security, rbac-authorization) y verifica que el orquestador los conduce contra LLMs reales sin éxito falso. Scaffolding del slice + slots en commits `582437c` (wave-1-2-full + wave-2-domain) y `e24b580` (wave-1-3 + wave-3-app-security).
+
+**Pre-run**: dry-run del slice extendido (`out/yoga-regen-v3-2026-05-15T14-23-33`, synthetic) limpio — 6 waves, 11 agents, 0 gateViolations, los 3 agentes de wave-3 invocables sin error de schema/contrato. Race R4 anticipada y documentada ANTES del run real (deuda #14).
+
+**Run real (F3-run-9)** — `out/yoga-regen-v3-2026-05-15T14-23-45`, `--real --stitch-mode fixture`, mismo fixture cacheado:
+
+| | F3-run-9 (2026-05-15) |
+|---|---|
+| mode / slice | real / wave-1-3 (stitch=fixture) |
+| duration | **1835.81s** (~30 min) |
+| waves | 7 (wave-2-design corre 2× por reprompt) |
+| agents efectivos | 11 (architect skipped B11; wave-3 los 3 v2-reused `ok`, 712s) |
+| files | 194 |
+| reprompts stitch | 1 (converge en attempt 1) |
+| gateViolations (crudas) | **3** acumuladas: attempt 0 wave-2-design = 2 (pageFailures reales → ✗ → reprompt); attempt 1 = 1 residual |
+| violation residual | `stitch-completeness-component-deferred` · **severity `warn`** · scan-summary (no per-page) · 3 selectors de shell `header-root`/`nav-primary`/`signout-button` diferidos a wave-4 por `requiredOn.component` |
+| coherence errors final | 0 |
+| **failedAt** | **—** |
+| **requiresHumanReview** | **no (honesto)** |
+| sentencia | **CLEAN** |
+
+**Triage de la residual**: patrón `component-deferred` conocido — es el cierre B1 funcionando (silent-skip era el modo de fallo; el warn hace visible el diferimiento). No bloqueante, aceptado por precedente: los selectors transversales de shell sin ruta fija se verifican en el futuro wave-4 scanner. No es regresión ni hallazgo nuevo. Reconstruido deterministicamente contra `test-id-contract.json` del workdir (10 criticals, 3 `requiredOn.component`).
+
+**Sorpresas**: ninguna funcional. R4 (rbac↔service-layer intra-wave) anticipada y NO explotó en yoga (deuda #14). Lo único "inesperado" fue de proceso: A y B ya estaban ejecutadas por una sesión previa que no dejó session summary.
+
+**Cierre explícito**: **wave-1-3 verificado end-to-end con LLMs reales. Slice listo para extender a wave-4-presentation.** Antes de arrancar wave-4 hay que decidir qué hacer con animation-choreographer (agente fantasma) — pendiente para el próximo turno.
+
+---
+
 ## Cambios arquitecturales no-bug
 
 Pivots arquitecturales aplicados después del cierre de paso 5, NO motivados por bugs F3. Conviven con la línea principal del ROADMAP pero la divergen materialmente. Ver `ROADMAP_V3 (2).md` sección **Deviations** para citas exactas.
@@ -256,6 +287,10 @@ Inventario actual de deudas de cableado:
 12. **seeds-fixtures rework pendiente (ROADMAP §3.7).** El ROADMAP §3.7 describe ampliación del agente con volumen realista (50/30/200), casos edge explícitos por enum, distribución temporal, y `seed-manifest.json` para coordinar con Visual QA. Código actual: el agente está en `wave-5-data-tests` pero NO tiene schema v3 (`lib/agents/contracts-v3/seeds-fixtures.*` no existe) ni prompt v3 (`lib/agents/prompts-v3/seeds-fixtures.md` no existe). Es v2-reused. La ampliación del §3.7 sigue pendiente.
 
 13. **R2 race wave-2-domain: seeds-shape y domain-modeler paralelos; dependencia declarada pero aspiracional (seeds-shape deriva de discovery+architect, no necesita domain-model.json hoy). Benigno actualmente, frágil ante futuras refactorizaciones. Referencia: F3-run-8, out/yoga-regen-v3-2026-05-15T13-43-48.**
+
+14. **R4 race wave-3-app-security: rbac-authorization lee `services.json` que service-layer produce en la MISMA wave (intra-wave, los 3 agentes corren en paralelo). Dependencia declarada pero el run real no la respeta ordenadamente. Análoga a R2. En F3-run-9 NO explotó: los 3 v2-reused (service-layer, auth-security, rbac-authorization) cerraron `ok`, output coherente. service-layer y auth-security ambos leen `persistence.json` (de wave-2-domain, ya asentado) → safe; el race real es solo rbac↔service-layer. Benigno actualmente, frágil ante futuras refactorizaciones. Referencia: F3-run-9, out/yoga-regen-v3-2026-05-15T14-23-45.**
+
+> **R2 y R4 forman una categoría: _declared intra-wave dependencies that race-but-survive_.** Ambas son dependencias declaradas entre agentes de la misma wave que el runtime real no serializa, pero que sobreviven porque el consumidor no necesita realmente el artefacto del productor en este dominio (yoga). Vigilar nuevas instancias en waves futuras; si aparece una **tercera**, dejar de tratarlas caso-a-caso y revisar la categoría como bloque (¿el runtime debe respetar `dependsOn` intra-wave, o se acepta el patrón como invariante del diseño?).
 
 ---
 
