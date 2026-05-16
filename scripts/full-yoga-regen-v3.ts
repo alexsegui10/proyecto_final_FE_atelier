@@ -61,6 +61,7 @@ import {
 } from "../lib/agents/runtime/artifact-boundary";
 import type { AgentNameV3 } from "../lib/agents/contracts-v3/agent-names";
 import { validateTestIdContract } from "../lib/agents/contracts-v3/test-id-contract.schema";
+import { validateComponentsCatalogV3 } from "../lib/agents/contracts-v3/components-catalog.schema";
 import { scanCrossArtifactCoherence } from "../lib/agents/runtime/qa-gates/cross-artifact-coherence-scanner";
 import { createStitchCompletenessGate } from "../lib/agents/runtime/qa-gates/stitch-completeness-scanner";
 import { createStitchFixturePreparerGate } from "../lib/agents/runtime/stitch-fixture-helper";
@@ -363,9 +364,15 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     promptRel: "lib/agents/prompts-v2/frontend-architect.md",
     artifactFile: "frontend-architecture.json",
   },
+  // v3-native-lite (port reducido): solo los 17 shadcn primitives.
+  // Bloque B (componentes por área desde screens-map.componentSpecs) fue
+  // eliminado — obsoleto por visual-adapter R0. Esto cierra B-w4-6 para
+  // ui-components: ya no lee screens-map.json, solo design-system.json
+  // (que v3 ux-ui-designer sí emite).
   "ui-components": {
-    promptRel: "lib/agents/prompts-v2/ui-components.md",
+    promptRel: "lib/agents/prompts-v3/ui-components.md",
     artifactFile: "components-catalog.json",
+    validators: { "components-catalog.json": validateComponentsCatalogV3 },
   },
   "forms-validations": {
     promptRel: "lib/agents/prompts-v2/forms-validations.md",
