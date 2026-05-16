@@ -378,10 +378,9 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     promptRel: "lib/agents/prompts-v2/forms-validations.md",
     artifactFile: "forms-validations.json",
   },
-  "pages-routing": {
-    promptRel: "lib/agents/prompts-v2/pages-routing.md",
-    artifactFile: "pages-routing.json",
-  },
+  // pages-routing REMOVED in v3 — its App Router role (page.tsx, group
+  // layouts, special files, SEO metadata, RSC/CC policy) is absorbed by
+  // visual-adapter (single owner of app/*, closes B-w4-7).
   "visual-adapter": {
     promptRel: "lib/agents/prompts-v3/visual-adapter.md",
     artifactFile: "page-adaptations.json",

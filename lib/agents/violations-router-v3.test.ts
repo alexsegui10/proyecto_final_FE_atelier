@@ -7,8 +7,8 @@ import {
 import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, isAgentNameV3 } from "./contracts-v3/agent-names";
 
 describe("AgentNameV3 union", () => {
-  it("declares exactly 23 agents (17 v2 + 6 new)", () => {
-    expect(AGENT_NAMES_V3).toHaveLength(23);
+  it("declares exactly 22 agents (16 v2 + 6 new; pages-routing dropped in v3)", () => {
+    expect(AGENT_NAMES_V3).toHaveLength(22);
   });
 
   it("includes all 6 net-new v3 agents", () => {
@@ -25,17 +25,19 @@ describe("AgentNameV3 union", () => {
     }
   });
 
-  it("keeps the 17 v2 agent names verbatim", () => {
-    const v2 = [
+  it("keeps 16 of the 17 v2 agent names verbatim (pages-routing dropped in v3)", () => {
+    const v2Kept = [
       "discovery", "architect", "ux-ui-designer", "domain-modeler",
       "persistence", "seeds-shape", "service-layer", "auth-security",
       "rbac-authorization", "api-backend", "frontend-architect",
-      "ui-components", "forms-validations", "pages-routing",
+      "ui-components", "forms-validations",
       "seeds-fixtures", "tests-writer", "qa-reviewer",
     ];
-    for (const a of v2) {
+    for (const a of v2Kept) {
       expect(AGENT_NAME_V3_SET.has(a)).toBe(true);
     }
+    // pages-routing was removed in v3 (role absorbed by visual-adapter).
+    expect(AGENT_NAME_V3_SET.has("pages-routing")).toBe(false);
   });
 
   it("isAgentNameV3 narrows strings correctly", () => {
@@ -73,6 +75,17 @@ describe("routeViolationToAgentV3 — v3 additions", () => {
   it("routes visual QA paths to visual-qa", () => {
     expect(routeViolationToAgentV3("playwright.config.ts")).toBe("visual-qa");
     expect(routeViolationToAgentV3("tests/visual/home.spec.ts")).toBe("visual-qa");
+  });
+
+  it("routes App Router paths to visual-adapter (pages-routing removed, B-w4-7)", () => {
+    // pages-routing was removed in v3; visual-adapter is the single owner of
+    // app/*. These v3 rules override the v2 base (which still maps to the
+    // now-nonexistent pages-routing via fall-through).
+    expect(routeViolationToAgentV3("app/page.tsx")).toBe("visual-adapter");
+    expect(routeViolationToAgentV3("app/(dashboard)/profile/page.tsx")).toBe("visual-adapter");
+    expect(routeViolationToAgentV3("app/(public)/layout.tsx")).toBe("visual-adapter");
+    expect(routeViolationToAgentV3("app/not-found.tsx")).toBe("visual-adapter");
+    expect(routeViolationToAgentV3("app/error.tsx")).toBe("visual-adapter");
   });
 });
 

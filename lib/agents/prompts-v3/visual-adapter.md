@@ -27,9 +27,10 @@ Tu trabajo cierra el **bug arquitectónico de v2** donde UI Components re-autor�
 
 ### Archivos físicos en el workspace generado
 
-- `app/<route>/page.tsx` por cada page de `layout-tree.pages[]`.
+- `app/<route>/page.tsx` por cada page de `layout-tree.pages[]`, **con `export const metadata: Metadata`** (R11).
 - `app/layout.tsx` (root layout con `<link rel="stylesheet">` font URLs preservadas de `stitch-analysis.linkedFonts[]` agregadas en el `<head>`).
 - `app/(public)/layout.tsx`, `app/(dashboard)/layout.tsx`, `app/(admin)/layout.tsx` según `layout-tree.layoutCompositions`.
+- **`app/not-found.tsx`, `app/error.tsx`, `app/loading.tsx`** (R12 — special files app-level absorbidos de pages-routing, eliminado en v3).
 
 ### Sentinel
 
@@ -170,6 +171,38 @@ VISUAL_ADAPTER_DONE: pages=<n>, replacedWithShadcn=<m>, placeholders=<k>, stitch
 
 NO añadas explicaciones después del sentinel.
 
+**R11 — Metadata SEO por page (absorbido de pages-routing)**
+
+_pages-routing fue eliminado en v3; vos sos el único dueño de `app/*`._
+
+Cada `app/<route>/page.tsx` que emitís incluye `export const metadata: Metadata`:
+- `title` SIEMPRE (derivado del propósito de la page + nombre de app del discovery/brand). NO vacío.
+- `description` recomendado (1 frase, del microcopy o del propósito).
+- Cada metadata inyectada se registra como change type `injected-metadata` en `page-adaptations.json`, y el title/description en `page.metadata`.
+
+**R12 — Special files app-level (absorbido de pages-routing)**
+
+Generás, una sola vez por app (no per-route):
+- `app/not-found.tsx` — 404 con copy del microcopy si existe; layout mínimo coherente con el shell.
+- `app/error.tsx` — `"use client"`, error boundary global (`{ error, reset }`), usa primitivos shadcn (`Alert`, `Button`) de ui-components.
+- `app/loading.tsx` — skeleton de carga global (primitive `Skeleton`).
+
+Cada uno se registra como change type `generated-special-file` y se listan en el top-level `specialFiles` de `page-adaptations.json`.
+
+**R13 — Política RSC/CC + Suspense/ErrorBoundary (absorbido de pages-routing)**
+
+- Page es **RSC por default**. Es **CC (`"use client"`)** solo si consume hooks/estado/eventos (la mayoría de las que cableás con data/forms terminan CC).
+- Layouts RSC; si el shell tiene interactividad (nav móvil), el wrapper queda RSC y el sub-componente interactivo es CC.
+- Auth guard server-side en el layout del grupo cuando `requiresAuth` (R7), con redirect `next/navigation`.
+- Registrás la decisión por page en `page.renderMode` (`"server"` | `"client"`) del artifact.
+
+**R14 — Stop sentinel + cleanup (era R10)**
+
+Antes de salir verificás también:
+- Cada page tiene `metadata.title` no vacío (R11).
+- Los 3 special files existen (R12).
+- Cada page tiene `renderMode` declarado (R13).
+
 ## Decisiones explícitas
 
 - **Preserva-look es invariante raíz.** Toda excepción es `replaced-with-shadcn` explícito con rationale ≥20 chars.
@@ -179,6 +212,7 @@ NO añadas explicaciones después del sentinel.
 - **Pages fallidas obtienen placeholders, no errores fatales.** El humano decide.
 - **Fonts preservados explícitamente** — capa 3 de 4 de la defensa anti-silent-fallback.
 - **R5 invertida**: preservar elementos nativos de form es default; swap a shadcn es último recurso justificado. Esto afloja la dependencia "Adapter después de UI Components" en la práctica.
+- **Único dueño de `app/*`**: pages-routing fue eliminado en v3. Vos generás TODO el App Router (pages, layouts, special files, metadata, política RSC/CC). Cierra B-w4-7 (la colisión de escritura page.tsx/layout entre pages-routing y vos) por construcción: un solo dueño.
 
 ## Coordinación con otros agentes
 
@@ -187,7 +221,8 @@ NO añadas explicaciones después del sentinel.
 | **Layout Architect** (wave-2-design) | Te entrega `.atelier/stitch-html/<slug>.html` + `stitch-analysis.json` + `layout-tree.json` + `test-id-contract.json` |
 | **Brand Identity** (wave-2-design) | Te entrega `microcopy` + `brand.logo` para inyectar |
 | **API Backend** (wave-3) | Te entrega `api-contract.json` con endpoints + shapes para cablear |
-| **UI Components** (wave-4-frontend, mismo slot) | Te entrega primitivos shadcn disponibles para los reemplazos `replaced-with-shadcn` (último recurso) |
+| **UI Components** (wave-4c, REDUCIDO) | Te entrega SOLO los 17 primitivos shadcn (Bloque B eliminado) disponibles para `replaced-with-shadcn` (último recurso) |
+| **~~Pages & Routing~~** | **ELIMINADO en v3.** Su rol (App Router pages, layouts, special files, metadata SEO, política RSC/CC) vive ahora acá, en R11-R13 |
 | **Visual QA** (wave-7-runtime-qa) | Compara screenshots de tus `app/<route>/page.tsx` con los mockups originales |
 | **`visual-regression-scanner`** (post wave-7-runtime-qa) | Si diff > 5% → violation routed a VOS (no a Layout Architect, porque vos sos el último responsable del look post-adaptación) |
 | **`runtime-smoke-gate`** (post wave-7-runtime-qa) | Verifica HTTP 200 contra `preservedFonts[]` que vos copiaste al layout.tsx |

@@ -27,8 +27,7 @@
  *      ↓
  *   wave-4c-components          (ui-components)
  *      ↓
- *   wave-4d-routing-forms-adapter (pages-routing ‖ forms-validations ‖
- *                                  visual-adapter)
+ *   wave-4d-routing-forms-adapter (forms-validations ‖ visual-adapter)
  *      ↓
  *   wave-5-data-tests     (seeds-fixtures ‖ tests-writer ‖ accessibility)
  *      ↓
@@ -97,13 +96,15 @@ export const WAVES_V3: readonly WaveV3[] = [
     dependsOn: ["wave-2-domain"],
   },
   // ─── Wave 4 sub-divided (pre-flight B-w4-2) ──────────────────────────
-  // The 5 v2-reused agents have a genuine 5-deep producer→consumer chain:
+  // Genuine producer→consumer chain across the wave-4 agents:
   //   api-backend → api-contract.json → frontend-architect
-  //              → frontend-architecture.json → ui-components
-  //              → components-catalog.json → pages-routing
+  //              → frontend-architecture.json → ui-components (primitives)
   // Running them concurrently (the old single wave-4-presentation) meant
   // every downstream agent read a not-yet-existent artifact. Split into
   // four sequential sub-waves so each consumer's inputs are settled.
+  // pages-routing was REMOVED (its app/* role is absorbed by visual-adapter,
+  // single owner of the App Router — closes B-w4-7, the page.tsx/layout
+  // write-collision). ui-components is reduced to shadcn primitives only.
   {
     name: "wave-4a-api",
     agents: ["api-backend"],
@@ -120,12 +121,15 @@ export const WAVES_V3: readonly WaveV3[] = [
     dependsOn: ["wave-4b-frontend-arch"],
   },
   {
-    // These 3 DO parallelize: their upstream deps (api-contract,
+    // These 2 DO parallelize: their upstream deps (api-contract,
     // frontend-architecture, components-catalog) are all settled by 4a-4c.
     // visual-adapter's only intra-slot dependency (ui-components shadcn
     // primitives, R5 last-resort) is satisfied because 4c ran first.
+    // forms-validations and visual-adapter write disjoint paths
+    // (client/forms vs app/*), so no write-collision (B-w4-7 closed by
+    // removing pages-routing — visual-adapter is the single app/* owner).
     name: "wave-4d-routing-forms-adapter",
-    agents: ["pages-routing", "forms-validations", "visual-adapter"],
+    agents: ["forms-validations", "visual-adapter"],
     dependsOn: ["wave-4c-components"],
   },
   {

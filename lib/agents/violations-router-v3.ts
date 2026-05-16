@@ -27,6 +27,20 @@ interface RouteRuleV3 {
 }
 
 /**
+ * v3 dropped `pages-routing` (one of the 17 inherited v2 agents); its
+ * App Router role is owned by `visual-adapter` (single owner of `app/*`,
+ * B-w4-7 closure). The v2 base router still maps App Router paths
+ * (`app/**\/page.tsx`, `layout.tsx`, `template.tsx`, `default.tsx`,
+ * `not-found.tsx`, ...) to the now-nonexistent `pages-routing`. This
+ * remaps any inherited v2 result so v3 never surfaces an agent absent
+ * from `AgentNameV3` — covering ALL v2 app/* patterns, not just the
+ * explicit V3_ADDITIONS below.
+ */
+function remapDroppedV2Agent(agent: string): AgentNameV3 {
+  return (agent === "pages-routing" ? "visual-adapter" : agent) as AgentNameV3;
+}
+
+/**
  * v3-only additions. The v2 table is composed in {@link routeViolationToAgentV3}
  * via fall-through, not duplicated here, so any future v2 router fix
  * propagates automatically.
@@ -44,14 +58,21 @@ const V3_ADDITIONS: RouteRuleV3[] = [
   { pattern: /^README\.md$/i, agent: "bootstrap-devops", priority: 6 },
 
   // ─── Wave 2 — Layout Architect ──────────────────────────────────────
-  // Stitch / global layout decisions. The actual generated layout.tsx files
-  // remain owned by pages-routing (priority 7) — layout-architect owns the
-  // PLANNING artifacts and any high-level documentation about layout tree.
+  // Stitch / global layout decisions. layout-architect owns the PLANNING
+  // artifacts and high-level documentation about the layout tree; the
+  // generated app/* files are owned by visual-adapter (see Wave 4 below).
   { pattern: /^docs\/layout-tree\.md$/, agent: "layout-architect", priority: 8 },
-  // App-router root + group layouts are jointly owned: pages-routing writes
-  // them, but if the bug is "missing header", that's a layout-architect issue.
-  // We keep pages-routing's priority 7 default and let qa-reviewer surface
-  // layout-architect violations directly via `agent` field rather than path.
+
+  // ─── Wave 4 — App Router → visual-adapter (B-w4-7 closure) ───────────
+  // pages-routing was removed in v3; visual-adapter is the SINGLE owner of
+  // the App Router (pages, group layouts, special files). The v2 base
+  // router (composed via fall-through) still maps these paths to the
+  // now-nonexistent "pages-routing" — these v3 rules override it at higher
+  // priority so violations route to the agent that actually exists/owns
+  // them. priority 8 beats the v2 pages-routing default (7).
+  { pattern: /^app\/.*page\.tsx$/, agent: "visual-adapter", priority: 8 },
+  { pattern: /^app\/.*layout\.tsx$/, agent: "visual-adapter", priority: 8 },
+  { pattern: /^app\/(not-found|error|loading|global-error)\.tsx$/, agent: "visual-adapter", priority: 8 },
 
   // ─── Wave 2 — Brand Identity ────────────────────────────────────────
   // Owns brand tokens + microcopy bundle. Tokens live alongside theme files
@@ -106,7 +127,7 @@ export function routeViolationToAgentV3(rawPath: string): AgentNameV3 | null {
   if (bestV3 && (!v2Hit || bestV3.priority >= bestV2Priority)) {
     return bestV3.agent;
   }
-  return (v2Hit as AgentNameV3 | null) ?? null;
+  return v2Hit ? remapDroppedV2Agent(v2Hit) : null;
 }
 
 /**
@@ -137,7 +158,7 @@ export function getRoutingTableV3(): ReadonlyArray<{
 }> {
   const v2 = getRoutingTableV2().map((r) => ({
     pattern: r.pattern,
-    agent: r.agent as AgentNameV3,
+    agent: remapDroppedV2Agent(r.agent),
     priority: r.priority,
     source: "v2" as const,
   }));

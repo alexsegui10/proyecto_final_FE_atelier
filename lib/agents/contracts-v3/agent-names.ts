@@ -1,12 +1,16 @@
 /**
  * Atelier v3 agent namespace.
  *
- * v3 = 17 v2 agents + 6 new agents = 23 total (visual-adapter added in
+ * v3 = 16 v2 agents + 6 new agents = 22 total (visual-adapter added in
  * the Stitch preserve-design rework, see ROADMAP_V3 § 5.1 reinterpreted;
  * animation-choreographer removed as a ghost — reduced-motion moved to
- * bootstrap-devops globals.css, see V3_PROGRESS.md "Cambios arquitecturales").
+ * bootstrap-devops globals.css; pages-routing removed in v3 — its app/*
+ * role is absorbed by visual-adapter, single owner of the App Router,
+ * closing the B-w4-7 page.tsx/layout write-collision. v2 keeps all 17;
+ * only v3 drops pages-routing. See V3_PROGRESS.md "Cambios arquitecturales").
  *
- * The 17 existing agents keep their v2 names verbatim. The 6 net-new are:
+ * 16 of the 17 v2 agents keep their names verbatim (pages-routing dropped).
+ * The 6 net-new are:
  * - bootstrap-devops    (wave 1, between discovery and architect)
  * - layout-architect    (wave 2, after ux-ui-designer)
  * - brand-identity      (wave 2, parallel with layout-architect)
@@ -20,7 +24,7 @@
  */
 
 export type AgentNameV3 =
-  // ── 17 agents inherited from v2 ────────────────────────────────────
+  // ── 16 agents inherited from v2 (pages-routing dropped in v3) ───────
   | "discovery"
   | "architect"
   | "ux-ui-designer"
@@ -34,7 +38,6 @@ export type AgentNameV3 =
   | "frontend-architect"
   | "ui-components"
   | "forms-validations"
-  | "pages-routing"
   | "seeds-fixtures"
   | "tests-writer"
   | "qa-reviewer"
@@ -60,7 +63,6 @@ export const AGENT_NAMES_V3: readonly AgentNameV3[] = [
   "frontend-architect",
   "ui-components",
   "forms-validations",
-  "pages-routing",
   "seeds-fixtures",
   "tests-writer",
   "qa-reviewer",

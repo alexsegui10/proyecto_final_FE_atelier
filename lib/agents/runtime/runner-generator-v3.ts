@@ -6,7 +6,7 @@
  * detect stop sentinel, validate artifact JSON, diff file tree) is identical.
  *
  * What changes in v3 is the **per-agent config table**: AGENT_CONFIG_V3 holds
- * the 23-agent timeouts + stop sentinels, including the 6 net-new agents
+ * the 22-agent timeouts + stop sentinels, including the 6 net-new agents
  * introduced by v3 (bootstrap-devops, layout-architect, brand-identity,
  * visual-adapter, accessibility, visual-qa).
  *
@@ -28,7 +28,10 @@ export type { AgentConfigEntry, GeneratorAgentInput, GeneratorAgentResult };
 // ─── v3 config ──────────────────────────────────────────────────────
 
 /**
- * 23 entries: the 17 v2 configs preserved verbatim + 6 new agent configs.
+ * 22 entries used in v3: 16 of the 17 v2 configs (pages-routing dropped in
+ * v3 — its app/* role is absorbed by visual-adapter) + 6 new agent configs.
+ * AGENT_CONFIG_V2 is still spread verbatim (v2 intact); the pages-routing
+ * v2 config simply goes unused because WAVES_V3 never schedules it.
  *
  * Bootstrap-devops: small artifact + many tiny files (env.example, scripts,
  * etc.). 8 min is plenty.
