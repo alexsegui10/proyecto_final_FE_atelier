@@ -293,6 +293,12 @@ Inventario actual de deudas de cableado:
 
 > **R2 y R4 forman una categoría: _declared intra-wave dependencies that race-but-survive_.** Ambas son dependencias declaradas entre agentes de la misma wave que el runtime real no serializa, pero que sobreviven porque el consumidor no necesita realmente el artefacto del productor en este dominio (yoga). Vigilar nuevas instancias en waves futuras; si aparece una **tercera**, dejar de tratarlas caso-a-caso y revisar la categoría como bloque (¿el runtime debe respetar `dependsOn` intra-wave, o se acepta el patrón como invariante del diseño?).
 
+15. **`app/globals.css` emitido por bootstrap-devops pero NO registrado en `filesProduced` del schema.** `filesProducedSchema` (`lib/agents/contracts-v3/bootstrap.schema.ts`) es `.strict()`; añadir la clave `globalsCss` rompería la validación del artifact en runs reales. Decisión consciente: el schema permanece strict por trazabilidad del resto del sistema (env/devops files con gates específicos); `globals.css` es un archivo pequeño sin gates propios, se emite igual fuera del inventario. Si en el futuro necesitamos validar el contenido de `globals.css` (e.g. gate que verifique que el bloque `prefers-reduced-motion` sobrevivió), ampliar el schema con un campo opcional. Origen: commit 27b5e17.
+
+16. **Bug latente pre-existente en `lib/agents/orchestrator-v3.test.ts:869/887`.** Compara `severity: "warning"` contra el tipo `QaSeverityV3` (`"error" | "warn"`) — sin overlap. Pasa en vitest (no typechequea) pero la lógica del test está rota: `tsc --noEmit` reporta 2 errores (TS2322 + TS2367), o sea el v3 suite NO compila limpio en HEAD. Pre-existente, descubierto durante el removal de animation-choreographer (27b5e17), NO causado por él. Arreglo acotado: cambiar el literal `"warning"` → `"warn"`, o revisar si la intención original del test era otra (en cuyo caso reescribir el assert). No urgente, no bloqueante.
+
+17. **Self-reference de hash en docs (cosmético).** Las entradas de `V3_PROGRESS.md` "Cambios arquitecturales no-bug" y `ROADMAP_V3 (2).md` Deviations #10 citan el commit `63d0f4b` (pre-amend) en lugar de `27b5e17` (HEAD final). Contenido idéntico — `63d0f4b` es el objeto previo al `--amend` que rellenó el hash en los docs (paradoja inevitable del hash auto-referenciado en single-commit). Corregir en el próximo pase de docs reemplazando `63d0f4b` → `27b5e17` en ambos archivos.
+
 ---
 
 ## Estado pendiente — pasos 6 a 13
