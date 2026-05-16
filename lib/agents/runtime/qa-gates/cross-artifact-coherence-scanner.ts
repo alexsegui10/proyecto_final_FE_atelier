@@ -16,6 +16,7 @@
  * downstream waves cheaply.
  */
 import type { QaViolationV3 } from "../../orchestrator-v3";
+import { expectArray } from "./_artifact-guard";
 
 // ─── Input shapes (defensive — accept anything, narrow internally) ──
 
@@ -68,7 +69,14 @@ export function scanCrossArtifactCoherence(input: CoherenceInputs): QaViolationV
   // Invariant 1: layout-tree.pages[] ⊆ architect routes
   if (layoutTree && architect) {
     const architectRoutes = collectArchitectRoutes(architect);
-    for (const page of layoutTree.pages) {
+    const ltPages = expectArray<{ pageRoute: string }>(layoutTree.pages, {
+      violations,
+      rule: "layout-tree-malformed",
+      agent: "layout-architect",
+      file: ".atelier/layout-tree.json",
+      field: "layoutTree.pages",
+    });
+    for (const page of ltPages) {
       if (
         !architectRoutes.has(page.pageRoute) &&
         !IMPLICIT_AUTH_ROUTES.has(page.pageRoute)
@@ -87,8 +95,22 @@ export function scanCrossArtifactCoherence(input: CoherenceInputs): QaViolationV
 
   // Invariant 2: stitch-analysis.pages[] ⊆ layout-tree.pages[]
   if (stitchAnalysis && layoutTree) {
-    const layoutRoutes = new Set(layoutTree.pages.map((p) => p.pageRoute));
-    for (const page of stitchAnalysis.pages) {
+    const ltPagesForRoutes = expectArray<{ pageRoute: string }>(layoutTree.pages, {
+      violations,
+      rule: "layout-tree-malformed",
+      agent: "layout-architect",
+      file: ".atelier/layout-tree.json",
+      field: "layoutTree.pages",
+    });
+    const saPages = expectArray<{ pageRoute: string }>(stitchAnalysis.pages, {
+      violations,
+      rule: "stitch-analysis-malformed",
+      agent: "layout-architect",
+      file: ".atelier/stitch-analysis.json",
+      field: "stitchAnalysis.pages",
+    });
+    const layoutRoutes = new Set(ltPagesForRoutes.map((p) => p.pageRoute));
+    for (const page of saPages) {
       if (!layoutRoutes.has(page.pageRoute)) {
         violations.push({
           rule: "stitch-analysis-orphan",
@@ -104,8 +126,25 @@ export function scanCrossArtifactCoherence(input: CoherenceInputs): QaViolationV
 
   // Invariant 3: test-id-contract.entries[].consumedByFlow ⊆ valid flow names
   if (testIdContract) {
-    for (const entry of testIdContract.entries) {
-      for (const flow of entry.consumedByFlow) {
+    const ticEntries = expectArray<{ selector: string; consumedByFlow: readonly string[] }>(
+      testIdContract.entries,
+      {
+        violations,
+        rule: "test-id-contract-malformed",
+        agent: "layout-architect",
+        file: ".atelier/test-id-contract.json",
+        field: "testIdContract.entries",
+      },
+    );
+    for (const entry of ticEntries) {
+      const flows = expectArray<string>(entry.consumedByFlow, {
+        violations,
+        rule: "test-id-contract-malformed",
+        agent: "layout-architect",
+        file: ".atelier/test-id-contract.json",
+        field: `testIdContract.entries['${entry.selector}'].consumedByFlow`,
+      });
+      for (const flow of flows) {
         if (!VALID_FLOWS.has(flow)) {
           violations.push({
             rule: "test-id-invalid-flow",

@@ -35,6 +35,7 @@ import { join } from "node:path";
 import { load as loadHtml } from "cheerio";
 
 import type { PostWaveGate, QaViolationV3 } from "../../orchestrator-v3";
+import { expectArray } from "./_artifact-guard";
 
 // ─── Public types ───────────────────────────────────────────────────
 
@@ -139,15 +140,39 @@ export async function scanStitchCompleteness(
   const violations: QaViolationV3[] = [];
   const pageFailures: PageFailure[] = [];
 
+  // B-w4-5a — defensive: a malformed artifact must yield violations, not a
+  // throw (an uncaught postWaveGate throw is the F3-run-10a fatal crash).
+  const saPages = expectArray<StitchPageLike>(opts.stitchAnalysis.pages, {
+    violations,
+    rule: "stitch-analysis-malformed",
+    agent: "layout-architect",
+    file: ".atelier/stitch-analysis.json",
+    field: "stitchAnalysis.pages",
+  });
+  const ltPages = expectArray<LayoutTreePageLike>(opts.layoutTree.pages, {
+    violations,
+    rule: "layout-tree-malformed",
+    agent: "layout-architect",
+    file: ".atelier/layout-tree.json",
+    field: "layoutTree.pages",
+  });
+  const ticEntries = expectArray<TestIdEntryLike>(opts.testIdContract.entries, {
+    violations,
+    rule: "test-id-contract-malformed",
+    agent: "layout-architect",
+    file: ".atelier/test-id-contract.json",
+    field: "testIdContract.entries",
+  });
+
   // Index stitch pages by route for O(1) lookup.
-  const stitchByRoute = new Map(opts.stitchAnalysis.pages.map((p) => [p.pageRoute, p]));
+  const stitchByRoute = new Map(saPages.map((p) => [p.pageRoute, p]));
 
   // Pre-classify critical test-id entries by their requiredOn variant.
   // Component-scoped entries are NOT silently skipped — they're counted
   // and surfaced as a single warn-summary violation at the end of the
   // scan. This closes B1 of the F3 first-real-run triage (the
   // "silent-skip is the failure mode" pattern).
-  const criticals = opts.testIdContract.entries.filter((e) => e.criticality === "critical");
+  const criticals = ticEntries.filter((e) => e.criticality === "critical");
   const criticalByLayoutGroup = new Map<LayoutGroupV3, TestIdEntryLike[]>();
   const criticalByPageRoute = new Map<string, TestIdEntryLike[]>();
   const criticalComponentDeferred: TestIdEntryLike[] = [];
@@ -170,7 +195,7 @@ export async function scanStitchCompleteness(
     // Schema guarantees at least one of the three is present.
   }
 
-  for (const ltPage of opts.layoutTree.pages) {
+  for (const ltPage of ltPages) {
     const stitchPage = stitchByRoute.get(ltPage.pageRoute);
     const failure: PageFailure = {
       pageRoute: ltPage.pageRoute,
@@ -305,7 +330,7 @@ export async function scanStitchCompleteness(
     dashboard: ["header", "main"],
     admin: ["header", "main"],
   };
-  const usedGroups = new Set<LayoutGroupV3>(opts.layoutTree.pages.map((p) => p.layoutGroup));
+  const usedGroups = new Set<LayoutGroupV3>(ltPages.map((p) => p.layoutGroup));
   for (const group of ["public", "dashboard", "admin"] as const) {
     if (!usedGroups.has(group)) continue;
     const composition = opts.layoutTree.layoutCompositions?.[group];
@@ -315,7 +340,7 @@ export async function scanStitchCompleteness(
         severity: "error",
         agent: "layout-architect",
         file: ".atelier/layout-tree.json",
-        message: `Layout group '${group}' is used by ${opts.layoutTree.pages.filter((p) => p.layoutGroup === group).length} page(s) but has no entry in layoutCompositions.`,
+        message: `Layout group '${group}' is used by ${ltPages.filter((p) => p.layoutGroup === group).length} page(s) but has no entry in layoutCompositions.`,
         recommendedFix: `Declare layoutCompositions.${group} with at least slots: ['header', 'main'] so the Visual Adapter knows how to wrap pages of that group.`,
       });
       continue;

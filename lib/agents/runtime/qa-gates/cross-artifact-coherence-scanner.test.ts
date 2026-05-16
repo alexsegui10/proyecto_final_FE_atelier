@@ -163,6 +163,41 @@ describe("scanCrossArtifactCoherence — adverse case 3: test-id contract refere
   });
 });
 
+// ─── B-w4-5a: malformed artifacts → violation, never throw ──────────
+
+describe("scanCrossArtifactCoherence — defensive (B-w4-5a)", () => {
+  it("testIdContract with `selectors` instead of `entries` → violation, not throw", () => {
+    // Exact F3-run-10a shape: LLM emitted { selectors: [...] }, so
+    // `.entries` is undefined. Old code did `for..of undefined` → throw.
+    let v: ReturnType<typeof scanCrossArtifactCoherence> | undefined;
+    expect(() => {
+      v = scanCrossArtifactCoherence({
+        architect: ARCHITECT,
+        layoutTree: { pages: [] },
+        stitchAnalysis: { pages: [] },
+        testIdContract: { selectors: [{ selector: "x" }] },
+      });
+    }).not.toThrow();
+    expect(v!.some((x) => x.rule === "test-id-contract-malformed")).toBe(true);
+    expect(v!.find((x) => x.rule === "test-id-contract-malformed")?.severity).toBe("error");
+  });
+
+  it("layoutTree.pages / stitchAnalysis.pages not arrays → violations, not throw", () => {
+    let v: ReturnType<typeof scanCrossArtifactCoherence> | undefined;
+    expect(() => {
+      v = scanCrossArtifactCoherence({
+        architect: ARCHITECT,
+        layoutTree: { pages: "oops" },
+        stitchAnalysis: { pages: { wrong: true } },
+        testIdContract: { entries: [] },
+      });
+    }).not.toThrow();
+    const rules = new Set(v!.map((x) => x.rule));
+    expect(rules).toContain("layout-tree-malformed");
+    expect(rules).toContain("stitch-analysis-malformed");
+  });
+});
+
 // ─── Combined ──────────────────────────────────────────────────────
 
 describe("scanCrossArtifactCoherence — combined failures", () => {

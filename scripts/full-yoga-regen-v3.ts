@@ -55,7 +55,12 @@ import {
   type QaArtifactV3,
 } from "../lib/agents/orchestrator-v3";
 import { runGeneratorAgentV3 } from "../lib/agents/runtime/runner-generator-v3";
+import {
+  assertArtifactsValid,
+  type ArtifactValidator,
+} from "../lib/agents/runtime/artifact-boundary";
 import type { AgentNameV3 } from "../lib/agents/contracts-v3/agent-names";
+import { validateTestIdContract } from "../lib/agents/contracts-v3/test-id-contract.schema";
 import { scanCrossArtifactCoherence } from "../lib/agents/runtime/qa-gates/cross-artifact-coherence-scanner";
 import { createStitchCompletenessGate } from "../lib/agents/runtime/qa-gates/stitch-completeness-scanner";
 import { createStitchFixturePreparerGate } from "../lib/agents/runtime/stitch-fixture-helper";
@@ -242,6 +247,14 @@ interface AgentSlotV3 {
    * B-series if F3-run-10 shows the alias is insufficient.
    */
   aliasFrom?: string;
+  /**
+   * B-w4-5b — `.atelier` filename → schema validator run AT THE BOUNDARY
+   * after the agent emits, before any gate sees the artifact. A non-null
+   * validator result throws (→ orchestrator fails the agent → reprompt /
+   * B12) instead of a malformed shape cascading into a gate throw. Generic
+   * map so extending coverage to other artifacts is one line per slot.
+   */
+  validators?: Record<string, ArtifactValidator>;
 }
 
 const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
@@ -290,6 +303,12 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     // mirror layout-tree.json into it. FIRST ATTEMPT (see aliasFrom doc).
     aliasFile: "screens-map.json",
     aliasFrom: "layout-tree.json",
+    // B-w4-5b — F3-run-10a: layout-architect LLM emitted test-id-contract
+    // with top-level `selectors` instead of `entries`; the malformed shape
+    // reached cross-artifact-coherence-scanner which threw. Validate at the
+    // boundary so the agent fails cleanly (reprompt / B12) instead.
+    // Extend to layout-tree.json / stitch-analysis.json in a future pass.
+    validators: { "test-id-contract.json": validateTestIdContract },
   },
   "brand-identity": {
     promptRel: "lib/agents/prompts-v3/brand-identity.md",
@@ -517,6 +536,12 @@ function makeRealRunner(): AgentRunnerV3 {
         // the LLM context does.
       }
     }
+
+    // B-w4-5b — validate emitted artifacts at the boundary BEFORE bundling
+    // or returning. A schema violation throws here, which the orchestrator
+    // treats as an agent failure (reprompt / B12) — instead of a malformed
+    // shape cascading into a downstream gate throw (the F3-run-10a crash).
+    await assertArtifactsValid(input.agent, input.workDir, slot.validators);
 
     // Bundle composition for agents that emit multiple sibling files.
     let artifact: unknown = result.artifact;

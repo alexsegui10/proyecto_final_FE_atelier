@@ -34,6 +34,7 @@ import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 
 import type { QaViolationV3 } from "../../orchestrator-v3";
+import { expectArray } from "./_artifact-guard";
 import type { StitchAnalysis } from "../../contracts-v3/stitch-analysis.schema";
 import type { VisualQaReport } from "../../contracts-v3/visual-qa.schema";
 
@@ -83,7 +84,17 @@ export async function runVisualRegression(
   // screenshot for each route as a proxy for the page render.
   const vqScreenshots = opts.visualQaReport.screenshots;
 
-  for (const page of opts.stitchAnalysis.pages) {
+  const saPages = expectArray<{ mockupPath: string; pageRoute: string }>(
+    opts.stitchAnalysis.pages,
+    {
+      violations,
+      rule: "stitch-analysis-malformed",
+      agent: "layout-architect",
+      file: ".atelier/stitch-analysis.json",
+      field: "stitchAnalysis.pages",
+    },
+  );
+  for (const page of saPages) {
     const mockupRel = page.mockupPath;
     const mockupAbs = join(opts.workDir, mockupRel);
     if (!existsSync(mockupAbs)) {

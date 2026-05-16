@@ -189,6 +189,25 @@ Emitís al menos estos 8 selectors críticos:
 
 Selectors siempre kebab-case lowercase (`admin-create-class`, NO `admin-create-Class`). El schema regex lo enforza.
 
+**SHAPE EXACTO de `test-id-contract.json` (NO negociable)** — el array de selectors va bajo la clave **`entries`**, NO `selectors`, NO `testIds`, NO ningún sinónimo. Falta `generatedAt` (ISO datetime) → rechazo. Cualquier alias de campo hace que el artifact sea **rechazado en el borde** (validación contra `lib/agents/contracts-v3/test-id-contract.schema.ts`) y el agente se marca como fallido (reprompt). Shape canónico:
+
+```json
+{
+  "generatedAt": "2026-05-16T09:00:00.000Z",
+  "entries": [
+    {
+      "selector": "signin-form",
+      "purpose": "Formulario de login en /sign-in (≥10 chars)",
+      "requiredOn": { "pageRoute": "/sign-in" },
+      "criticality": "critical",
+      "consumedByFlow": ["client-anonymous", "client-authenticated"]
+    }
+  ]
+}
+```
+
+El top-level es `{ generatedAt, entries[] }` — exactamente esas dos claves, `entries` con ≥5 elementos. F3-run-10a falló porque se emitió `{ "selectors": [...] }`: ese error ahora se caza en el boundary (B-w4-5b) y vuelve como fallo del agente, no como crash del pipeline. No lo repitas.
+
 **Regla operativa**: si terminás con muchos selectors críticos `requiredOn.component` (e.g. >50% del total), revisá la elección — la mayoría son normalmente locales a una page y deberían usar `pageRoute`. El warn-summary del scanner te lo va a recordar en el reporte, pero es preferible elegir bien desde el origen.
 
 **Excepción legítima — shell elements**: `header-root`, `nav-primary`, `signout-button` y similares VIVEN EN EL SHELL del layout group, no en cada page individual. Stitch produce page CONTENT, no shell wrappers. Esos selectors deben usar `requiredOn: { component: "AppHeader"|"NavPrimary"|"SignoutButton" }` y se deferirán a wave-4 con el warn-summary. El scanner verifica que `layoutCompositions[group].slots` incluye `header` (donde el Visual Adapter inyectará el shell) — eso es lo que wave-2 puede verificar; la renderización real del shell se valida en wave-4.
