@@ -124,6 +124,64 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-2-domain",
     "wave-3-app-security",
   ],
+  // Progressive wave-4 slices. Each adds one sub-wave so F3-run-10 can be
+  // bisected (4a settles api-contract, 4b frontend-architecture, 4c
+  // components-catalog, 4d the 3 parallel consumers). `wave-1-4` is the
+  // full alias (== wave-1-4d).
+  "wave-1-4a": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+  ],
+  "wave-1-4b": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+  ],
+  "wave-1-4c": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+    "wave-4c-components",
+  ],
+  "wave-1-4d": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+    "wave-4c-components",
+    "wave-4d-routing-forms-adapter",
+  ],
+  "wave-1-4": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+    "wave-4c-components",
+    "wave-4d-routing-forms-adapter",
+  ],
   all: WAVES_V3.map((w) => w.name),
 };
 
@@ -165,13 +223,25 @@ interface AgentSlotV3 {
    */
   bundleLoader?: (workDir: string) => Promise<unknown>;
   /**
-   * Optional sibling filename to mirror `artifactFile` to, post-run.
+   * Optional sibling filename to mirror to, post-run.
    * Ported from v2 (`scripts/full-yoga-regen.ts`) to keep downstream
    * v2-reused prompts working when they reference the legacy filename
    * (e.g. domain-modeler writes `domain-modeler.json` but persistence
    * + seeds-shape v2 prompts read `domain-model.json`).
    */
   aliasFile?: string;
+  /**
+   * Source filename for the `aliasFile` copy. Defaults to `artifactFile`
+   * when omitted (the domain-modeler case). Set explicitly when the agent
+   * emits multiple siblings (artifactFile === false) but a v2-reused
+   * consumer still expects a decomposed legacy name — e.g. layout-architect
+   * emits `layout-tree.json`, but frontend-architect / ui-components /
+   * pages-routing v2 prompts read `screens-map.json` (decomposed in v3,
+   * see ux-ui-designer.md:91). FIRST ATTEMPT: layout-tree may not carry
+   * everything those prompts want (componentSpecs etc.); escalate in
+   * B-series if F3-run-10 shows the alias is insufficient.
+   */
+  aliasFrom?: string;
 }
 
 const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
@@ -214,6 +284,12 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
         ...(summary !== null ? { summary } : {}),
       };
     },
+    // v3 decomposed `screens-map.json` (v2 ux-ui-designer's artifact) into
+    // Layout Architect's outputs. frontend-architect / ui-components /
+    // pages-routing v2 prompts still read `.atelier/screens-map.json` —
+    // mirror layout-tree.json into it. FIRST ATTEMPT (see aliasFrom doc).
+    aliasFile: "screens-map.json",
+    aliasFrom: "layout-tree.json",
   },
   "brand-identity": {
     promptRel: "lib/agents/prompts-v3/brand-identity.md",
@@ -253,6 +329,36 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   "rbac-authorization": {
     promptRel: "lib/agents/prompts-v2/rbac-authorization.md",
     artifactFile: "rbac-policy.json",
+  },
+  // ─── wave-4 sub-divided (pre-flight B-w4-3) ─────────────────────
+  // 5 v2-reused agents + visual-adapter (v3-new). Sequenced across
+  // wave-4a/4b/4c/4d in WAVES_V3 so the genuine producer→consumer chain
+  // (api-contract → frontend-architecture → components-catalog) resolves.
+  // Slots only map agent → prompt/artifact; wave membership lives in
+  // WAVES_V3 (orchestrator-v3.ts), not here.
+  "api-backend": {
+    promptRel: "lib/agents/prompts-v2/api-backend.md",
+    artifactFile: "api-contract.json",
+  },
+  "frontend-architect": {
+    promptRel: "lib/agents/prompts-v2/frontend-architect.md",
+    artifactFile: "frontend-architecture.json",
+  },
+  "ui-components": {
+    promptRel: "lib/agents/prompts-v2/ui-components.md",
+    artifactFile: "components-catalog.json",
+  },
+  "forms-validations": {
+    promptRel: "lib/agents/prompts-v2/forms-validations.md",
+    artifactFile: "forms-validations.json",
+  },
+  "pages-routing": {
+    promptRel: "lib/agents/prompts-v2/pages-routing.md",
+    artifactFile: "pages-routing.json",
+  },
+  "visual-adapter": {
+    promptRel: "lib/agents/prompts-v3/visual-adapter.md",
+    artifactFile: "page-adaptations.json",
   },
 };
 
@@ -391,12 +497,17 @@ function makeRealRunner(): AgentRunnerV3 {
       throw new Error(`agent ${input.agent} timed out without artifact`);
     }
 
-    // Mirror artifactFile to aliasFile when declared. Ported from v2 so
+    // Mirror a sibling to aliasFile when declared. Ported from v2 so
     // downstream v2-reused prompts can keep referencing the legacy filename
     // (e.g. domain-modeler.json → domain-model.json for persistence +
-    // seeds-shape). Best-effort: failure is non-fatal (log + continue).
-    if (slot.aliasFile && typeof slot.artifactFile === "string") {
-      const src = join(input.workDir, ".atelier", slot.artifactFile);
+    // seeds-shape; layout-tree.json → screens-map.json for frontend-architect
+    // / ui-components / pages-routing). Source = aliasFrom, defaulting to
+    // artifactFile when the agent emits a single primary artifact.
+    // Best-effort: failure is non-fatal (log + continue).
+    const aliasSrcName =
+      slot.aliasFrom ?? (typeof slot.artifactFile === "string" ? slot.artifactFile : undefined);
+    if (slot.aliasFile && aliasSrcName) {
+      const src = join(input.workDir, ".atelier", aliasSrcName);
       const dst = join(input.workDir, ".atelier", slot.aliasFile);
       try {
         await cp(src, dst);

@@ -64,8 +64,8 @@ const base = (overrides: Partial<Parameters<typeof runGenerationV3>[0]> = {}) =>
 // ─── Wave structure ─────────────────────────────────────────────────
 
 describe("WAVES_V3 — structural sanity", () => {
-  it("declares 10 dependency-ordered slices (7 logical waves)", () => {
-    expect(WAVES_V3).toHaveLength(10);
+  it("declares 13 dependency-ordered slices (7 logical waves)", () => {
+    expect(WAVES_V3).toHaveLength(13);
     const seen = new Set<string>();
     for (const w of WAVES_V3) {
       for (const dep of w.dependsOn) expect(seen.has(dep)).toBe(true);
@@ -105,11 +105,33 @@ describe("WAVES_V3 — structural sanity", () => {
     expect(w7?.agents).toEqual(["visual-qa"]);
   });
 
-  it("places wave-4-presentation with 6 agents (5 v2 + visual-adapter)", () => {
-    const w4 = WAVES_V3.find((w) => w.name === "wave-4-presentation");
-    expect(w4?.agents).toHaveLength(6);
-    expect(w4?.agents).toContain("visual-adapter");
-    expect(w4?.agents).not.toContain("animation-choreographer");
+  it("sub-divides wave-4 into 4 sequential sub-waves (B-w4-2)", () => {
+    const w4a = WAVES_V3.find((w) => w.name === "wave-4a-api");
+    const w4b = WAVES_V3.find((w) => w.name === "wave-4b-frontend-arch");
+    const w4c = WAVES_V3.find((w) => w.name === "wave-4c-components");
+    const w4d = WAVES_V3.find((w) => w.name === "wave-4d-routing-forms-adapter");
+
+    expect(w4a?.agents).toEqual(["api-backend"]);
+    expect(w4b?.agents).toEqual(["frontend-architect"]);
+    expect(w4c?.agents).toEqual(["ui-components"]);
+    expect(w4d?.agents).toEqual(["pages-routing", "forms-validations", "visual-adapter"]);
+
+    // Sequential chain: 4a → 4b → 4c → 4d, anchored on wave-3.
+    expect(w4a?.dependsOn).toEqual(["wave-3-app-security"]);
+    expect(w4b?.dependsOn).toEqual(["wave-4a-api"]);
+    expect(w4c?.dependsOn).toEqual(["wave-4b-frontend-arch"]);
+    expect(w4d?.dependsOn).toEqual(["wave-4c-components"]);
+
+    // The old single slot is gone; the ghost agent never came back.
+    // (cast: "wave-4-presentation" is no longer a member of WaveNameV3,
+    // which is itself the compile-time guarantee — assert it at runtime too.)
+    const waveNames: string[] = WAVES_V3.map((w) => w.name);
+    expect(waveNames).not.toContain("wave-4-presentation");
+    expect(WAVES_V3.flatMap((w) => w.agents)).not.toContain("animation-choreographer");
+
+    // wave-5 now hangs off the last wave-4 sub-wave.
+    const w5 = WAVES_V3.find((w) => w.name === "wave-5-data-tests");
+    expect(w5?.dependsOn).toEqual(["wave-4d-routing-forms-adapter"]);
   });
 
   it("generatorAgentOrderV3 returns 23 deterministic entries", () => {
@@ -148,7 +170,7 @@ describe("runGenerationV3 — auto mode", () => {
     // Sanity events
     expect(events.some((e) => e.type === "generation.started")).toBe(true);
     expect(events.some((e) => e.type === "generation.completed")).toBe(true);
-    expect(events.filter((e) => e.type === "wave.started").length).toBe(10);
+    expect(events.filter((e) => e.type === "wave.started").length).toBe(13);
   });
 
   it("stops at the first failed wave with failedAt", async () => {
@@ -592,7 +614,10 @@ describe("type plumbing", () => {
       "wave-2-design",
       "wave-2-domain",
       "wave-3-app-security",
-      "wave-4-presentation",
+      "wave-4a-api",
+      "wave-4b-frontend-arch",
+      "wave-4c-components",
+      "wave-4d-routing-forms-adapter",
       "wave-5-data-tests",
       "wave-6-static-qa",
       "wave-7-runtime-qa",

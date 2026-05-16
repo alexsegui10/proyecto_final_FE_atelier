@@ -21,9 +21,14 @@
  *      ↓
  *   wave-3-app-security   (service-layer ‖ auth-security ‖ rbac-authorization)
  *      ↓
- *   wave-4-presentation   (api-backend ‖ frontend-architect ‖ ui-components ‖
- *                          forms-validations ‖ pages-routing ‖
- *                          visual-adapter)
+ *   wave-4a-api                 (api-backend)
+ *      ↓
+ *   wave-4b-frontend-arch       (frontend-architect)
+ *      ↓
+ *   wave-4c-components          (ui-components)
+ *      ↓
+ *   wave-4d-routing-forms-adapter (pages-routing ‖ forms-validations ‖
+ *                                  visual-adapter)
  *      ↓
  *   wave-5-data-tests     (seeds-fixtures ‖ tests-writer ‖ accessibility)
  *      ↓
@@ -31,10 +36,15 @@
  *      ↓
  *   wave-7-runtime-qa     (visual-qa)
  *
- * The 7 logical waves in the ROADMAP map to 9 dependency-ordered slices
+ * The 7 logical waves in the ROADMAP map to 13 dependency-ordered slices
  * above because Wave 1 has THREE sequential sub-waves (discovery → bootstrap
- * → architect) and Wave 2 has TWO parallel sub-waves (design + domain that
- * happen to be independent of each other beyond architect/bootstrap inputs).
+ * → architect), Wave 2 has TWO parallel sub-waves (design + domain that
+ * happen to be independent of each other beyond architect/bootstrap inputs),
+ * and Wave 4 was sub-divided into FOUR sequential sub-waves (4a-api → 4b-
+ * frontend-arch → 4c-components → 4d-routing-forms-adapter) because the 5
+ * v2-reused agents have a genuine producer→consumer chain (api-contract →
+ * frontend-architecture → components-catalog) that cannot run concurrently.
+ * See V3_PROGRESS.md "Cambios arquitecturales no-bug" (pre-flight B-w4-2).
  *
  * Agents within a wave run in PARALLEL via Promise.allSettled.
  */
@@ -53,7 +63,10 @@ export type WaveNameV3 =
   | "wave-2-design"
   | "wave-2-domain"
   | "wave-3-app-security"
-  | "wave-4-presentation"
+  | "wave-4a-api"
+  | "wave-4b-frontend-arch"
+  | "wave-4c-components"
+  | "wave-4d-routing-forms-adapter"
   | "wave-5-data-tests"
   | "wave-6-static-qa"
   | "wave-7-runtime-qa";
@@ -83,27 +96,42 @@ export const WAVES_V3: readonly WaveV3[] = [
     agents: ["service-layer", "auth-security", "rbac-authorization"],
     dependsOn: ["wave-2-domain"],
   },
+  // ─── Wave 4 sub-divided (pre-flight B-w4-2) ──────────────────────────
+  // The 5 v2-reused agents have a genuine 5-deep producer→consumer chain:
+  //   api-backend → api-contract.json → frontend-architect
+  //              → frontend-architecture.json → ui-components
+  //              → components-catalog.json → pages-routing
+  // Running them concurrently (the old single wave-4-presentation) meant
+  // every downstream agent read a not-yet-existent artifact. Split into
+  // four sequential sub-waves so each consumer's inputs are settled.
   {
-    name: "wave-4-presentation",
-    agents: [
-      "api-backend",
-      "frontend-architect",
-      "ui-components",
-      "forms-validations",
-      "pages-routing",
-      // visual-adapter runs LAST inside wave-4-presentation: it consumes
-      // ui-components primitives for the rare `replaced-with-shadcn` cases
-      // (R5 of visual-adapter.md). Ordering within a wave is best-effort —
-      // the orchestrator runs all agents of a wave concurrently with
-      // Promise.allSettled, so this ordering is mostly documentation.
-      "visual-adapter",
-    ],
+    name: "wave-4a-api",
+    agents: ["api-backend"],
     dependsOn: ["wave-3-app-security"],
+  },
+  {
+    name: "wave-4b-frontend-arch",
+    agents: ["frontend-architect"],
+    dependsOn: ["wave-4a-api"],
+  },
+  {
+    name: "wave-4c-components",
+    agents: ["ui-components"],
+    dependsOn: ["wave-4b-frontend-arch"],
+  },
+  {
+    // These 3 DO parallelize: their upstream deps (api-contract,
+    // frontend-architecture, components-catalog) are all settled by 4a-4c.
+    // visual-adapter's only intra-slot dependency (ui-components shadcn
+    // primitives, R5 last-resort) is satisfied because 4c ran first.
+    name: "wave-4d-routing-forms-adapter",
+    agents: ["pages-routing", "forms-validations", "visual-adapter"],
+    dependsOn: ["wave-4c-components"],
   },
   {
     name: "wave-5-data-tests",
     agents: ["seeds-fixtures", "tests-writer", "accessibility"],
-    dependsOn: ["wave-4-presentation"],
+    dependsOn: ["wave-4d-routing-forms-adapter"],
   },
   { name: "wave-6-static-qa",     agents: ["qa-reviewer"],        dependsOn: ["wave-5-data-tests"] },
   { name: "wave-7-runtime-qa",    agents: ["visual-qa"],          dependsOn: ["wave-6-static-qa"] },
