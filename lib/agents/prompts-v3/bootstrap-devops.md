@@ -28,6 +28,20 @@ NO escribís código de aplicación (controllers, services, etc.). NO decidís e
 6. `src/_shared/config/env.ts` — validador runtime. Importa Zod, declara un objeto con cada variable del manifest, valida al boot, fail-fast con error legible. **Single source of truth**: cualquier `process.env.X` que un agente downstream necesite debe pasar por este archivo.
 7. `src/_shared/config/check-environment.ts` — corre las `checkEnvironmentRules` al boot. Falla rápido con `fixSuggestion` accionable. NO degrada gracefully; el ROADMAP es explícito.
 8. `README.md` — sección "Arranca en 5 minutos" con comandos copiables, troubleshooting de los errores comunes (Postgres en 5432 ocupado, Docker Desktop apagado, falta `pnpm`, etc.).
+9. `app/globals.css` — **append-or-create**. Si el skeleton o un agente previo ya emitió `app/globals.css`, **appendeá** el bloque de abajo al final del archivo (no lo reescribas, no toques las directivas `@tailwind` ni los tokens existentes). Si NO existe, creá el archivo con las directivas Tailwind base + el bloque. El bloque, **verbatim**:
+
+   ```css
+   @media (prefers-reduced-motion: reduce) {
+     *, *::before, *::after {
+       animation-duration: 0.01ms !important;
+       animation-iteration-count: 1 !important;
+       transition-duration: 0.01ms !important;
+       scroll-behavior: auto !important;
+     }
+   }
+   ```
+
+   Esta regla anula transiciones y animaciones para usuarios con `prefers-reduced-motion` habilitado (accesibilidad real para gente con problemas vestibulares/vértigo). Es lo que iba a hacer el agente animation-choreographer, resuelto con CSS global en lugar de un agente dedicado. **NO registres `app/globals.css` en el `filesProduced` del artifact** — ese mapa tiene schema `.strict()` y solo cubre archivos de entorno/devops; añadir una clave nueva rompería la validación. El archivo se emite igual; simplemente no entra en ese inventario.
 
 ### Sentinel
 
@@ -248,12 +262,15 @@ La app está en http://localhost:3000. Admin demo: `admin@demo.<app> / demo1234`
 
 Más reglas si el dominio lo justifica (e.g. `stripe-key-set` si hay pagos).
 
+**R11** `app/globals.css` contiene el bloque `@media (prefers-reduced-motion: reduce)` exactamente como se especifica en el archivo físico #9. Append-or-create: nunca pisar `@tailwind`/tokens existentes. Este es el reemplazo del eliminado animation-choreographer — la accesibilidad de movimiento se resuelve con CSS global, no con un agente. El bloque debe sobrevivir regeneraciones downstream (si un agente posterior reescribe `globals.css`, el fix loop re-appendea por esta regla).
+
 ## Decisiones explícitas
 
 - **Postgres en puerto 5433 por defecto**: yoga v2 colisionó con instalaciones locales en 5432; default 5433 evita el problema. La variable `POSTGRES_HOST_PORT` permite override.
 - **Falla rápido al boot**: si `check-environment` detecta problema → `process.exit(1)`. NO banner degradado.
 - **Solo Postgres en docker-compose por ahora**: NO añadir Redis, Mailpit, etc. salvo que el Discovery los necesite explícitamente.
 - **Single env validator**: `src/_shared/config/env.ts` es la única puerta entre `process.env` y el resto del código. Todo lo demás importa `env` de ahí.
+- **reduced-motion en globals.css, no en un agente**: el ROADMAP preveía un animation-choreographer para wave-4; se eliminó por redundancia (Stitch + shadcn + Tailwind ya cubren animaciones). La única responsabilidad real e irrenunciable de ese agente —respetar `prefers-reduced-motion`— se resuelve con 7 líneas de CSS global que vos emitís en wave-1. Más simple, determinista, sin LLM.
 
 ## Enforcement por QA Reviewer
 

@@ -80,12 +80,12 @@ describe("WAVES_V3 — structural sanity", () => {
     }
   });
 
-  it("includes all 24 agents exactly once", () => {
+  it("includes all 23 agents exactly once", () => {
     const counts = new Map<string, number>();
     for (const w of WAVES_V3) {
       for (const a of w.agents) counts.set(a, (counts.get(a) ?? 0) + 1);
     }
-    expect(counts.size).toBe(24);
+    expect(counts.size).toBe(23);
     for (const [agent, count] of counts) {
       expect(count, `${agent} appears more than once`).toBe(1);
     }
@@ -105,17 +105,17 @@ describe("WAVES_V3 — structural sanity", () => {
     expect(w7?.agents).toEqual(["visual-qa"]);
   });
 
-  it("places wave-4-presentation with 7 agents (5 v2 + animation-choreographer + visual-adapter)", () => {
+  it("places wave-4-presentation with 6 agents (5 v2 + visual-adapter)", () => {
     const w4 = WAVES_V3.find((w) => w.name === "wave-4-presentation");
-    expect(w4?.agents).toHaveLength(7);
-    expect(w4?.agents).toContain("animation-choreographer");
+    expect(w4?.agents).toHaveLength(6);
     expect(w4?.agents).toContain("visual-adapter");
+    expect(w4?.agents).not.toContain("animation-choreographer");
   });
 
-  it("generatorAgentOrderV3 returns 24 deterministic entries", () => {
+  it("generatorAgentOrderV3 returns 23 deterministic entries", () => {
     const order = generatorAgentOrderV3();
-    expect(order).toHaveLength(24);
-    expect(new Set(order).size).toBe(24);
+    expect(order).toHaveLength(23);
+    expect(new Set(order).size).toBe(23);
     expect(order).toEqual(AGENT_NAMES_V3.slice().sort((a, b) => {
       const ai = order.indexOf(a);
       const bi = order.indexOf(b);
@@ -143,7 +143,7 @@ describe("runGenerationV3 — auto mode", () => {
     });
     expect(result.qa?.decision).toBe("go");
     expect(result.failedAt).toBeUndefined();
-    expect(calls.length).toBe(24);
+    expect(calls.length).toBe(23);
 
     // Sanity events
     expect(events.some((e) => e.type === "generation.started")).toBe(true);
@@ -237,8 +237,8 @@ describe("runGenerationV3 — auto mode", () => {
     expect(calls.some((c) => c.agent === "architect")).toBe(false);
     // The seeded artifact landed in result.artifacts verbatim.
     expect(result.artifacts.architect).toEqual(recordedArchitect);
-    // Other agents still ran (24 - 1 seeded = 23 calls).
-    expect(calls.length).toBe(23);
+    // Other agents still ran (23 - 1 seeded = 22 calls).
+    expect(calls.length).toBe(22);
   });
 });
 

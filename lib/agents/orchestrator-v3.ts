@@ -23,7 +23,7 @@
  *      ↓
  *   wave-4-presentation   (api-backend ‖ frontend-architect ‖ ui-components ‖
  *                          forms-validations ‖ pages-routing ‖
- *                          animation-choreographer)
+ *                          visual-adapter)
  *      ↓
  *   wave-5-data-tests     (seeds-fixtures ‖ tests-writer ‖ accessibility)
  *      ↓
@@ -91,7 +91,6 @@ export const WAVES_V3: readonly WaveV3[] = [
       "ui-components",
       "forms-validations",
       "pages-routing",
-      "animation-choreographer",
       // visual-adapter runs LAST inside wave-4-presentation: it consumes
       // ui-components primitives for the rare `replaced-with-shadcn` cases
       // (R5 of visual-adapter.md). Ordering within a wave is best-effort —

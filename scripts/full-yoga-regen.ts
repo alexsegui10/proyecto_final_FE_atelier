@@ -80,8 +80,8 @@ const MAX_FIX_ROUNDS = 3;
 // orchestrator works end-to-end in dry-run (see scripts/test-v3-dry-run.ts)
 // but only the Bootstrap & DevOps Agent has a real prompt + schema today.
 // For real LLM runs, point users back at v2 until the remaining v3 agents
-// (layout-architect, brand-identity, animation-choreographer, accessibility,
-// visual-qa) are implemented.
+// (layout-architect, brand-identity, accessibility, visual-qa) are
+// implemented.
 if (MODE_V3) {
   console.error(
     [
@@ -89,8 +89,8 @@ if (MODE_V3) {
       "  Only the Bootstrap & DevOps Agent is implemented today.",
       "  Use `tsx scripts/test-v3-dry-run.ts` to validate the v3 orchestrator wiring",
       "  end-to-end with synthetic fixtures. The full v3 --real run becomes available",
-      "  once layout-architect / brand-identity / animation-choreographer /",
-      "  accessibility / visual-qa are completed (see ROADMAP_V3.md § 9).",
+      "  once layout-architect / brand-identity / accessibility / visual-qa",
+      "  are completed (see ROADMAP_V3.md § 9).",
       "  Re-run WITHOUT --v3 to use the v2 pipeline (yoga-regen-v2-* output).",
     ].join("\n"),
   );

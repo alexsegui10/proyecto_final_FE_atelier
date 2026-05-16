@@ -2,9 +2,9 @@
  * Atelier v3 violations router.
  *
  * Maps workspace file paths to the v3 agent that owns them. Extends the v2
- * routing table with rules for the 7 net-new agents (bootstrap-devops,
- * layout-architect, brand-identity, animation-choreographer, visual-adapter,
- * accessibility, visual-qa). visual-adapter violations typically arrive
+ * routing table with rules for the 6 net-new agents (bootstrap-devops,
+ * layout-architect, brand-identity, visual-adapter, accessibility,
+ * visual-qa). visual-adapter violations typically arrive
  * with their `agent` field pre-set by visual-regression-scanner or
  * stitch-completeness-scanner, so the path-based routing rules below are
  * minimal — only the artifact JSON path is registered.
@@ -62,12 +62,14 @@ const V3_ADDITIONS: RouteRuleV3[] = [
   // SVG logos (we put them under client/brand/ by convention)
   { pattern: /^client\/brand\/logo.*\.svg$/, agent: "brand-identity", priority: 10 },
 
-  // ─── Wave 4 — Animation Choreographer ──────────────────────────────
-  // Owns motion code. Animations are usually applied as wrappers over
-  // components, so the component files themselves remain ui-components'
-  // territory; only dedicated motion files belong here.
-  { pattern: /^client\/motion\//, agent: "animation-choreographer", priority: 9 },
-  { pattern: /^client\/hooks\/useMotion.*\.ts$/, agent: "animation-choreographer", priority: 9 },
+  // ─── Wave 4 — Motion code → ui-components ───────────────────────────
+  // animation-choreographer was removed as a ghost agent (reduced-motion
+  // moved to bootstrap-devops globals.css). Motion code is now owned by
+  // ui-components: post-rework, animations come from shadcn primitives +
+  // Tailwind transitions emitted by ui-components, so it is the functional
+  // owner of any dedicated motion file too.
+  { pattern: /^client\/motion\//, agent: "ui-components", priority: 9 },
+  { pattern: /^client\/hooks\/useMotion.*\.ts$/, agent: "ui-components", priority: 9 },
 
   // ─── Wave 5 — Accessibility ─────────────────────────────────────────
   // The accessibility agent can patch files owned by other agents; it has

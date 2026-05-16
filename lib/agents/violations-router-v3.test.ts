@@ -7,16 +7,15 @@ import {
 import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, isAgentNameV3 } from "./contracts-v3/agent-names";
 
 describe("AgentNameV3 union", () => {
-  it("declares exactly 24 agents (17 v2 + 7 new)", () => {
-    expect(AGENT_NAMES_V3).toHaveLength(24);
+  it("declares exactly 23 agents (17 v2 + 6 new)", () => {
+    expect(AGENT_NAMES_V3).toHaveLength(23);
   });
 
-  it("includes all 7 net-new v3 agents", () => {
+  it("includes all 6 net-new v3 agents", () => {
     const expected = [
       "bootstrap-devops",
       "layout-architect",
       "brand-identity",
-      "animation-choreographer",
       "visual-adapter",
       "accessibility",
       "visual-qa",
@@ -66,9 +65,9 @@ describe("routeViolationToAgentV3 — v3 additions", () => {
     expect(routeViolationToAgentV3("client/lib/microcopy.ts")).toBe("brand-identity");
   });
 
-  it("routes motion paths to animation-choreographer", () => {
-    expect(routeViolationToAgentV3("client/motion/fade-in.ts")).toBe("animation-choreographer");
-    expect(routeViolationToAgentV3("client/hooks/useMotionFadeIn.ts")).toBe("animation-choreographer");
+  it("routes motion paths to ui-components (animation-choreographer removed)", () => {
+    expect(routeViolationToAgentV3("client/motion/fade-in.ts")).toBe("ui-components");
+    expect(routeViolationToAgentV3("client/hooks/useMotionFadeIn.ts")).toBe("ui-components");
   });
 
   it("routes visual QA paths to visual-qa", () => {
