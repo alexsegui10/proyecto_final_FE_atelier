@@ -167,16 +167,31 @@ Cuando emitís `replaced-with-shadcn`:
 
 _Cierra B-w4-9: en el run `2026-05-16T16-15-35`, forms-validations y visual-adapter corrían en paralelo en la vieja `wave-4d-routing-forms-adapter`; vos no podías leer `forms-validations.json` y terminabas hand-rolleando submit handlers (`querySelector` scraping en `SignInClient.tsx`), dejando el `LoginForm` canónico (rhf+zod, 24 tests) HUÉRFANO — montado en ninguna route. Ahora forms-validations corre en `wave-4c-components-forms` (upstream tuyo), su output está en disco, y vos lo consumís._
 
-**Regiones `<form>` que mapean a un form canónico** (carve-out explícito a R0 — la única excepción donde reemplazás un subtree de Stitch por código que NO escribiste vos):
+_Cierra B-w4-13: con el mismo prompt v2, run-11 montó 5 forms (lectura liberal) y run-12 solo 2 (lectura literal de "regiones `<form>`"), dejando CreateBooking/CreateClass/Edit\* huérfanos. Ya NO interpretás dónde va cada form: `forms-validations.json` ahora trae `mountHint` por form ({`pageRoute`, `mountPattern`, `triggerHint?`}). Lo seguís al pie de la letra._
 
-1. Para cada `forms-validations.forms[]`, matcheás su región `<form>` en el HTML de Stitch por `testId` (el `data-testid` que R4 inyecta / que ya viene en el HTML), o por propósito/route si no hay testId.
+**R6 inline — `mountHint.mountPattern === "inline"`** (carve-out explícito a R0 — la única excepción donde reemplazás un subtree de Stitch por código que NO escribiste vos):
+
+1. En la página de `mountHint.pageRoute`, localizás la región `<form>` literal de Stitch (por `testId` que R4 inyecta, o propósito).
 2. **Reemplazás el subtree `<form>...</form>` de Stitch** por el componente canónico montado: `import { <Name> } from "@client/components/forms/<Name>"` y lo renderizás en el lugar exacto donde estaba el `<form>`.
 3. **Preservás el contenedor y estilos circundantes**: la `<section>`, la card (`bg-surface-container...`), padding, headings, ilustraciones alrededor del `<form>` quedan TAL CUAL (eso es look de Stitch, R0 intacto). Solo el `<form>` interno se sustituye.
 4. **NO** hand-rolleás `value`/`onChange`/`onSubmit`/Zod. NO scrapeás inputs con `querySelector`. El componente canónico ya trae rhf + zodResolver + el schema de `forms-validations.schemaFile`.
 5. Props: pasás lo que `forms-validations.json` declara — `onSuccess` (redirect/refresh según `submitFlow`), e `initial` si el form es edit (`initialProp` presente, e.g. `initial: ClassDTO`).
 6. La página que monta un form canónico es CC (`"use client"`) por R13 (el componente usa hooks).
 7. Registrás CADA mount como change type **`mounted-canonical-form`** con `targetSelector` = selector del `<form>` Stitch reemplazado y `rationale` explicando qué form canónico montaste (e.g. `"Mounted canonical LoginForm from forms-validations; Stitch <form> subtree replaced, container/styles preserved."`).
-8. Si una región `<form>` NO tiene form canónico en `forms-validations.json` → cae a R5 (preservás `<form>` + cableás handler a mano contra `api-contract`).
+8. Si una región `<form>` de Stitch NO tiene NINGÚN form canónico con `mountHint` apuntando a ella → cae a R5 (preservás `<form>` + cableás handler a mano contra `api-contract`). (Esto es raro: casi todo form canónico trae mountHint.)
+
+**R6b trigger-dialog — `mountHint.mountPattern === "trigger-dialog"`** (NO hay `<form>` literal en Stitch; el form se abre desde un control):
+
+1. En la página de `mountHint.pageRoute`, localizás el trigger usando `mountHint.triggerHint` (label visible / `data-testid` / descripción — ej. CTA "Reservar plaza", FAB "Crear clase", icono edit por fila).
+2. **Envolvés ese trigger en un shadcn `Dialog`**: `<Dialog><DialogTrigger asChild>{<trigger Stitch tal cual>}</DialogTrigger><DialogContent><{Name} ...props/></DialogContent></Dialog>`. El elemento trigger de Stitch (su markup/estilos/clases) se **preserva intacto** dentro de `DialogTrigger asChild` — R0 sigue valiendo para el trigger.
+3. El componente canónico va dentro de `DialogContent`. `import { <Name> } from "@client/components/forms/<Name>"`.
+4. **NO** hand-rolleás nada. Props: `onSuccess` (cerrar dialog + redirect/refresh según `submitFlow`), e `initial` si es edit-form. Para `triggerHint` de tipo "edit por fila", el trigger se repite por item de la lista → un Dialog por fila con su `initial`.
+5. Registrás cada mount como **`mounted-canonical-form`** con `targetSelector` = selector del trigger resuelto y `rationale` citando el `triggerHint` usado (e.g. `"Mounted canonical CreateClassForm in shadcn Dialog behind FAB 'Crear clase' (mountHint trigger-dialog); Stitch trigger preserved as DialogTrigger."`).
+6. La página es CC (`"use client"`) por R13.
+
+**R6c post-condition (OBLIGATORIA — verificá ANTES de emitir):**
+
+`count(changes con type === "mounted-canonical-form")` **DEBE ser igual a** `len(forms-validations.json.forms)`. Cada form canónico tiene su `mountHint` → cada uno DEBE quedar montado (inline o trigger-dialog). Si algún form quedó sin montar, es **ERROR**: corregilo antes de emitir el artifact (NO lo dejes como `static-to-interactive` ni huérfano — eso es exactamente B-w4-13). El boundary validator de forms-validations garantiza que todo form trae mountHint; no tenés excusa para no montarlo.
 
 **Data NO-form** (listas, fetch de lectura) → sin cambios respecto de antes:
 - Listas hardcodeadas en HTML → reemplazo con map sobre `useQuery({ queryKey: [<endpoint>] })` (o RSC fetch) usando `api-contract.entries[]`. El HTML del primer item queda como template; los demás se generan con map.

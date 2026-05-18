@@ -63,6 +63,7 @@ import type { AgentNameV3 } from "../lib/agents/contracts-v3/agent-names";
 import { validateTestIdContract } from "../lib/agents/contracts-v3/test-id-contract.schema";
 import { validateComponentsCatalogV3 } from "../lib/agents/contracts-v3/components-catalog.schema";
 import { validatePageAdaptations } from "../lib/agents/contracts-v3/page-adaptation.schema";
+import { validateFormsValidationsV3 } from "../lib/agents/contracts-v3/forms-validations.schema";
 import { scanCrossArtifactCoherence } from "../lib/agents/runtime/qa-gates/cross-artifact-coherence-scanner";
 import { createStitchCompletenessGate } from "../lib/agents/runtime/qa-gates/stitch-completeness-scanner";
 import { createStitchFixturePreparerGate } from "../lib/agents/runtime/stitch-fixture-helper";
@@ -377,8 +378,14 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     validators: { "components-catalog.json": validateComponentsCatalogV3 },
   },
   "forms-validations": {
-    promptRel: "lib/agents/prompts-v2/forms-validations.md",
+    // B-w4-13: promoted v2→v3. v3 prompt adds the required `mountHint`
+    // contract so visual-adapter mounts EVERY canonical form deterministically
+    // (run-11 mounted 5, run-12 only 2 with the same v2 prompt — ambiguity).
+    promptRel: "lib/agents/prompts-v3/forms-validations.md",
     artifactFile: "forms-validations.json",
+    // Boundary-validate (closes deuda #23 for this slot): mountHint drift
+    // fails the agent (reprompt / B12) instead of a false-green downstream.
+    validators: { "forms-validations.json": validateFormsValidationsV3 },
   },
   // pages-routing REMOVED in v3 — its App Router role (page.tsx, group
   // layouts, special files, SEO metadata, RSC/CC policy) is absorbed by
