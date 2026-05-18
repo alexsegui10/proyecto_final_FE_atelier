@@ -327,3 +327,82 @@ describe("pageAdaptationsSchema — refinements", () => {
     ).toMatch(/preservedFonts|url/i);
   });
 });
+
+// ─── B-w4-11 regression — the exact F3-run-11 schema drift ───────────
+
+describe("pageAdaptationsSchema — B-w4-11 regression (F3-run-11 drift)", () => {
+  it("rejects the exact run-11 shape with field-specific errors (outputPath / adaptationStatus / rationale)", () => {
+    // Faithful synthesis of out/yoga-regen-v3-2026-05-18T09-18-29's
+    // page-adaptations.json: outputPath instead of generatedPagePath,
+    // adaptationStatus="adapted" (invalid enum), a change with no rationale,
+    // and invented top-level keys. Cast through unknown — this is exactly
+    // the malformed shape the LLM emitted, not a typed object.
+    const runEleven = {
+      generatedAt: "2026-05-18T10:31:27.000Z",
+      stitchHealth: "clean",
+      agent: "visual-adapter",
+      summary: "adapted 15 pages",
+      preservedDesignStrategy: "literal-stitch",
+      rootLayout: "app/layout.tsx",
+      layouts: ["app/(standalone)/layout.tsx"],
+      notes: ["R5: zero replaced-with-shadcn"],
+      pages: [
+        {
+          pageRoute: "/sign-in",
+          layoutGroup: "(standalone)",
+          renderMode: "client",
+          adaptationStatus: "adapted",
+          sourceHtmlPath: ".atelier/stitch-html/sign-in.html",
+          outputPath: "app/(standalone)/sign-in/page.tsx",
+          metadata: { title: "Entrar" },
+          injectedTestIds: ["signin-form"],
+          preservedFonts: [],
+          changes: [
+            {
+              type: "injected-test-id",
+              targetSelector: "header",
+              after: "header-root (R4)",
+            },
+          ],
+        },
+      ],
+    } as unknown;
+    const err = validatePageAdaptations(runEleven);
+    expect(err).not.toBeNull();
+    expect(err).toMatch(/generatedPagePath/);
+    expect(err).toMatch(/adaptationStatus/);
+    expect(err).toMatch(/rationale/);
+  });
+
+  it("rejects invented top-level keys (.strict) — the run-11 drift class", () => {
+    const withExtraKey = {
+      ...adaptation(),
+      summary: "this top-level key is not in the schema",
+    } as unknown;
+    const err = validatePageAdaptations(withExtraKey);
+    expect(err).not.toBeNull();
+    expect(err).toMatch(/[Uu]nrecognized key|summary/);
+  });
+
+  it("rejects a change missing rationale, for any change type", () => {
+    const noRationale = adaptation({
+      pages: [
+        {
+          pageRoute: "/",
+          sourceHtmlPath: ".atelier/stitch-html/home.html",
+          generatedPagePath: "app/page.tsx",
+          adaptationStatus: "clean",
+          changes: [
+            // @ts-expect-error — intentionally missing required `rationale`
+            { type: "injected-test-id", targetSelector: "header" },
+          ],
+          preservedFonts: [],
+          injectedTestIds: [],
+        },
+      ],
+    });
+    const err = validatePageAdaptations(noRationale);
+    expect(err).not.toBeNull();
+    expect(err).toMatch(/rationale/);
+  });
+});

@@ -62,6 +62,7 @@ import {
 import type { AgentNameV3 } from "../lib/agents/contracts-v3/agent-names";
 import { validateTestIdContract } from "../lib/agents/contracts-v3/test-id-contract.schema";
 import { validateComponentsCatalogV3 } from "../lib/agents/contracts-v3/components-catalog.schema";
+import { validatePageAdaptations } from "../lib/agents/contracts-v3/page-adaptation.schema";
 import { scanCrossArtifactCoherence } from "../lib/agents/runtime/qa-gates/cross-artifact-coherence-scanner";
 import { createStitchCompletenessGate } from "../lib/agents/runtime/qa-gates/stitch-completeness-scanner";
 import { createStitchFixturePreparerGate } from "../lib/agents/runtime/stitch-fixture-helper";
@@ -385,6 +386,10 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   "visual-adapter": {
     promptRel: "lib/agents/prompts-v3/visual-adapter.md",
     artifactFile: "page-adaptations.json",
+    // B-w4-12: boundary-validate the artifact so schema drift fails the
+    // agent (reprompt / B12) instead of reaching downstream waves as a
+    // false-green. Symmetric with ui-components / layout-architect.
+    validators: { "page-adaptations.json": validatePageAdaptations },
   },
 };
 

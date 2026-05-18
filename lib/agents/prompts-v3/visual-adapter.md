@@ -26,6 +26,50 @@ Tu trabajo cierra el **bug arquitectónico de v2** donde UI Components re-autor�
 
 - `.atelier/page-adaptations.json` (valida contra `lib/agents/contracts-v3/page-adaptation.schema.ts`).
 
+**Estructura EXACTA — pineate a este skeleton (motivación: B-w4-11).** En F3-run-11 el artifact divergió del schema (`outputPath` en vez de `generatedPagePath`, `adaptationStatus: "adapted"` inválido, 58/73 changes sin `rationale`, keys top-level inventadas) y como ahora se valida en boundary (B-w4-12), eso te repromptea. Emití EXACTAMENTE esta forma:
+
+```jsonc
+{
+  "generatedAt": "2026-05-18T10:00:00.000Z",   // ISO datetime
+  "stitchProjectId": "<id de stitch-analysis>", // REQUIRED, string no vacío
+  "stitchHealth": "clean",                      // "clean" | "degraded" (espejo de stitch-analysis)
+  "pages": [
+    {
+      "pageRoute": "/sign-in",                  // empieza con "/"
+      "sourceHtmlPath": ".atelier/stitch-html/sign-in.html",
+      "generatedPagePath": "app/sign-in/page.tsx", // "app/page.tsx" o "app/<route>/page.tsx"
+      "adaptationStatus": "clean",              // SOLO "clean" | "partial" | "requires-reprompt"
+      "renderMode": "client",                   // "server" | "client" (opcional)
+      "metadata": { "title": "Entrar — Áurea Yoga", "description": "..." }, // title no vacío
+      "preservedFonts": ["https://fonts.../x.css"],
+      "injectedTestIds": ["signin-form"],       // ^[a-z][a-z0-9-]*$
+      "changes": [
+        {
+          "type": "mounted-canonical-form",     // ∈ ADAPTATION_CHANGE_TYPES
+          "targetSelector": "section > div.bg-surface-container-lowest > form",
+          "rationale": "Mounted canonical LoginForm from forms-validations; Stitch <form> subtree replaced, container/styles preserved." // ≥10 chars, SIEMPRE
+        }
+      ],
+      "reasonForReprompt": "..."                // SOLO si adaptationStatus === "requires-reprompt" (≥10 chars)
+    }
+  ],
+  "specialFiles": {                             // opcional; si lo emitís, exactamente estas 3 claves
+    "notFound": "app/not-found.tsx",
+    "error": "app/error.tsx",
+    "loading": "app/loading.tsx"
+  }
+}
+```
+
+Prohibiciones EXPLÍCITAS (el schema es `.strict()` — un solo desvío = reprompt):
+
+- **El schema es `.strict()` — NO emitas NINGÚN campo top-level fuera del skeleton.** Prohibido: `agent`, `summary`, `preservedDesignStrategy`, `rootLayout`, `layouts`, `notes`, o cualquier otro. Solo `generatedAt`, `stitchProjectId`, `stitchHealth`, `pages`, `specialFiles`.
+- **NO uses `outputPath`.** El campo correcto es **`generatedPagePath`**.
+- **NO uses `adaptationStatus: "adapted"`.** El enum es EXACTAMENTE `{clean | partial | requires-reprompt}`. "adapted" NO existe.
+- **CADA change DEBE tener `rationale` de ≥10 chars.** Sin excepción, para TODOS los `type` (también `injected-test-id`, `injected-microcopy`, etc.).
+- **Per-page el objeto también es `.strict()`** — no agregues claves fuera de las del skeleton (nada de `layoutGroup`, `outputPath`, etc.).
+- Si el boundary validator te rechaza, el mensaje te dice el campo exacto — corregí ESE campo, no reestructures todo.
+
 ### Archivos físicos en el workspace generado
 
 - `app/<route>/page.tsx` por cada page de `layout-tree.pages[]`, **con `export const metadata: Metadata`** (R11).
