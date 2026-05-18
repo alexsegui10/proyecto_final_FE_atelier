@@ -132,8 +132,9 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
   ],
   // Progressive wave-4 slices. Each adds one sub-wave so F3-run-10 can be
   // bisected (4a settles api-contract, 4b frontend-architecture, 4c
-  // components-catalog, 4d the 3 parallel consumers). `wave-1-4` is the
-  // full alias (== wave-1-4d).
+  // ui-components ‖ forms-validations, 4d visual-adapter alone — the
+  // downstream convergence, B-w4-9). `wave-1-4` is the full alias
+  // (== wave-1-4d).
   "wave-1-4a": [
     "wave-1-discovery",
     "wave-1-bootstrap",
@@ -162,7 +163,7 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-3-app-security",
     "wave-4a-api",
     "wave-4b-frontend-arch",
-    "wave-4c-components",
+    "wave-4c-components-forms",
   ],
   "wave-1-4d": [
     "wave-1-discovery",
@@ -173,8 +174,8 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-3-app-security",
     "wave-4a-api",
     "wave-4b-frontend-arch",
-    "wave-4c-components",
-    "wave-4d-routing-forms-adapter",
+    "wave-4c-components-forms",
+    "wave-4d-adapter",
   ],
   "wave-1-4": [
     "wave-1-discovery",
@@ -185,8 +186,8 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-3-app-security",
     "wave-4a-api",
     "wave-4b-frontend-arch",
-    "wave-4c-components",
-    "wave-4d-routing-forms-adapter",
+    "wave-4c-components-forms",
+    "wave-4d-adapter",
   ],
   all: WAVES_V3.map((w) => w.name),
 };

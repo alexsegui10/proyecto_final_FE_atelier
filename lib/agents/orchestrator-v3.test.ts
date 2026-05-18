@@ -105,23 +105,27 @@ describe("WAVES_V3 — structural sanity", () => {
     expect(w7?.agents).toEqual(["visual-qa"]);
   });
 
-  it("sub-divides wave-4 into 4 sequential sub-waves (B-w4-2)", () => {
+  it("sub-divides wave-4 into 4 sequential sub-waves (B-w4-2, B-w4-9)", () => {
     const w4a = WAVES_V3.find((w) => w.name === "wave-4a-api");
     const w4b = WAVES_V3.find((w) => w.name === "wave-4b-frontend-arch");
-    const w4c = WAVES_V3.find((w) => w.name === "wave-4c-components");
-    const w4d = WAVES_V3.find((w) => w.name === "wave-4d-routing-forms-adapter");
+    const w4c = WAVES_V3.find((w) => w.name === "wave-4c-components-forms");
+    const w4d = WAVES_V3.find((w) => w.name === "wave-4d-adapter");
 
     expect(w4a?.agents).toEqual(["api-backend"]);
     expect(w4b?.agents).toEqual(["frontend-architect"]);
-    expect(w4c?.agents).toEqual(["ui-components"]);
-    expect(w4d?.agents).toEqual(["forms-validations", "visual-adapter"]);
+    // B-w4-9: forms-validations parallelizes with ui-components in 4c
+    // (independent — both consume only 4a/4b artifacts); visual-adapter
+    // is isolated downstream in 4d so it can consume forms-validations.json.
+    expect(w4c?.agents).toEqual(["ui-components", "forms-validations"]);
+    expect(w4d?.agents).toEqual(["visual-adapter"]);
     expect(w4d?.agents).not.toContain("pages-routing");
+    expect(w4d?.agents).not.toContain("forms-validations");
 
     // Sequential chain: 4a → 4b → 4c → 4d, anchored on wave-3.
     expect(w4a?.dependsOn).toEqual(["wave-3-app-security"]);
     expect(w4b?.dependsOn).toEqual(["wave-4a-api"]);
     expect(w4c?.dependsOn).toEqual(["wave-4b-frontend-arch"]);
-    expect(w4d?.dependsOn).toEqual(["wave-4c-components"]);
+    expect(w4d?.dependsOn).toEqual(["wave-4c-components-forms"]);
 
     // The old single slot is gone; the ghost agent never came back.
     // (cast: "wave-4-presentation" is no longer a member of WaveNameV3,
@@ -132,7 +136,7 @@ describe("WAVES_V3 — structural sanity", () => {
 
     // wave-5 now hangs off the last wave-4 sub-wave.
     const w5 = WAVES_V3.find((w) => w.name === "wave-5-data-tests");
-    expect(w5?.dependsOn).toEqual(["wave-4d-routing-forms-adapter"]);
+    expect(w5?.dependsOn).toEqual(["wave-4d-adapter"]);
   });
 
   it("generatorAgentOrderV3 returns 22 deterministic entries", () => {
@@ -607,7 +611,7 @@ describe("type plumbing", () => {
     void r;
   });
 
-  it("WaveV3 names cover all 10 slices", () => {
+  it("WaveV3 names cover all 13 slices", () => {
     const expected: WaveV3["name"][] = [
       "wave-1-discovery",
       "wave-1-bootstrap",
@@ -617,8 +621,8 @@ describe("type plumbing", () => {
       "wave-3-app-security",
       "wave-4a-api",
       "wave-4b-frontend-arch",
-      "wave-4c-components",
-      "wave-4d-routing-forms-adapter",
+      "wave-4c-components-forms",
+      "wave-4d-adapter",
       "wave-5-data-tests",
       "wave-6-static-qa",
       "wave-7-runtime-qa",

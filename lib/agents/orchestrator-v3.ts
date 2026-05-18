@@ -25,9 +25,9 @@
  *      ↓
  *   wave-4b-frontend-arch       (frontend-architect)
  *      ↓
- *   wave-4c-components          (ui-components)
+ *   wave-4c-components-forms    (ui-components ‖ forms-validations)
  *      ↓
- *   wave-4d-routing-forms-adapter (forms-validations ‖ visual-adapter)
+ *   wave-4d-adapter             (visual-adapter)
  *      ↓
  *   wave-5-data-tests     (seeds-fixtures ‖ tests-writer ‖ accessibility)
  *      ↓
@@ -40,9 +40,13 @@
  * → architect), Wave 2 has TWO parallel sub-waves (design + domain that
  * happen to be independent of each other beyond architect/bootstrap inputs),
  * and Wave 4 was sub-divided into FOUR sequential sub-waves (4a-api → 4b-
- * frontend-arch → 4c-components → 4d-routing-forms-adapter) because the 5
- * v2-reused agents have a genuine producer→consumer chain (api-contract →
+ * frontend-arch → 4c-components-forms → 4d-adapter) because the v2-reused
+ * agents have a genuine producer→consumer chain (api-contract →
  * frontend-architecture → components-catalog) that cannot run concurrently.
+ * forms-validations and ui-components share NO producer→consumer edge (both
+ * consume only 4a/4b artifacts), so they parallelize in 4c; visual-adapter
+ * is isolated in 4d-adapter as the downstream convergence that consumes
+ * forms-validations.json for R6 (B-w4-9 — see V3_PROGRESS.md).
  * See V3_PROGRESS.md "Cambios arquitecturales no-bug" (pre-flight B-w4-2).
  *
  * Agents within a wave run in PARALLEL via Promise.allSettled.
@@ -64,8 +68,8 @@ export type WaveNameV3 =
   | "wave-3-app-security"
   | "wave-4a-api"
   | "wave-4b-frontend-arch"
-  | "wave-4c-components"
-  | "wave-4d-routing-forms-adapter"
+  | "wave-4c-components-forms"
+  | "wave-4d-adapter"
   | "wave-5-data-tests"
   | "wave-6-static-qa"
   | "wave-7-runtime-qa";
@@ -116,26 +120,30 @@ export const WAVES_V3: readonly WaveV3[] = [
     dependsOn: ["wave-4a-api"],
   },
   {
-    name: "wave-4c-components",
-    agents: ["ui-components"],
+    // ui-components and forms-validations DO parallelize: both consume
+    // ONLY 4a/4b artifacts (api-contract, frontend-architecture) — they
+    // share no producer→consumer edge. forms-validations references
+    // @client/components/ui/* by stable path convention, NOT by reading
+    // components-catalog.json at generation time, so 4c concurrency is safe.
+    name: "wave-4c-components-forms",
+    agents: ["ui-components", "forms-validations"],
     dependsOn: ["wave-4b-frontend-arch"],
   },
   {
-    // These 2 DO parallelize: their upstream deps (api-contract,
-    // frontend-architecture, components-catalog) are all settled by 4a-4c.
-    // visual-adapter's only intra-slot dependency (ui-components shadcn
-    // primitives, R5 last-resort) is satisfied because 4c ran first.
-    // forms-validations and visual-adapter write disjoint paths
-    // (client/forms vs app/*), so no write-collision (B-w4-7 closed by
-    // removing pages-routing — visual-adapter is the single app/* owner).
-    name: "wave-4d-routing-forms-adapter",
-    agents: ["forms-validations", "visual-adapter"],
-    dependsOn: ["wave-4c-components"],
+    // visual-adapter isolated downstream: it is the single app/* owner
+    // (B-w4-7) AND the convergence point that consumes forms-validations.json
+    // to mount the canonical client/components/forms/* components for R6
+    // forms-wiring. Running it concurrently with forms-validations (the old
+    // wave-4d-routing-forms-adapter) orphaned the canonical forms and forced
+    // hand-rolled submit handlers — fixed by isolating it here (B-w4-9).
+    name: "wave-4d-adapter",
+    agents: ["visual-adapter"],
+    dependsOn: ["wave-4c-components-forms"],
   },
   {
     name: "wave-5-data-tests",
     agents: ["seeds-fixtures", "tests-writer", "accessibility"],
-    dependsOn: ["wave-4d-routing-forms-adapter"],
+    dependsOn: ["wave-4d-adapter"],
   },
   { name: "wave-6-static-qa",     agents: ["qa-reviewer"],        dependsOn: ["wave-5-data-tests"] },
   { name: "wave-7-runtime-qa",    agents: ["visual-qa"],          dependsOn: ["wave-6-static-qa"] },
