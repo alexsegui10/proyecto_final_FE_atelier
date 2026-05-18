@@ -192,6 +192,32 @@ describe("pageAdaptationsSchema — refinements", () => {
     ).toBeNull();
   });
 
+  it("accepts mounted-canonical-form change (B-w4-9 R6 carve-out)", () => {
+    expect(
+      validatePageAdaptations(
+        adaptation({
+          pages: [
+            {
+              pageRoute: "/sign-in",
+              sourceHtmlPath: ".atelier/stitch-html/sign-in.html",
+              generatedPagePath: "app/sign-in/page.tsx",
+              adaptationStatus: "clean",
+              changes: [
+                {
+                  type: "mounted-canonical-form",
+                  targetSelector: "form[data-testid=\"signin-form\"]",
+                  rationale: "Mounted canonical LoginForm from forms-validations; Stitch <form> subtree replaced, container/styles preserved.",
+                },
+              ],
+              preservedFonts: [],
+              injectedTestIds: [],
+            },
+          ],
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("rejects duplicate pageRoute in pages[]", () => {
     expect(
       validatePageAdaptations(

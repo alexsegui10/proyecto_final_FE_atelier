@@ -44,6 +44,14 @@ export const ADAPTATION_CHANGE_TYPES = [
   "wired-auth",
   /** <form> wired with useForm + zod schema + submit handler. */
   "wired-form",
+  /**
+   * B-w4-9 carve-out to R0: a Stitch <form> region replaced by mounting
+   * the canonical client/components/forms/<Name> component produced by
+   * forms-validations, with the surrounding container/styles preserved.
+   * Distinct from `wired-form` (hand-rolled useForm+zod in place) — here
+   * the canonical rhf+zod component is imported and mounted, not authored.
+   */
+  "mounted-canonical-form",
   /** Lorem ipsum / placeholder text replaced with microcopy.<key>. */
   "injected-microcopy",
   /** data-testid attribute inserted from test-id-contract.json. */
