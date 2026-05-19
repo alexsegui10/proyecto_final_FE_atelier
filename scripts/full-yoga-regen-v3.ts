@@ -64,6 +64,8 @@ import { validateTestIdContract } from "../lib/agents/contracts-v3/test-id-contr
 import { validateComponentsCatalogV3 } from "../lib/agents/contracts-v3/components-catalog.schema";
 import { validatePageAdaptations } from "../lib/agents/contracts-v3/page-adaptation.schema";
 import { validateFormsValidationsV3 } from "../lib/agents/contracts-v3/forms-validations.schema";
+import { validateSeedsFixtures } from "../lib/agents/contracts-v3/seeds-fixtures.schema";
+import { validateTestsWriter } from "../lib/agents/contracts-v3/tests-writer.schema";
 import { scanCrossArtifactCoherence } from "../lib/agents/runtime/qa-gates/cross-artifact-coherence-scanner";
 import { createStitchCompletenessGate } from "../lib/agents/runtime/qa-gates/stitch-completeness-scanner";
 import { createStitchFixturePreparerGate } from "../lib/agents/runtime/stitch-fixture-helper";
@@ -415,17 +417,21 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     validators: { "page-adaptations.json": validatePageAdaptations },
   },
   // wave-5a — seeds-fixtures (v2 prompt reused; mismo código v2 corre en
-  // v3, las diferencias se gestionan vía artifact set). Sin validators:
-  // schema/validator de wave-5 es TBD post-F3-run-14 (deuda #23).
+  // v3, las diferencias se gestionan vía artifact set). Boundary-validate
+  // con schema shape-only diseñado desde el output real de F3-run-14
+  // (cierra deuda #23 para el slot seeds-fixtures).
   "seeds-fixtures": {
     promptRel: "lib/agents/prompts-v2/seeds-fixtures.md",
     artifactFile: "seeds-fixtures.json",
+    validators: { "seeds-fixtures.json": validateSeedsFixtures },
   },
   // wave-5b — tests-writer (v2 prompt reused). Consume seeds-fixtures.json
   // de wave-5a (dep secuencial: wave-5b-tests dependsOn wave-5a-seeds).
+  // Boundary-validate con schema shape-only de F3-run-14 (deuda #23).
   "tests-writer": {
     promptRel: "lib/agents/prompts-v2/tests-writer.md",
     artifactFile: "tests-writer.json",
+    validators: { "tests-writer.json": validateTestsWriter },
   },
 };
 
