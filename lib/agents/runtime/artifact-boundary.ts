@@ -34,6 +34,12 @@ function describeError(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** Notified once per artifact that passed schema validation. */
+export type OnValidArtifact = (
+  agent: string,
+  file: string,
+) => void | Promise<void>;
+
 /**
  * Validate every `(filename → validator)` pair for `agent` against the
  * files it emitted under `<workDir>/.atelier/`. Throws on the first
@@ -43,11 +49,18 @@ function describeError(e: unknown): string {
  * shape cascade into a downstream gate throw.
  *
  * No-op when `validators` is undefined or empty.
+ *
+ * The success path used to be entirely silent (B-w4-11/12: an absent log
+ * line was indistinguishable from "validator never ran" when auditing
+ * F3-run-13). `onValid` is invoked once per artifact that passes so the
+ * runner can emit a `[boundary] ✓` trace into `_orchestration.log`. It
+ * never affects the error path — a schema violation still throws.
  */
 export async function assertArtifactsValid(
   agent: string,
   workDir: string,
   validators: Record<string, ArtifactValidator> | undefined,
+  onValid?: OnValidArtifact,
 ): Promise<void> {
   if (!validators) return;
   for (const [file, validate] of Object.entries(validators)) {
@@ -70,5 +83,6 @@ export async function assertArtifactsValid(
           `in its prompt; do NOT let this reach a gate.)`,
       );
     }
+    await onValid?.(agent, file);
   }
 }

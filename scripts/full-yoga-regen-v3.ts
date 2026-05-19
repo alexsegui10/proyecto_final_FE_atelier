@@ -560,7 +560,12 @@ function makeRealRunner(): AgentRunnerV3 {
     // or returning. A schema violation throws here, which the orchestrator
     // treats as an agent failure (reprompt / B12) — instead of a malformed
     // shape cascading into a downstream gate throw (the F3-run-10a crash).
-    await assertArtifactsValid(input.agent, input.workDir, slot.validators);
+    await assertArtifactsValid(
+      input.agent,
+      input.workDir,
+      slot.validators,
+      (agent, file) => log("boundary", `✓ ${agent} ${file} schema ok`),
+    );
 
     // Bundle composition for agents that emit multiple sibling files.
     let artifact: unknown = result.artifact;

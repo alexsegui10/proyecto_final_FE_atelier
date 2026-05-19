@@ -75,4 +75,43 @@ describe("assertArtifactsValid — boundary validation (B-w4-5b)", () => {
       assertArtifactsValid("some-agent", workDir, undefined),
     ).resolves.toBeUndefined();
   });
+
+  it("invokes onValid once per artifact that passes (success-path trace)", async () => {
+    await writeArtifact("test-id-contract.json", {
+      generatedAt: new Date().toISOString(),
+      entries: [
+        { selector: "signin-form", purpose: "login form on /sign-in", requiredOn: { pageRoute: "/sign-in" }, criticality: "critical", consumedByFlow: ["client-anonymous"] },
+        { selector: "signup-form", purpose: "register form on /sign-up", requiredOn: { pageRoute: "/sign-up" }, criticality: "critical", consumedByFlow: ["client-anonymous"] },
+        { selector: "header-root", purpose: "shell header root wrapper", requiredOn: { component: "AppHeader" }, criticality: "critical", consumedByFlow: ["client-anonymous"] },
+        { selector: "nav-primary", purpose: "primary navigation list", requiredOn: { component: "NavPrimary" }, criticality: "critical", consumedByFlow: ["client-anonymous"] },
+        { selector: "signout-button", purpose: "sign out action in shell", requiredOn: { component: "SignoutButton" }, criticality: "critical", consumedByFlow: ["client-authenticated"] },
+      ],
+    });
+    const seen: Array<[string, string]> = [];
+    await assertArtifactsValid(
+      "layout-architect",
+      workDir,
+      { "test-id-contract.json": validateTestIdContract },
+      (agent, file) => {
+        seen.push([agent, file]);
+      },
+    );
+    expect(seen).toEqual([["layout-architect", "test-id-contract.json"]]);
+  });
+
+  it("does NOT invoke onValid when the artifact violates its schema", async () => {
+    await writeArtifact("test-id-contract.json", { selectors: [] });
+    const seen: Array<[string, string]> = [];
+    await expect(
+      assertArtifactsValid(
+        "layout-architect",
+        workDir,
+        { "test-id-contract.json": validateTestIdContract },
+        (agent, file) => {
+          seen.push([agent, file]);
+        },
+      ),
+    ).rejects.toThrow(/violates its schema/);
+    expect(seen).toEqual([]);
+  });
 });
