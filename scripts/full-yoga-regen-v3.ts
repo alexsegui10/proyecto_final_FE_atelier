@@ -209,6 +209,23 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-5a-seeds",
     "wave-5b-tests",
   ],
+  // wave-1-6 — todo wave-1-5 + wave-6-static-qa (qa-reviewer). Para en
+  // wave-6 (NO wave-7 — shape-first: wave-7+A2 será commit dedicado).
+  "wave-1-6": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+    "wave-4c-components-forms",
+    "wave-4d-adapter",
+    "wave-5a-seeds",
+    "wave-5b-tests",
+    "wave-6-static-qa",
+  ],
   all: WAVES_V3.map((w) => w.name),
 };
 
@@ -432,6 +449,16 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     promptRel: "lib/agents/prompts-v2/tests-writer.md",
     artifactFile: "tests-writer.json",
     validators: { "tests-writer.json": validateTestsWriter },
+  },
+  // wave-6 — qa-reviewer (v2 prompt reused). artifactFile ≠ nombre de
+  // agente es la norma v2 (cf. auth-security→auth-mechanics.json); el
+  // runner lo carga genérico → r.outcome.artifact → cast QaArtifactV3 en
+  // orchestrator-v3.ts:740 (special-casing + fix-loop ya existen). Único
+  // output, sin siblings → sin bundleLoader. Sin validators: schema de
+  // qa-report.json es TBD post-F3-run-15 (disciplina shape-first; deuda #23).
+  "qa-reviewer": {
+    promptRel: "lib/agents/prompts-v2/qa-reviewer.md",
+    artifactFile: "qa-report.json",
   },
 };
 
