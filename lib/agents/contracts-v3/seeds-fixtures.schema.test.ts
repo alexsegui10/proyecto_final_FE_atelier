@@ -99,3 +99,69 @@ describe("validateSeedsFixtures — shape-only (v3 wave-5a)", () => {
     expect(r).toMatch(/seededEntities\.0/);
   });
 });
+
+// ─── B-w5-1 regression — the exact F3-run-15 divergent shape ─────────
+// run-15's seeds-fixtures.json followed the (under-specified) v2 prompt:
+// runCommand/resetCommand regrouped into `seedCommands`, userDistribution
+// + constraints omitted, fixedCredentials[1] a free-text {note} entry.
+// The v3 prompt now pins the full shape; the validator MUST reject this
+// exact shape so a regression is caught at the boundary, not false-green.
+
+describe("validateSeedsFixtures — B-w5-1 regression (F3-run-15 shape)", () => {
+  const run15Shape = {
+    seedScript: "prisma/seed.ts",
+    seedCommands: {
+      seed: "pnpm prisma:seed",
+      reset: "SEED_RESET=true pnpm prisma:seed",
+      regenerateJson: "pnpm tsx prisma/seed.ts --dump",
+    },
+    seedDataFiles: ["prisma/seed-data/admin.json"],
+    fixtureFiles: ["tests/fixtures/users.fixture.ts"],
+    fixedCredentials: [
+      { email: "admin@demo.yoga", password: "demo1234", role: "admin", name: "Admin Demo" },
+      { note: "Las demás cuentas usan demo1234. Emails en seed-data." },
+    ],
+    seededEntities: [{ entity: "User", count: 16, notes: "x" }],
+    totalRecords: 141,
+    edgeCasesCovered: [{ case: "x", where: "y" }],
+    notes: ["..."],
+  };
+
+  it("rejects the run-15 shape (regression must not pass)", () => {
+    expect(validateSeedsFixtures(run15Shape)).not.toBeNull();
+  });
+
+  it("flags runCommand + resetCommand missing (regrouped into seedCommands)", () => {
+    const r = validateSeedsFixtures(run15Shape) ?? "";
+    expect(r).toMatch(/runCommand/);
+    expect(r).toMatch(/resetCommand/);
+  });
+
+  it("flags userDistribution + constraints omitted", () => {
+    // userDistribution is the 4th issue; constraints the last — widen the
+    // slice by validating a shape whose only defects are those two.
+    const r =
+      validateSeedsFixtures({
+        ...run15Shape,
+        runCommand: "pnpm prisma:seed",
+        resetCommand: "SEED_RESET=true pnpm tsx prisma/seed.ts",
+        fixedCredentials: [
+          { email: "a@b.c", password: "p", role: "admin", name: "n" },
+        ],
+      }) ?? "";
+    expect(r).toMatch(/userDistribution/);
+    expect(r).toMatch(/constraints/);
+  });
+
+  it("flags the fixedCredentials note entry (strict sub-object)", () => {
+    const r =
+      validateSeedsFixtures({
+        ...run15Shape,
+        runCommand: "x",
+        resetCommand: "y",
+        userDistribution: { admin: 1 },
+        constraints: { uniqueEmails: true },
+      }) ?? "";
+    expect(r).toMatch(/fixedCredentials\.1/);
+  });
+});

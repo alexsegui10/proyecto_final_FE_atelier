@@ -438,7 +438,9 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   // con schema shape-only diseñado desde el output real de F3-run-14
   // (cierra deuda #23 para el slot seeds-fixtures).
   "seeds-fixtures": {
-    promptRel: "lib/agents/prompts-v2/seeds-fixtures.md",
+    // B-w5-1: prompt promovido v2→v3 con skeleton vinculante fiel al
+    // schema v3 (el v2 sub-especificaba la shape → F3-run-15 falló).
+    promptRel: "lib/agents/prompts-v3/seeds-fixtures.md",
     artifactFile: "seeds-fixtures.json",
     validators: { "seeds-fixtures.json": validateSeedsFixtures },
   },
@@ -446,7 +448,9 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
   // de wave-5a (dep secuencial: wave-5b-tests dependsOn wave-5a-seeds).
   // Boundary-validate con schema shape-only de F3-run-14 (deuda #23).
   "tests-writer": {
-    promptRel: "lib/agents/prompts-v2/tests-writer.md",
+    // B-w5-1 (preventivo): prompt promovido v2→v3, skeleton fiel al
+    // schema v3 (v2 omitía generatedAt/runner/verification/notes/endpoints*).
+    promptRel: "lib/agents/prompts-v3/tests-writer.md",
     artifactFile: "tests-writer.json",
     validators: { "tests-writer.json": validateTestsWriter },
   },

@@ -81,3 +81,45 @@ describe("validateTestsWriter — shape-only + counts refinement (v3 wave-5b)", 
     expect(r).toMatch(/verification/);
   });
 });
+
+// ─── B-w5-1 regression (preventive) — under-specified v2 shape ──────
+// The v2 prompt skeleton omitted generatedAt/runner/verification/notes
+// and coverage.endpoints*. A prompt-faithful v2 output would look like
+// this; the v3 schema MUST reject it so the v3 prompt promotion is the
+// only path to a passing artifact.
+
+describe("validateTestsWriter — B-w5-1 regression (under-specified v2 shape)", () => {
+  const v2Shape = {
+    files: [
+      { path: "tests/unit/x.test.ts", layer: "unit", tests: 60, feature: "x" },
+    ],
+    counts: { unit: 60, integration: 45, e2e: 8, total: 113 },
+    coverage: { servicesPercent: 85, controllersPercent: 100 },
+  };
+
+  it("rejects the under-specified v2 shape", () => {
+    expect(validateTestsWriter(v2Shape)).not.toBeNull();
+  });
+
+  it("flags the v3-required fields the v2 skeleton omitted", () => {
+    const r = validateTestsWriter(v2Shape) ?? "";
+    // first 5 issues surfaced: generatedAt, runner, verification, notes,
+    // coverage.endpointsCovered — assert the load-bearing ones.
+    expect(r).toMatch(/generatedAt/);
+    expect(r).toMatch(/runner/);
+  });
+
+  it("flags coverage missing endpointsCovered/endpointsTotal", () => {
+    const r =
+      validateTestsWriter({
+        generatedAt: "2026-05-19T00:00:00.000Z",
+        runner: { unit: "vitest", integration: "vitest", e2e: "playwright" },
+        files: v2Shape.files,
+        counts: v2Shape.counts,
+        coverage: { servicesPercent: 85, controllersPercent: 100 },
+        verification: { status: "green" },
+        notes: ["x"],
+      }) ?? "";
+    expect(r).toMatch(/coverage\.endpoints/);
+  });
+});
