@@ -7,17 +7,16 @@ import {
 import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, isAgentNameV3 } from "./contracts-v3/agent-names";
 
 describe("AgentNameV3 union", () => {
-  it("declares exactly 22 agents (16 v2 + 6 new; pages-routing dropped in v3)", () => {
-    expect(AGENT_NAMES_V3).toHaveLength(22);
+  it("declares exactly 21 agents (16 v2 + 5 new; pages-routing dropped in v3, accessibility removed pre-run-14)", () => {
+    expect(AGENT_NAMES_V3).toHaveLength(21);
   });
 
-  it("includes all 6 net-new v3 agents", () => {
+  it("includes all 5 net-new v3 agents", () => {
     const expected = [
       "bootstrap-devops",
       "layout-architect",
       "brand-identity",
       "visual-adapter",
-      "accessibility",
       "visual-qa",
     ];
     for (const a of expected) {

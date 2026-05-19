@@ -191,6 +191,22 @@ const SLICE_DEFS: Record<string, ReadonlyArray<WaveNameV3>> = {
     "wave-4c-components-forms",
     "wave-4d-adapter",
   ],
+  // wave-1-5 — todo wave-1-4 + cierre de wave-5 (5a seeds → 5b tests).
+  // Para por defecto en wave-5b-tests (no llega a wave-6/7 — eso es `all`).
+  "wave-1-5": [
+    "wave-1-discovery",
+    "wave-1-bootstrap",
+    "wave-1-planning",
+    "wave-2-design",
+    "wave-2-domain",
+    "wave-3-app-security",
+    "wave-4a-api",
+    "wave-4b-frontend-arch",
+    "wave-4c-components-forms",
+    "wave-4d-adapter",
+    "wave-5a-seeds",
+    "wave-5b-tests",
+  ],
   all: WAVES_V3.map((w) => w.name),
 };
 
@@ -397,6 +413,19 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     // agent (reprompt / B12) instead of reaching downstream waves as a
     // false-green. Symmetric with ui-components / layout-architect.
     validators: { "page-adaptations.json": validatePageAdaptations },
+  },
+  // wave-5a — seeds-fixtures (v2 prompt reused; mismo código v2 corre en
+  // v3, las diferencias se gestionan vía artifact set). Sin validators:
+  // schema/validator de wave-5 es TBD post-F3-run-14 (deuda #23).
+  "seeds-fixtures": {
+    promptRel: "lib/agents/prompts-v2/seeds-fixtures.md",
+    artifactFile: "seeds-fixtures.json",
+  },
+  // wave-5b — tests-writer (v2 prompt reused). Consume seeds-fixtures.json
+  // de wave-5a (dep secuencial: wave-5b-tests dependsOn wave-5a-seeds).
+  "tests-writer": {
+    promptRel: "lib/agents/prompts-v2/tests-writer.md",
+    artifactFile: "tests-writer.json",
   },
 };
 

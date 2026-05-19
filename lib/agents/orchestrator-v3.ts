@@ -1,5 +1,5 @@
 /**
- * Atelier v3 orchestrator — 7 waves, 23 agents.
+ * Atelier v3 orchestrator — 7 logical waves (14 dependency-ordered slices), 21 agents.
  *
  * Companion to `./orchestrator-v2.ts`. The v2 module stays intact; v3 is
  * opt-in via the `--v3` flag in the generation scripts. The two modules
@@ -29,7 +29,9 @@
  *      ↓
  *   wave-4d-adapter             (visual-adapter)
  *      ↓
- *   wave-5-data-tests     (seeds-fixtures ‖ tests-writer ‖ accessibility)
+ *   wave-5a-seeds         (seeds-fixtures)
+ *      ↓
+ *   wave-5b-tests         (tests-writer)
  *      ↓
  *   wave-6-static-qa      (qa-reviewer)
  *      ↓
@@ -70,7 +72,8 @@ export type WaveNameV3 =
   | "wave-4b-frontend-arch"
   | "wave-4c-components-forms"
   | "wave-4d-adapter"
-  | "wave-5-data-tests"
+  | "wave-5a-seeds"
+  | "wave-5b-tests"
   | "wave-6-static-qa"
   | "wave-7-runtime-qa";
 
@@ -141,11 +144,16 @@ export const WAVES_V3: readonly WaveV3[] = [
     dependsOn: ["wave-4c-components-forms"],
   },
   {
-    name: "wave-5-data-tests",
-    agents: ["seeds-fixtures", "tests-writer", "accessibility"],
+    name: "wave-5a-seeds",
+    agents: ["seeds-fixtures"],
     dependsOn: ["wave-4d-adapter"],
   },
-  { name: "wave-6-static-qa",     agents: ["qa-reviewer"],        dependsOn: ["wave-5-data-tests"] },
+  {
+    name: "wave-5b-tests",
+    agents: ["tests-writer"],
+    dependsOn: ["wave-5a-seeds"],
+  },
+  { name: "wave-6-static-qa",     agents: ["qa-reviewer"],        dependsOn: ["wave-5b-tests"] },
   { name: "wave-7-runtime-qa",    agents: ["visual-qa"],          dependsOn: ["wave-6-static-qa"] },
 ] as const;
 

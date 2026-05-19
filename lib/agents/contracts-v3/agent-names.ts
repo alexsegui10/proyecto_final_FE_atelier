@@ -10,12 +10,11 @@
  * only v3 drops pages-routing. See V3_PROGRESS.md "Cambios arquitecturales").
  *
  * 16 of the 17 v2 agents keep their names verbatim (pages-routing dropped).
- * The 6 net-new are:
+ * The 5 net-new are:
  * - bootstrap-devops    (wave 1, between discovery and architect)
  * - layout-architect    (wave 2, after ux-ui-designer)
  * - brand-identity      (wave 2, parallel with layout-architect)
  * - visual-adapter      (wave 4, after ui-components — owns Stitch HTML adaptation)
- * - accessibility       (wave 5)
  * - visual-qa           (wave 7)
  *
  * See `ROADMAP_V3.md` § 6 for the wave assignment and `PENDING_V3_DECISIONS.md`
@@ -46,7 +45,6 @@ export type AgentNameV3 =
   | "layout-architect"
   | "brand-identity"
   | "visual-adapter"
-  | "accessibility"
   | "visual-qa";
 
 export const AGENT_NAMES_V3: readonly AgentNameV3[] = [
@@ -70,7 +68,6 @@ export const AGENT_NAMES_V3: readonly AgentNameV3[] = [
   "layout-architect",
   "brand-identity",
   "visual-adapter",
-  "accessibility",
   "visual-qa",
 ] as const;
 

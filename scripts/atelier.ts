@@ -43,7 +43,8 @@ const WAVE_NAMES: readonly WaveNameV3[] = [
   "wave-4b-frontend-arch",
   "wave-4c-components-forms",
   "wave-4d-adapter",
-  "wave-5-data-tests",
+  "wave-5a-seeds",
+  "wave-5b-tests",
   "wave-6-static-qa",
   "wave-7-runtime-qa",
 ];

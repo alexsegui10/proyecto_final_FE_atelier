@@ -2,8 +2,8 @@
  * Atelier v3 violations router.
  *
  * Maps workspace file paths to the v3 agent that owns them. Extends the v2
- * routing table with rules for the 6 net-new agents (bootstrap-devops,
- * layout-architect, brand-identity, visual-adapter, accessibility,
+ * routing table with rules for the 5 net-new agents (bootstrap-devops,
+ * layout-architect, brand-identity, visual-adapter,
  * visual-qa). visual-adapter violations typically arrive
  * with their `agent` field pre-set by visual-regression-scanner or
  * stitch-completeness-scanner, so the path-based routing rules below are
@@ -91,11 +91,6 @@ const V3_ADDITIONS: RouteRuleV3[] = [
   // owner of any dedicated motion file too.
   { pattern: /^client\/motion\//, agent: "ui-components", priority: 9 },
   { pattern: /^client\/hooks\/useMotion.*\.ts$/, agent: "ui-components", priority: 9 },
-
-  // ─── Wave 5 — Accessibility ─────────────────────────────────────────
-  // The accessibility agent can patch files owned by other agents; it has
-  // no exclusive path territory. We DO own the audit report itself.
-  { pattern: /^docs\/accessibility-audit\.md$/, agent: "accessibility", priority: 8 },
 
   // ─── Wave 7 — Visual QA ─────────────────────────────────────────────
   // Playwright config + e2e visual specs + visual diff baseline.

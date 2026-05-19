@@ -64,8 +64,8 @@ const base = (overrides: Partial<Parameters<typeof runGenerationV3>[0]> = {}) =>
 // ─── Wave structure ─────────────────────────────────────────────────
 
 describe("WAVES_V3 — structural sanity", () => {
-  it("declares 13 dependency-ordered slices (7 logical waves)", () => {
-    expect(WAVES_V3).toHaveLength(13);
+  it("declares 14 dependency-ordered slices (7 logical waves)", () => {
+    expect(WAVES_V3).toHaveLength(14);
     const seen = new Set<string>();
     for (const w of WAVES_V3) {
       for (const dep of w.dependsOn) expect(seen.has(dep)).toBe(true);
@@ -80,12 +80,12 @@ describe("WAVES_V3 — structural sanity", () => {
     }
   });
 
-  it("includes all 22 agents exactly once", () => {
+  it("includes all 21 agents exactly once", () => {
     const counts = new Map<string, number>();
     for (const w of WAVES_V3) {
       for (const a of w.agents) counts.set(a, (counts.get(a) ?? 0) + 1);
     }
-    expect(counts.size).toBe(22);
+    expect(counts.size).toBe(21);
     for (const [agent, count] of counts) {
       expect(count, `${agent} appears more than once`).toBe(1);
     }
@@ -134,15 +134,23 @@ describe("WAVES_V3 — structural sanity", () => {
     expect(waveNames).not.toContain("wave-4-presentation");
     expect(WAVES_V3.flatMap((w) => w.agents)).not.toContain("animation-choreographer");
 
-    // wave-5 now hangs off the last wave-4 sub-wave.
-    const w5 = WAVES_V3.find((w) => w.name === "wave-5-data-tests");
-    expect(w5?.dependsOn).toEqual(["wave-4d-adapter"]);
+    // wave-5 split into 5a (seeds) → 5b (tests); 5a hangs off the last
+    // wave-4 sub-wave, 5b is sequential after 5a (B-w4-9 class, anticipated).
+    // (cast via waveNames: "wave-5-data-tests" is no longer a WaveNameV3
+    // member — the compile-time guarantee — assert it at runtime too.)
+    expect(waveNames).not.toContain("wave-5-data-tests");
+    const w5a = WAVES_V3.find((w) => w.name === "wave-5a-seeds");
+    const w5b = WAVES_V3.find((w) => w.name === "wave-5b-tests");
+    expect(w5a?.agents).toEqual(["seeds-fixtures"]);
+    expect(w5a?.dependsOn).toEqual(["wave-4d-adapter"]);
+    expect(w5b?.agents).toEqual(["tests-writer"]);
+    expect(w5b?.dependsOn).toEqual(["wave-5a-seeds"]);
   });
 
-  it("generatorAgentOrderV3 returns 22 deterministic entries", () => {
+  it("generatorAgentOrderV3 returns 21 deterministic entries", () => {
     const order = generatorAgentOrderV3();
-    expect(order).toHaveLength(22);
-    expect(new Set(order).size).toBe(22);
+    expect(order).toHaveLength(21);
+    expect(new Set(order).size).toBe(21);
     expect(order).toEqual(AGENT_NAMES_V3.slice().sort((a, b) => {
       const ai = order.indexOf(a);
       const bi = order.indexOf(b);
@@ -170,12 +178,12 @@ describe("runGenerationV3 — auto mode", () => {
     });
     expect(result.qa?.decision).toBe("go");
     expect(result.failedAt).toBeUndefined();
-    expect(calls.length).toBe(22);
+    expect(calls.length).toBe(21);
 
     // Sanity events
     expect(events.some((e) => e.type === "generation.started")).toBe(true);
     expect(events.some((e) => e.type === "generation.completed")).toBe(true);
-    expect(events.filter((e) => e.type === "wave.started").length).toBe(13);
+    expect(events.filter((e) => e.type === "wave.started").length).toBe(14);
   });
 
   it("stops at the first failed wave with failedAt", async () => {
@@ -264,8 +272,8 @@ describe("runGenerationV3 — auto mode", () => {
     expect(calls.some((c) => c.agent === "architect")).toBe(false);
     // The seeded artifact landed in result.artifacts verbatim.
     expect(result.artifacts.architect).toEqual(recordedArchitect);
-    // Other agents still ran (22 - 1 seeded = 21 calls).
-    expect(calls.length).toBe(21);
+    // Other agents still ran (21 - 1 seeded = 20 calls).
+    expect(calls.length).toBe(20);
   });
 });
 
@@ -611,7 +619,7 @@ describe("type plumbing", () => {
     void r;
   });
 
-  it("WaveV3 names cover all 13 slices", () => {
+  it("WaveV3 names cover all 14 slices", () => {
     const expected: WaveV3["name"][] = [
       "wave-1-discovery",
       "wave-1-bootstrap",
@@ -623,7 +631,8 @@ describe("type plumbing", () => {
       "wave-4b-frontend-arch",
       "wave-4c-components-forms",
       "wave-4d-adapter",
-      "wave-5-data-tests",
+      "wave-5a-seeds",
+      "wave-5b-tests",
       "wave-6-static-qa",
       "wave-7-runtime-qa",
     ];

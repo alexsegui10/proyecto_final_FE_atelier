@@ -6,9 +6,9 @@
  * detect stop sentinel, validate artifact JSON, diff file tree) is identical.
  *
  * What changes in v3 is the **per-agent config table**: AGENT_CONFIG_V3 holds
- * the 22-agent timeouts + stop sentinels, including the 6 net-new agents
+ * the 21-agent timeouts + stop sentinels, including the 5 net-new agents
  * introduced by v3 (bootstrap-devops, layout-architect, brand-identity,
- * visual-adapter, accessibility, visual-qa).
+ * visual-adapter, visual-qa).
  *
  * Defaults are deliberately conservative — yoga + tutorias v2 taught us that
  * underestimating wave-4 agents leads to wasted runs. We bump conservatively
@@ -28,8 +28,8 @@ export type { AgentConfigEntry, GeneratorAgentInput, GeneratorAgentResult };
 // ─── v3 config ──────────────────────────────────────────────────────
 
 /**
- * 22 entries used in v3: 16 of the 17 v2 configs (pages-routing dropped in
- * v3 — its app/* role is absorbed by visual-adapter) + 6 new agent configs.
+ * 21 entries used in v3: 16 of the 17 v2 configs (pages-routing dropped in
+ * v3 — its app/* role is absorbed by visual-adapter) + 5 new agent configs.
  * AGENT_CONFIG_V2 is still spread verbatim (v2 intact); the pages-routing
  * v2 config simply goes unused because WAVES_V3 never schedules it.
  *
@@ -71,11 +71,6 @@ export const AGENT_CONFIG_V3: Record<AgentNameV3, AgentConfigEntry> = {
     timeoutMs: 35 * 60_000,
     model: "opus",
     stopSentinel: "VISUAL_ADAPTER_DONE",
-  },
-  accessibility: {
-    timeoutMs: 20 * 60_000,
-    model: "opus",
-    stopSentinel: "ACCESSIBILITY_DONE",
   },
   "visual-qa": {
     timeoutMs: 40 * 60_000,
