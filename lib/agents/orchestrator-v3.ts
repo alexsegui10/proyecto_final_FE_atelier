@@ -60,103 +60,13 @@ import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, type AgentNameV3 } from "./contracts
 import { runDeterministicFormat } from "./runtime/format-rescue";
 import { routeViolationToAgentV3 } from "./violations-router-v3";
 
-// ─── Wave shape ──────────────────────────────────────────────────────
+// ─── Wave shape — imported from the client-safe contracts-v3 module ──
+// Re-exported so callers that previously imported from here continue to work.
 
-export type WaveNameV3 =
-  | "wave-1-discovery"
-  | "wave-1-bootstrap"
-  | "wave-1-planning"
-  | "wave-2-design"
-  | "wave-2-domain"
-  | "wave-3-app-security"
-  | "wave-4a-api"
-  | "wave-4b-frontend-arch"
-  | "wave-4c-components-forms"
-  | "wave-4d-adapter"
-  | "wave-5a-seeds"
-  | "wave-5b-tests"
-  | "wave-6-static-qa"
-  | "wave-7-runtime-qa";
-
-export interface WaveV3 {
-  readonly name: WaveNameV3;
-  readonly agents: readonly AgentNameV3[];
-  readonly dependsOn: readonly WaveNameV3[];
-}
-
-export const WAVES_V3: readonly WaveV3[] = [
-  { name: "wave-1-discovery",     agents: ["discovery"],          dependsOn: [] },
-  { name: "wave-1-bootstrap",     agents: ["bootstrap-devops"],   dependsOn: ["wave-1-discovery"] },
-  { name: "wave-1-planning",      agents: ["architect"],          dependsOn: ["wave-1-bootstrap"] },
-  {
-    name: "wave-2-design",
-    agents: ["ux-ui-designer", "layout-architect", "brand-identity"],
-    dependsOn: ["wave-1-planning"],
-  },
-  {
-    name: "wave-2-domain",
-    agents: ["domain-modeler", "persistence", "seeds-shape"],
-    dependsOn: ["wave-2-design"],
-  },
-  {
-    name: "wave-3-app-security",
-    agents: ["service-layer", "auth-security", "rbac-authorization"],
-    dependsOn: ["wave-2-domain"],
-  },
-  // ─── Wave 4 sub-divided (pre-flight B-w4-2) ──────────────────────────
-  // Genuine producer→consumer chain across the wave-4 agents:
-  //   api-backend → api-contract.json → frontend-architect
-  //              → frontend-architecture.json → ui-components (primitives)
-  // Running them concurrently (the old single wave-4-presentation) meant
-  // every downstream agent read a not-yet-existent artifact. Split into
-  // four sequential sub-waves so each consumer's inputs are settled.
-  // pages-routing was REMOVED (its app/* role is absorbed by visual-adapter,
-  // single owner of the App Router — closes B-w4-7, the page.tsx/layout
-  // write-collision). ui-components is reduced to shadcn primitives only.
-  {
-    name: "wave-4a-api",
-    agents: ["api-backend"],
-    dependsOn: ["wave-3-app-security"],
-  },
-  {
-    name: "wave-4b-frontend-arch",
-    agents: ["frontend-architect"],
-    dependsOn: ["wave-4a-api"],
-  },
-  {
-    // ui-components and forms-validations DO parallelize: both consume
-    // ONLY 4a/4b artifacts (api-contract, frontend-architecture) — they
-    // share no producer→consumer edge. forms-validations references
-    // @client/components/ui/* by stable path convention, NOT by reading
-    // components-catalog.json at generation time, so 4c concurrency is safe.
-    name: "wave-4c-components-forms",
-    agents: ["ui-components", "forms-validations"],
-    dependsOn: ["wave-4b-frontend-arch"],
-  },
-  {
-    // visual-adapter isolated downstream: it is the single app/* owner
-    // (B-w4-7) AND the convergence point that consumes forms-validations.json
-    // to mount the canonical client/components/forms/* components for R6
-    // forms-wiring. Running it concurrently with forms-validations (the old
-    // wave-4d-routing-forms-adapter) orphaned the canonical forms and forced
-    // hand-rolled submit handlers — fixed by isolating it here (B-w4-9).
-    name: "wave-4d-adapter",
-    agents: ["visual-adapter"],
-    dependsOn: ["wave-4c-components-forms"],
-  },
-  {
-    name: "wave-5a-seeds",
-    agents: ["seeds-fixtures"],
-    dependsOn: ["wave-4d-adapter"],
-  },
-  {
-    name: "wave-5b-tests",
-    agents: ["tests-writer"],
-    dependsOn: ["wave-5a-seeds"],
-  },
-  { name: "wave-6-static-qa",     agents: ["qa-reviewer"],        dependsOn: ["wave-5b-tests"] },
-  { name: "wave-7-runtime-qa",    agents: ["visual-qa"],          dependsOn: ["wave-6-static-qa"] },
-] as const;
+export type { WaveNameV3, WaveV3 } from "./contracts-v3/waves";
+export { WAVES_V3 } from "./contracts-v3/waves";
+import { WAVES_V3 } from "./contracts-v3/waves";
+import type { WaveNameV3, WaveV3 } from "./contracts-v3/waves";
 
 /** Canonical execution order — same as v2 generatorAgentOrderV2 but for v3. */
 export function generatorAgentOrderV3(): readonly AgentNameV3[] {
