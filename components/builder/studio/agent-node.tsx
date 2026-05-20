@@ -4,16 +4,30 @@ import { motion } from "motion/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import {
   IconAlertTriangle,
-  IconBox,
   IconCheck,
-  IconChecks,
   IconCircleDashed,
   IconCompass,
   IconCpu,
+  IconDatabase,
+  IconFlask,
+  IconFolder,
+  IconKey,
   IconLayoutGrid,
   IconLoader2,
-  IconLock,
+  IconMicroscope,
+  IconPalette,
+  IconPhoto,
   IconRotateClockwise2,
+  IconRuler,
+  IconServer,
+  IconShield,
+  IconSitemap,
+  IconStar,
+  IconTerminal2,
+  IconTestPipe,
+  IconTool,
+  IconUsers,
+  IconWand,
 } from "@tabler/icons-react";
 
 import {
@@ -25,20 +39,10 @@ import {
   studioStatusStyle,
 } from "@/lib/styles/studio-tokens";
 
-import { ArchitectCompass } from "./animations/architect-compass";
-import { DomainCubes } from "./animations/domain-cubes";
-import { UseCasesGears } from "./animations/usecases-gears";
-import { AuthShield } from "./animations/auth-shield";
-import { ApiGrid } from "./animations/api-grid";
-import { QaScanner } from "./animations/qa-scanner";
+import type { AgentNameV3 } from "@/lib/agents/contracts-v3/agent-names";
 
-export type AgentKey =
-  | "architect"
-  | "domain-persistence"
-  | "use-cases"
-  | "auth-rbac"
-  | "api-frontend"
-  | "qa-reviewer";
+// AgentKey is now the full v3 union
+export type AgentKey = AgentNameV3;
 
 export type AgentNodeData = {
   label: string;
@@ -48,14 +52,66 @@ export type AgentNodeData = {
   miniLog?: string[];
 };
 
+// ─── Icon mapping — one icon per agent ───────────────────────────────
+
 const ICONS: Record<AgentKey, typeof IconCompass> = {
-  architect: IconCompass,
-  "domain-persistence": IconBox,
-  "use-cases": IconCpu,
-  "auth-rbac": IconLock,
-  "api-frontend": IconLayoutGrid,
-  "qa-reviewer": IconChecks,
+  // wave-1
+  "discovery":         IconFolder,
+  "bootstrap-devops":  IconTerminal2,
+  "architect":         IconCompass,
+  // wave-2-design
+  "ux-ui-designer":    IconPalette,
+  "layout-architect":  IconRuler,
+  "brand-identity":    IconStar,
+  // wave-2-domain
+  "domain-modeler":    IconSitemap,
+  "persistence":       IconDatabase,
+  "seeds-shape":       IconFlask,
+  // wave-3-app-security
+  "service-layer":     IconCpu,
+  "auth-security":     IconKey,
+  "rbac-authorization": IconShield,
+  // wave-4
+  "api-backend":       IconServer,
+  "frontend-architect": IconLayoutGrid,
+  "ui-components":     IconWand,
+  "forms-validations": IconTestPipe,
+  "visual-adapter":    IconPhoto,
+  // wave-5
+  "seeds-fixtures":    IconFolder,
+  "tests-writer":      IconMicroscope,
+  // wave-6 + 7
+  "qa-reviewer":       IconUsers,
+  "visual-qa":         IconTool,
 };
+
+// ─── Display labels ───────────────────────────────────────────────────
+
+export const AGENT_LABELS: Record<AgentKey, string> = {
+  "discovery":          "Discovery",
+  "bootstrap-devops":   "Bootstrap & DevOps",
+  "architect":          "Architect",
+  "ux-ui-designer":     "UX / UI Designer",
+  "layout-architect":   "Layout Architect",
+  "brand-identity":     "Brand Identity",
+  "domain-modeler":     "Domain Modeler",
+  "persistence":        "Persistence",
+  "seeds-shape":        "Seeds Shape",
+  "service-layer":      "Service Layer",
+  "auth-security":      "Auth Security",
+  "rbac-authorization": "RBAC Authorization",
+  "api-backend":        "API Backend",
+  "frontend-architect": "Frontend Architect",
+  "ui-components":      "UI Components",
+  "forms-validations":  "Forms & Validations",
+  "visual-adapter":     "Visual Adapter",
+  "seeds-fixtures":     "Seeds Fixtures",
+  "tests-writer":       "Tests Writer",
+  "qa-reviewer":        "QA Reviewer",
+  "visual-qa":          "Visual QA",
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────
 
 function StatusIcon({ status }: { status: AgentStatus }) {
   switch (status) {
@@ -72,45 +128,18 @@ function StatusIcon({ status }: { status: AgentStatus }) {
   }
 }
 
-function SignatureAnimation({
-  agent,
-  active,
-}: {
-  agent: AgentKey;
-  active: boolean;
-}) {
-  switch (agent) {
-    case "architect":
-      return <ArchitectCompass active={active} />;
-    case "domain-persistence":
-      return <DomainCubes active={active} />;
-    case "use-cases":
-      return <UseCasesGears active={active} />;
-    case "auth-rbac":
-      return <AuthShield active={active} />;
-    case "api-frontend":
-      return <ApiGrid active={active} />;
-    case "qa-reviewer":
-      return <QaScanner active={active} />;
-  }
-}
-
 export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
   const Icon = ICONS[data.agent];
   const style = studioStatusStyle[data.status];
   const isActive = data.status === "working" || data.status === "fixing";
 
   return (
-    <div className="relative" style={{ width: 240, height: 132 }}>
-      {/* Ambient glow behind the node when active */}
+    <div className="relative" style={{ width: 200, height: 72 }}>
       {style.glow ? (
         <motion.div
           aria-hidden
-          className="absolute -inset-6 -z-10"
-          style={{
-            background: style.glow,
-            filter: "blur(8px)",
-          }}
+          className="absolute -inset-4 -z-10"
+          style={{ background: style.glow, filter: "blur(6px)" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: isActive ? [0.3, 0.55, 0.3] : 0.4 }}
           transition={{
@@ -128,9 +157,7 @@ export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
           borderColor: style.border,
           boxShadow: isActive ? `0 0 0 1px ${style.ring}` : "none",
         }}
-        animate={{
-          borderColor: style.border,
-        }}
+        animate={{ borderColor: style.border }}
         transition={{ duration: studioDurations.nodeStateChange, ease: studioEasings.default }}
       >
         <Handle
@@ -140,12 +167,13 @@ export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
         />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2">
-          <div className="flex items-center gap-2">
-            <Icon size={14} style={{ color: studioColors.textSecondary }} />
+        <div className="flex h-full items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon size={14} style={{ color: studioColors.textSecondary, flexShrink: 0 }} />
             <span
+              className="truncate"
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 500,
                 color: studioColors.textPrimary,
                 fontFamily: studioFonts.body,
@@ -154,36 +182,28 @@ export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
               {data.label}
             </span>
           </div>
-          <span
-            className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-            style={{
-              color: style.badgeColor,
-              border: `1px solid ${style.badgeColor}40`,
-              background: `${style.badgeColor}10`,
-              fontFamily: studioFonts.mono,
-            }}
-          >
-            <StatusIcon status={data.status} />
-            {style.badgeText}
-          </span>
-        </div>
-
-        {/* Body — either the signature animation, or a mini-terminal log,
-            or a static placeholder when idle/done. */}
-        <div className="relative h-[78px] border-t" style={{ borderColor: studioColors.borderSubtle }}>
-          <SignatureAnimation agent={data.agent} active={isActive} />
-
-          {/* Done state — small file counter */}
-          {data.status === "done" && data.fileCount > 0 ? (
-            <div
-              className="flex h-full items-center justify-center text-center"
-              style={{ color: studioColors.success, fontFamily: studioFonts.mono }}
+          <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
+            <span
+              className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
+              style={{
+                color: style.badgeColor,
+                border: `1px solid ${style.badgeColor}40`,
+                background: `${style.badgeColor}10`,
+                fontFamily: studioFonts.mono,
+              }}
             >
-              <span className="text-[10px] uppercase tracking-widest">
-                +{data.fileCount} files
+              <StatusIcon status={data.status} />
+              {style.badgeText}
+            </span>
+            {data.status === "done" && data.fileCount > 0 ? (
+              <span
+                className="text-[9px] uppercase tracking-widest"
+                style={{ color: studioColors.success, fontFamily: studioFonts.mono }}
+              >
+                +{data.fileCount}f
               </span>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
         <Handle
