@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   IconBrandChrome,
+  IconCheck,
+  IconClipboard,
   IconExternalLink,
   IconInfoCircle,
 } from "@tabler/icons-react";
 
 import { studioColors, studioFonts } from "@/lib/styles/studio-tokens";
+import { Button } from "@/components/ui/button";
 
 /**
  * Preview pane — placeholder for the WebContainers live boot.
@@ -20,6 +24,21 @@ import { studioColors, studioFonts } from "@/lib/styles/studio-tokens";
  * matches the "Demo en vivo disponible al desplegar" plan.
  */
 export function PreviewPane({ workDir }: { workDir: string | null }) {
+  const [copied, setCopied] = useState(false);
+
+  const commands = `cd ${workDir ?? "<workDir>"}
+pnpm install
+pnpm prisma migrate dev
+pnpm seed     # crea el admin demo
+pnpm dev`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(commands).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div
       className="relative flex h-full flex-col overflow-hidden rounded-md border"
@@ -91,7 +110,7 @@ export function PreviewPane({ workDir }: { workDir: string | null }) {
                 className="text-sm font-medium"
                 style={{ color: studioColors.textPrimary }}
               >
-                La app generada arranca al desplegar
+                Tu app está lista
               </h3>
             </div>
             <p
@@ -99,30 +118,47 @@ export function PreviewPane({ workDir }: { workDir: string | null }) {
               style={{ color: studioColors.textSecondary }}
             >
               El árbol de archivos a la izquierda es la app real, generada por los
-              6 agentes de Atelier en tiempo real. Para arrancarla:
+              21 agentes de Atelier. Para arrancarla localmente:
             </p>
-            <pre
-              className="mt-3 overflow-x-auto rounded-md border px-3 py-2 text-[11px] leading-relaxed"
-              style={{
-                borderColor: studioColors.borderSubtle,
-                background: studioColors.bg,
-                color: studioColors.textPrimary,
-                fontFamily: studioFonts.mono,
-              }}
-            >
-{`cd ${workDir ?? "<workDir>"}
-pnpm install
-pnpm prisma migrate dev
-pnpm seed     # crea el admin demo
-pnpm dev`}
-            </pre>
+            <div className="relative mt-3">
+              <pre
+                className="overflow-x-auto rounded-md border px-3 py-2 text-[11px] leading-relaxed"
+                style={{
+                  borderColor: studioColors.borderSubtle,
+                  background: studioColors.bg,
+                  color: studioColors.textPrimary,
+                  fontFamily: studioFonts.mono,
+                }}
+              >
+                {commands}
+              </pre>
+              <div className="mt-2 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={handleCopy}
+                  style={{ fontFamily: studioFonts.mono }}
+                >
+                  {copied ? (
+                    <>
+                      <IconCheck size={11} />
+                      Copiado ✓
+                    </>
+                  ) : (
+                    <>
+                      <IconClipboard size={11} />
+                      Copiar comandos
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
             <p
               className="mt-3 text-[11px]"
               style={{ color: studioColors.textMuted }}
             >
-              <span style={{ color: studioColors.warning }}>Phase 4 roadmap:</span>{" "}
-              embedded WebContainers boot con SQLite — hoy diferido por restricciones de tamaño del
-              skeleton y compatibilidad de adaptadores Prisma 7 con WebContainers.
+              <span style={{ color: studioColors.warning }}>Preview live:</span>{" "}
+              próximamente — hoy diferido por compatibilidad de adaptadores Prisma 7 con WebContainers.
             </p>
             {workDir ? (
               <a
