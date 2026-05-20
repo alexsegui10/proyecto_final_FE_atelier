@@ -149,8 +149,13 @@ export const AGENT_CONFIG_V2: Record<AgentNameV2, AgentConfigEntry> = {
     stopSentinel: "FRONTEND_ARCHITECT_DONE",
   },
   "ui-components": { timeoutMs: 35 * 60_000, model: "opus", stopSentinel: "UI_COMPONENTS_DONE" },
+  // forms-validations 18→24: bumped preemptive after F3-run-19 hit 876s
+  // (= 81% of the 18min cap, dangerously close to timeout under any
+  // further variance). Sibling agent of ui-components in wave-4c — both
+  // share the same parallel slot and have been observed slowest in the
+  // run-18/19 systemic-slowdown window.
   "forms-validations": {
-    timeoutMs: 18 * 60_000,
+    timeoutMs: 24 * 60_000,
     model: "opus",
     stopSentinel: "FORMS_VALIDATIONS_DONE",
   },

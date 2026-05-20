@@ -59,6 +59,66 @@ UI_COMPONENTS_DONE: primitives=22, components=0
 
 (`primitives=22` = 5 pre-instalados + 17 nuevos; contá los que caigan con placeholder igual.)
 
+## Artifact JSON — shape EXACTO (B-w4-14 pin vinculante)
+
+El `.atelier/components-catalog.json` debe parsear contra
+`lib/agents/contracts-v3/components-catalog.schema.ts`. Shape **literal**
+abajo — copiá la estructura tal cual, solo cambiando si necesitás añadir
+metadata extra a un primitive (el schema permite `passthrough` en cada
+entry). El `name` de cada primitive es **el basename del archivo SIN
+`.tsx`, en lowercase kebab-case**, NO el nombre React del componente:
+
+```json
+{
+  "primitives": [
+    { "name": "button", "file": "client/components/ui/button.tsx", "source": "skeleton" },
+    { "name": "card", "file": "client/components/ui/card.tsx", "source": "skeleton" },
+    { "name": "input", "file": "client/components/ui/input.tsx", "source": "skeleton" },
+    { "name": "label", "file": "client/components/ui/label.tsx", "source": "skeleton" },
+    { "name": "badge", "file": "client/components/ui/badge.tsx", "source": "skeleton" },
+    { "name": "dialog", "file": "client/components/ui/dialog.tsx", "source": "generated" },
+    { "name": "dropdown-menu", "file": "client/components/ui/dropdown-menu.tsx", "source": "generated" },
+    { "name": "form", "file": "client/components/ui/form.tsx", "source": "generated" },
+    { "name": "select", "file": "client/components/ui/select.tsx", "source": "generated" },
+    { "name": "table", "file": "client/components/ui/table.tsx", "source": "generated" },
+    { "name": "tabs", "file": "client/components/ui/tabs.tsx", "source": "generated" },
+    { "name": "toast", "file": "client/components/ui/toast.tsx", "source": "generated" },
+    { "name": "separator", "file": "client/components/ui/separator.tsx", "source": "generated" },
+    { "name": "sheet", "file": "client/components/ui/sheet.tsx", "source": "generated" },
+    { "name": "skeleton", "file": "client/components/ui/skeleton.tsx", "source": "generated" },
+    { "name": "alert", "file": "client/components/ui/alert.tsx", "source": "generated" },
+    { "name": "avatar", "file": "client/components/ui/avatar.tsx", "source": "generated" },
+    { "name": "popover", "file": "client/components/ui/popover.tsx", "source": "generated" },
+    { "name": "tooltip", "file": "client/components/ui/tooltip.tsx", "source": "generated" },
+    { "name": "command", "file": "client/components/ui/command.tsx", "source": "generated" },
+    { "name": "calendar", "file": "client/components/ui/calendar.tsx", "source": "generated" },
+    { "name": "checkbox", "file": "client/components/ui/checkbox.tsx", "source": "generated" }
+  ],
+  "components": []
+}
+```
+
+### Prohibiciones (B-w4-14)
+
+- **`name` MUST ser lowercase kebab-case = file basename SIN `.tsx`.**
+  - ✅ `"name": "dialog"`, `"name": "dropdown-menu"`, `"name": "checkbox"`
+  - ❌ `"name": "Dialog"`, `"name": "DropdownMenu"`, `"name": "Checkbox"` (PascalCase componente — el schema verifica contra `REQUIRED_PRIMITIVES` que es lowercase kebab-case)
+  - ❌ `"name": "dialog.tsx"` (incluye extensión — debe ser basename limpio)
+- El nombre React del componente (`Dialog`, `DropdownMenu`, etc.) NO va
+  en este campo. Ese vive en el archivo `.tsx` como `export const Dialog`.
+- NO renombres keys top-level: `primitives` y `components` exclusivamente.
+  NO `shadcn`, NO `ui`, NO `entries`, NO `items`.
+- NO emitas un subset de los 22. Faltar un primitive → rechazo en
+  boundary B-w4-5b con mensaje `must include all 17 primitives: ...`.
+- `components` siempre array vacío `[]` (Bloque B eliminado en v3 — R0).
+
+Contexto del pin: F3-run-19 (`out/yoga-regen-v3-2026-05-20T11-36-24`) emitió
+los 22 primitives con `"name": "Button"` PascalCase. El schema verifica
+contra `REQUIRED_PRIMITIVES = ["dialog", "dropdown-menu", ...]` (lowercase
+basenames), entonces el refinement leyó la lista como "ninguno de los 17
+está presente" y rechazó. Boundary validator B-w4-5b cazó el drift; este
+pin elimina la ambigüedad río arriba.
+
 ## Reglas (R0-R6)
 
 **R0 — Solo primitives.** No generás Bloque B. Si dudás si algo es "primitive" o "componente de área": si no wrappea un `@radix-ui/react-*` y no está en la lista de 17, NO es tuyo.
@@ -71,7 +131,7 @@ UI_COMPONENTS_DONE: primitives=22, components=0
 
 **R4 — NO instalés deps.** Si una primitive necesita algo ausente del `package.json`, placeholder + warning, seguí.
 
-**R5 — `components-catalog.json` shape exacto.** Top-level `{ primitives: [...], components: [] }`. El array `primitives` DEBE incluir los 17 canónicos por nombre. Sin sinónimos de campo (`primitives`, no `shadcn`, no `ui`). Falta un primitive → rechazo en boundary.
+**R5 — `components-catalog.json` shape exacto.** Ver "Artifact JSON — shape EXACTO (B-w4-14 pin vinculante)" arriba. El `name` de cada primitive es **lowercase kebab-case** (basename del archivo SIN `.tsx`), NO el nombre React del componente. Top-level keys exclusivos: `primitives` y `components`. Faltar un primitive o usar PascalCase en `name` → rechazo en boundary B-w4-5b.
 
 **R6 — Stop sentinel + cleanup.** Verificá que los 17 `.tsx` existen en `client/components/ui/` antes de imprimir el sentinel.
 
