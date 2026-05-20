@@ -41,6 +41,7 @@ import {
   type AgentRunResultV3,
   type AgentRunnerV3,
   type OrchestratorV3Event,
+  type PostWaveGate,
   type QaArtifactV3,
 } from "./orchestrator-v3";
 import { runGeneratorAgentV3 } from "./runtime/runner-generator-v3";
@@ -55,6 +56,142 @@ import { validatePageAdaptations } from "./contracts-v3/page-adaptation.schema";
 import { validateFormsValidationsV3 } from "./contracts-v3/forms-validations.schema";
 import { validateSeedsFixtures } from "./contracts-v3/seeds-fixtures.schema";
 import { validateTestsWriter } from "./contracts-v3/tests-writer.schema";
+import { createStitchFixturePreparerGate } from "./runtime/stitch-fixture-helper";
+import { scanCrossArtifactCoherence } from "./runtime/qa-gates/cross-artifact-coherence-scanner";
+import { createStitchCompletenessGate } from "./runtime/qa-gates/stitch-completeness-scanner";
+
+// ─── Stitch mode resolution ───────────────────────────────────────────
+
+/**
+ * Discriminated union returned by `resolveStitchMode`. Callers switch on
+ * `kind` to decide whether to register the fixture preparer gate.
+ */
+export type StitchModeResolved =
+  | {
+      kind: "fixture";
+      fixturePath: string;
+      source: "default-yoga" | "env-fixture" | "fallback-yoga";
+    }
+  | { kind: "live" };
+
+/**
+ * Reads `ATELIER_STITCH_MODE` (+ optional `ATELIER_STITCH_FIXTURE`) from the
+ * environment and returns a resolved discriminated union. Pure function —
+ * exported so it can be unit-tested without running the full bridge.
+ *
+ * Mode table:
+ *   unset / "fixture:yoga" → fixture, default-yoga
+ *   "fixture" + valid ATELIER_STITCH_FIXTURE → fixture, env-fixture
+ *   "fixture" + missing / empty ATELIER_STITCH_FIXTURE → warn + fallback-yoga
+ *   "live"                 → live
+ *   anything else          → warn + fallback-yoga
+ */
+export function resolveStitchMode(): StitchModeResolved {
+  // Evaluated lazily so tests can override process.cwd() and REPO_ROOT is
+  // not needed at module load time (it's declared further below).
+  const defaultYogaFixture = join(process.cwd(), "fixtures", "stitch-yoga.json");
+  const raw = process.env.ATELIER_STITCH_MODE;
+
+  if (!raw || raw === "fixture:yoga") {
+    return { kind: "fixture", fixturePath: defaultYogaFixture, source: "default-yoga" };
+  }
+
+  if (raw === "live") {
+    return { kind: "live" };
+  }
+
+  if (raw === "fixture") {
+    const envPath = process.env.ATELIER_STITCH_FIXTURE?.trim();
+    if (!envPath) {
+      console.warn(
+        "[bridge] ATELIER_STITCH_MODE=fixture but ATELIER_STITCH_FIXTURE is empty — " +
+          "falling back to fixture:yoga",
+      );
+      return { kind: "fixture", fixturePath: defaultYogaFixture, source: "fallback-yoga" };
+    }
+    if (!existsSync(envPath)) {
+      console.warn(
+        `[bridge] ATELIER_STITCH_MODE=fixture but ATELIER_STITCH_FIXTURE file not found at '${envPath}' — ` +
+          "falling back to fixture:yoga",
+      );
+      return { kind: "fixture", fixturePath: defaultYogaFixture, source: "fallback-yoga" };
+    }
+    return { kind: "fixture", fixturePath: envPath, source: "env-fixture" };
+  }
+
+  console.warn(
+    `[bridge] Unknown ATELIER_STITCH_MODE='${raw}' — falling back to fixture:yoga`,
+  );
+  return { kind: "fixture", fixturePath: defaultYogaFixture, source: "fallback-yoga" };
+}
+
+/**
+ * Loads the architect fixture sibling adjacent to the Stitch fixture
+ * (`<fixturePath>.replace(/\.json$/, ".architect.json")`), stages it to
+ * `<workDir>/.atelier/architect.json`, and returns the parsed object so the
+ * caller can seed it into `seedArtifacts.architect`.
+ *
+ * Returns `null` silently when the sibling does not exist — many fixtures may
+ * not have one, and that is NOT an error.
+ */
+export async function maybeLoadArchitectSeed(opts: {
+  fixturePath: string;
+  workDir: string;
+}): Promise<unknown | null> {
+  const architectFixturePath = opts.fixturePath.replace(/\.json$/, ".architect.json");
+  if (!existsSync(architectFixturePath)) return null;
+
+  const raw = await readFile(architectFixturePath, "utf8");
+  const architect: unknown = JSON.parse(raw);
+  const target = join(opts.workDir, ".atelier", "architect.json");
+  await mkdir(join(opts.workDir, ".atelier"), { recursive: true });
+  await writeFile(target, raw, "utf8");
+  return architect;
+}
+
+/**
+ * Builds the `{ preWaveGates?, postWaveGates? }` object to pass through to
+ * `runGenerationV3`. The coherence + completeness scanners run in BOTH fixture
+ * and live modes — they catch invariants independent of how the design was
+ * produced.
+ */
+export function buildBridgeGates(opts: { mode: StitchModeResolved }): {
+  preWaveGates?: Parameters<typeof runGenerationV3>[0]["preWaveGates"];
+  postWaveGates?: Parameters<typeof runGenerationV3>[0]["postWaveGates"];
+} {
+  const coherenceGate: PostWaveGate = {
+    name: "cross-artifact-coherence-scanner",
+    async run(ctx) {
+      const layoutBundle = ctx.artifacts["layout-architect"] as
+        | { layoutTree?: unknown; stitchAnalysis?: unknown; testIdContract?: unknown }
+        | undefined;
+      return scanCrossArtifactCoherence({
+        architect: ctx.artifacts["architect"],
+        layoutTree: layoutBundle?.layoutTree,
+        stitchAnalysis: layoutBundle?.stitchAnalysis,
+        testIdContract: layoutBundle?.testIdContract,
+      });
+    },
+  };
+  const completenessGate = createStitchCompletenessGate();
+
+  const postWaveGates = {
+    "wave-2-design": [coherenceGate, completenessGate] as const,
+  };
+
+  if (opts.mode.kind === "live") {
+    return { postWaveGates };
+  }
+
+  return {
+    preWaveGates: {
+      "wave-2-design": [
+        createStitchFixturePreparerGate({ fixturePath: opts.mode.fixturePath }),
+      ] as const,
+    },
+    postWaveGates,
+  };
+}
 
 // ─── Public interface ─────────────────────────────────────────────────
 
@@ -344,7 +481,26 @@ export async function runGenerationV3Bridge(
 ): Promise<void> {
   const { generationId, prd, workDir } = input;
 
+  // ── Resolve Stitch mode ──────────────────────────────────────────────
+  const stitchMode = resolveStitchMode();
+  const modeLabel =
+    stitchMode.kind === "live"
+      ? "live"
+      : `fixture:${stitchMode.source} at ${stitchMode.fixturePath}`;
+  console.log(`[bridge] ATELIER_STITCH_MODE resolved: ${modeLabel}`);
+
   await injectDiscoveryArtifact(workDir, prd);
+
+  // ── Architect seed (fixture modes only) ─────────────────────────────
+  let architectSeed: unknown | null = null;
+  if (stitchMode.kind === "fixture") {
+    architectSeed = await maybeLoadArchitectSeed({
+      fixturePath: stitchMode.fixturePath,
+      workDir,
+    });
+  }
+
+  const gates = buildBridgeGates({ mode: stitchMode });
 
   const runner = makeRunner();
   const emit = (event: OrchestratorV3Event) =>
@@ -360,7 +516,11 @@ export async function runGenerationV3Bridge(
       runner,
       // discovery artifact is pre-seeded; mark it so the orchestrator
       // auto-skips the discovery agent slot.
-      seedArtifacts: { discovery: prd },
+      seedArtifacts:
+        architectSeed !== null
+          ? { discovery: prd, architect: architectSeed }
+          : { discovery: prd },
+      ...gates,
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "orchestrator-v3 crashed";
