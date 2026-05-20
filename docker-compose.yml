@@ -1,0 +1,31 @@
+# =============================================================================
+# Atelier — local infrastructure
+# -----------------------------------------------------------------------------
+# Only Postgres lives here. The healthcheck guarantees the DB is ready before
+# migrations run. Override POSTGRES_HOST_PORT in .env to avoid collisions.
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: atelier-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: atelier
+      POSTGRES_PASSWORD: atelier
+      POSTGRES_DB: atelier
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - atelier-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atelier -d atelier"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  atelier-pg-data:
+    name: atelier-pg-data

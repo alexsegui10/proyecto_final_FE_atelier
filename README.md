@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Demo setup
+
+1. Copy env: `cp .env.example .env` and fill in `CLERK_*` keys ([Clerk dashboard](https://dashboard.clerk.com)).
+2. Bootstrap: `pnpm demo:setup` — boots Postgres in Docker, runs migrations, installs deps.
+3. Start: `pnpm dev` → open [http://localhost:3000](http://localhost:3000).
+
+> Requires Docker Desktop running. Set `ANTHROPIC_API_KEY` in `.env` to trigger agent generation.
+
 ## Getting Started
 
 First, run the development server:

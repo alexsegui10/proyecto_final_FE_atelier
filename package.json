@@ -14,7 +14,8 @@
     "agents:test:wave12": "tsx scripts/test-wave-1-2.ts",
     "agents:test:wave123": "tsx scripts/test-wave-1-2-3.ts",
     "agents:test:wave1234": "tsx scripts/test-wave-1-2-3-4.ts",
-    "agents:test:full": "tsx scripts/test-wave-1-2-3-4-5-6.ts"
+    "agents:test:full": "tsx scripts/test-wave-1-2-3-4-5-6.ts",
+    "demo:setup": "tsx scripts/demo-setup.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
