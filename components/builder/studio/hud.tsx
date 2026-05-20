@@ -9,6 +9,7 @@ import {
   studioEasings,
   studioFonts,
 } from "@/lib/styles/studio-tokens";
+import { WAVES_V3 } from "@/lib/agents/contracts-v3/waves";
 
 type Phase = "DESIGN" | "BUILD" | "VALIDATE" | "FIX" | "DONE" | "FAILED";
 
@@ -20,6 +21,10 @@ type HudProps = {
   testsCount: number;
   phase: Phase;
   fixRound?: number;
+  currentWaveIndex: number;
+  agentsDone: number;
+  formatRescueActive: boolean;
+  formatRescueFailed: boolean;
 };
 
 /**
@@ -132,6 +137,60 @@ function PhaseBadge({ phase }: { phase: Phase }) {
   );
 }
 
+/** Human-readable wave name: "wave-4c-components-forms" → "Wave 4c · Components Forms" */
+function formatWaveName(raw: string): string {
+  return raw
+    .replace(/^wave-/, "Wave ")
+    .replace(/-/g, " ")
+    .replace(/\bwave (\S+)\b/, (_, id) => `Wave ${id} ·`);
+}
+
+function WaveLabel({ waveIndex }: { waveIndex: number }) {
+  const wave = WAVES_V3[waveIndex];
+  if (!wave) return null;
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={wave.name}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.35, ease: studioEasings.smoothOut }}
+        className="text-[10px] uppercase tracking-widest"
+        style={{ color: studioColors.accentPrimary, fontFamily: studioFonts.mono }}
+      >
+        {formatWaveName(wave.name)}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+function FormatRescueBadge({ active, failed }: { active: boolean; failed: boolean }) {
+  const show = active || failed;
+  if (!show) return null;
+  const color = failed ? studioColors.error : studioColors.warning;
+  const label = failed ? "rescue failed" : "format rescue";
+  return (
+    <AnimatePresence>
+      <motion.span
+        key="rescue"
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.85 }}
+        transition={{ duration: 0.25 }}
+        className="rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-widest"
+        style={{
+          borderColor: color,
+          color,
+          fontFamily: studioFonts.mono,
+        }}
+      >
+        {label}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
 export function StudioHud({
   generationId,
   startedAt,
@@ -140,6 +199,10 @@ export function StudioHud({
   testsCount,
   phase,
   fixRound,
+  currentWaveIndex,
+  agentsDone,
+  formatRescueActive,
+  formatRescueFailed,
 }: HudProps) {
   return (
     <div
@@ -160,8 +223,11 @@ export function StudioHud({
             fix round {fixRound}/3
           </span>
         ) : null}
+        <WaveLabel waveIndex={currentWaveIndex} />
+        <FormatRescueBadge active={formatRescueActive} failed={formatRescueFailed} />
       </div>
       <div className="flex items-center gap-6">
+        <SlotCounter value={agentsDone} label={`/ ${WAVES_V3.flatMap((w) => w.agents).length} agents`} />
         <SlotCounter value={filesCount} label="files" />
         <SlotCounter value={linesCount} label="lines" />
         <SlotCounter value={testsCount} label="tests" />

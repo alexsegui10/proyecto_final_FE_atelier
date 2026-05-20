@@ -107,6 +107,11 @@ type StudioState = {
   // Tracks which target agents have an active working state — used for edge highlights
   workingAgents: Set<AgentKey>;
   bigBang: boolean;
+  // v3 HUD extensions
+  currentWaveIndex: number;
+  agentsDone: number;
+  formatRescueActive: boolean;
+  formatRescueFailed: boolean;
 };
 
 const nodeTypes = { agent: AgentNode };
@@ -154,6 +159,10 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
     fixRound: undefined,
     workingAgents: new Set(),
     bigBang: false,
+    currentWaveIndex: 0,
+    agentsDone: 0,
+    formatRescueActive: false,
+    formatRescueFailed: false,
   });
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -200,8 +209,13 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
           }
 
           // ── wave lifecycle ────────────────────────────────────────
-          case "wave.started":
-            return s; // no visual change needed — individual agent.started handles it
+          case "wave.started": {
+            // Advance the current wave indicator using the wave name from payload
+            const waveName = typeof payload.wave === "string" ? payload.wave : null;
+            if (!waveName) return s;
+            const waveIdx = WAVES_V3.findIndex((w) => w.name === waveName);
+            return waveIdx >= 0 ? { ...s, currentWaveIndex: waveIdx } : s;
+          }
 
           case "wave.completed": {
             // Mark all agents in the wave as done if not already failed/done
@@ -259,6 +273,7 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
             nextWorking.delete(payload.agent);
             return {
               ...s,
+              agentsDone: s.agentsDone + 1,
               workingAgents: nextWorking,
               agents: {
                 ...s.agents,
@@ -334,10 +349,13 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
 
           // ── format rescue ─────────────────────────────────────────
           case "format_rescue.started":
+            return { ...s, formatRescueActive: true, formatRescueFailed: false };
+
           case "format_rescue.completed":
+            return { ...s, formatRescueActive: false, formatRescueFailed: false };
+
           case "format_rescue.failed":
-            // Phase 3a will add a dedicated indicator; for now no-op
-            return s;
+            return { ...s, formatRescueActive: false, formatRescueFailed: true };
 
           default:
             return s;
@@ -398,6 +416,10 @@ export function StudioCanvas({ generationId }: { generationId: string }) {
         testsCount={state.totalTests}
         phase={state.phase}
         fixRound={state.fixRound}
+        currentWaveIndex={state.currentWaveIndex}
+        agentsDone={state.agentsDone}
+        formatRescueActive={state.formatRescueActive}
+        formatRescueFailed={state.formatRescueFailed}
       />
 
       <AnimatePresence>
