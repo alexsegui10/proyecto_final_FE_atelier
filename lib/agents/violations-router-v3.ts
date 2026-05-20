@@ -57,6 +57,18 @@ const V3_ADDITIONS: RouteRuleV3[] = [
   // boot-friendly content). Priority 6 beats architect's 5 above.
   { pattern: /^README\.md$/i, agent: "bootstrap-devops", priority: 6 },
 
+  // ─── Wave 1 — Bootstrap & DevOps fix-loop ownership (B-w6-1, R12) ────
+  // The skeleton emits eslint.config.mjs and prettier.config.mjs in
+  // primer-emit (they are NOT listed in bootstrap-output filesProduced —
+  // see prompts-v3/bootstrap-devops.md R12). But bootstrap-devops is the
+  // owner-in-fix-loop: a qa-reviewer LintError whose recommendedFix
+  // touches the lint config gets dispatched here. Pre-B-w6-1 these
+  // landed on the (removed) pages-routing agent — dead-letter.
+  // Priority 10 so they outrank any future generic match.
+  { pattern: /^eslint\.config\.(mjs|js|ts|cjs)$/, agent: "bootstrap-devops", priority: 10 },
+  { pattern: /^prettier\.config\.(mjs|js|cjs)$/, agent: "bootstrap-devops", priority: 10 },
+  { pattern: /^\.prettierrc(\.(json|js|cjs|mjs|yaml|yml))?$/, agent: "bootstrap-devops", priority: 10 },
+
   // ─── Wave 2 — Layout Architect ──────────────────────────────────────
   // Stitch / global layout decisions. layout-architect owns the PLANNING
   // artifacts and high-level documentation about the layout tree; the

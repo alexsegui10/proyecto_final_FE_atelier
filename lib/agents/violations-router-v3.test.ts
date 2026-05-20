@@ -86,6 +86,43 @@ describe("routeViolationToAgentV3 — v3 additions", () => {
     expect(routeViolationToAgentV3("app/not-found.tsx")).toBe("visual-adapter");
     expect(routeViolationToAgentV3("app/error.tsx")).toBe("visual-adapter");
   });
+
+  // ─── B-w6-1: lint + format config ownership ────────────────────────
+  // F3-run-16 dead-lettered LintError violations whose fix touched
+  // eslint.config.mjs because no v3 agent owned the path. R12 on
+  // bootstrap-devops claims fix-loop ownership of both lint and format
+  // config; these regression tests pin the routing.
+  it("routes eslint.config.mjs to bootstrap-devops (B-w6-1 R12)", () => {
+    expect(routeViolationToAgentV3("eslint.config.mjs")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3("eslint.config.js")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3("eslint.config.ts")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3("eslint.config.cjs")).toBe("bootstrap-devops");
+  });
+
+  it("routes prettier.config.* to bootstrap-devops (B-w6-1 R12)", () => {
+    expect(routeViolationToAgentV3("prettier.config.mjs")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3("prettier.config.js")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3("prettier.config.cjs")).toBe("bootstrap-devops");
+  });
+
+  it("routes .prettierrc variants to bootstrap-devops (B-w6-1 R12)", () => {
+    expect(routeViolationToAgentV3(".prettierrc")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.json")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.js")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.cjs")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.mjs")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.yaml")).toBe("bootstrap-devops");
+    expect(routeViolationToAgentV3(".prettierrc.yml")).toBe("bootstrap-devops");
+  });
+
+  it("B-w6-1 regression: eslint.config.mjs does NOT route to pages-routing", () => {
+    // Concrete dead-letter case from F3-run-16: qa-reviewer set
+    // agent='pages-routing' and file='eslint.config.mjs'. Path routing
+    // must land on bootstrap-devops, not the removed pages-routing.
+    const agent = routeViolationToAgentV3("eslint.config.mjs");
+    expect(agent).toBe("bootstrap-devops");
+    expect(agent).not.toBe("pages-routing");
+  });
 });
 
 describe("routeViolationToAgentV3 — v2 superset", () => {

@@ -454,14 +454,16 @@ const AGENT_SLOTS_V3: Partial<Record<AgentNameV3, AgentSlotV3>> = {
     artifactFile: "tests-writer.json",
     validators: { "tests-writer.json": validateTestsWriter },
   },
-  // wave-6 — qa-reviewer (v2 prompt reused). artifactFile ≠ nombre de
-  // agente es la norma v2 (cf. auth-security→auth-mechanics.json); el
+  // wave-6 — qa-reviewer. Promovido v2→v3 en B-w6-1 (routing table cambió:
+  // app/* → visual-adapter, eslint/prettier config → bootstrap-devops,
+  // FormatError sin agent — handled por D2 rescue). artifactFile ≠ nombre
+  // de agente es la norma v2 (cf. auth-security→auth-mechanics.json); el
   // runner lo carga genérico → r.outcome.artifact → cast QaArtifactV3 en
   // orchestrator-v3.ts:740 (special-casing + fix-loop ya existen). Único
   // output, sin siblings → sin bundleLoader. Sin validators: schema de
-  // qa-report.json es TBD post-F3-run-15 (disciplina shape-first; deuda #23).
+  // qa-report.json sigue TBD shape-first (deuda #23).
   "qa-reviewer": {
-    promptRel: "lib/agents/prompts-v2/qa-reviewer.md",
+    promptRel: "lib/agents/prompts-v3/qa-reviewer.md",
     artifactFile: "qa-report.json",
   },
 };

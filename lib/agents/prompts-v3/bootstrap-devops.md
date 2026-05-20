@@ -264,6 +264,19 @@ Más reglas si el dominio lo justifica (e.g. `stripe-key-set` si hay pagos).
 
 **R11** `app/globals.css` contiene el bloque `@media (prefers-reduced-motion: reduce)` exactamente como se especifica en el archivo físico #9. Append-or-create: nunca pisar `@tailwind`/tokens existentes. Este es el reemplazo del eliminado animation-choreographer — la accesibilidad de movimiento se resuelve con CSS global, no con un agente. El bloque debe sobrevivir regeneraciones downstream (si un agente posterior reescribe `globals.css`, el fix loop re-appendea por esta regla).
 
+**R12 — Fix-loop ownership de lint + format config (B-w6-1)**
+
+Además de los archivos que producís en primer-emit (`filesProduced`), sos **owner-en-fix-loop** de la configuración de lint y format:
+
+- `eslint.config.{mjs,js,ts,cjs}`
+- `prettier.config.{mjs,js,cjs}` / `.prettierrc*`
+
+Estos archivos los emite el skeleton (`lib/skeleton-v2/`); NO los listás en `filesProduced` (el schema `.strict()` no los acepta y mentiría si los declarara: vos no los producís en primer-emit). Pero cuando QA Reviewer emita una violation cuyo fix sea editar uno de ellos (e.g. `LintError` con `recommendedFix` que toca `eslint.config.mjs` para relajar una regla o añadir un override), el orchestrator te la dispatcha vía `violations-router-v3.ts` (regla path priority 10).
+
+Aplicá exactamente el `recommendedFix`. NO inventés overrides nuevos. NO migrés a otro stack (`eslint` → `biome`, etc.) — quedate dentro del recommendedFix. Si lo que el QA Reviewer pide no se puede aplicar mecánicamente (ambigüedad real), emití un fallback nota en el sentinel y dejá que el fix-loop escale.
+
+Contexto de la regla: F3-run-16 quedó atascado 3 rondas porque las `LintError` con fix en `eslint.config.mjs` se ruteaban al eliminado `pages-routing` → dead-letter, sin agente vivo que las recibiera. R12 cierra el routing dándote ownership explícito.
+
 ## Decisiones explícitas
 
 - **Postgres en puerto 5433 por defecto**: yoga v2 colisionó con instalaciones locales en 5432; default 5433 evita el problema. La variable `POSTGRES_HOST_PORT` permite override.

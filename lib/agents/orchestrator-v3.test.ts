@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import {
   WAVES_V3,
@@ -18,6 +18,7 @@ import {
   type WaveV3,
 } from "./orchestrator-v3";
 import { AGENT_NAMES_V3 } from "./contracts-v3/agent-names";
+import * as formatRescueModule from "./runtime/format-rescue";
 
 // ─── Runner fixture ─────────────────────────────────────────────────
 
@@ -1138,5 +1139,195 @@ describe("runGenerationV3 — critical severity early-exit", () => {
     const result = await runGenerationV3({ ...base(), runner, maxFixRounds: 1 });
     expect(fixRoundCalls).toBeGreaterThan(0); // fix loop DID run for severity=error
     expect(result.qa?.decision).toBe("go");
+  });
+});
+
+// ─── D2 — post-fix-loop format rescue (B-w6-1) ──────────────────────
+//
+// F3-run-16 closure. The fix loop terminated no-go after 3 rounds with
+// the only remaining error-severity violation being a `FormatError`:
+// no agent owned the synthetic repo-wide "file" qa-reviewer emits for
+// format, so routing dead-lettered the fix indefinitely. D2 runs
+// `pnpm format` deterministically once the loop ends, then re-runs
+// qa-reviewer; the well-known prettier-divergence case converts from
+// terminal no-go to go without escalating to human review.
+//
+// The test spies on `runDeterministicFormat` (imported at top of file)
+// so we never spawn pnpm against the host machine.
+
+describe("runGenerationV3 — D2 format rescue (B-w6-1)", () => {
+  it("rescues a no-go where only FormatError remains: runs pnpm format, re-runs qa, decision flips to go", async () => {
+    const spy = vi
+      .spyOn(formatRescueModule, "runDeterministicFormat")
+      .mockResolvedValue();
+
+    // Track qa-reviewer invocations: rounds 0..N return no-go with
+    // FormatError only (so fix loop iterates but cannot resolve format
+    // through agent routing), then the D2 re-run (fixRound -1 sentinel)
+    // returns go.
+    const qaCalls: number[] = []; // fixRound for each qa call
+    const formatOnlyNoGo: QaArtifactV3 = {
+      decision: "no-go",
+      violations: [
+        {
+          rule: "FormatError",
+          severity: "error",
+          file: "(repo-wide: 145 files)",
+          message: "prettier --check fails on 145 files",
+          recommendedFix: "pnpm format",
+        },
+      ],
+    };
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.agent === "qa-reviewer") {
+        qaCalls.push(input.fixRound);
+        if (input.fixRound === -1) {
+          return {
+            artifact: { decision: "go", violations: [] } satisfies QaArtifactV3,
+            filesCreated: [],
+            summary: "QA_DONE_RESCUE",
+          };
+        }
+        return {
+          artifact: formatOnlyNoGo,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return { artifact: { agent: input.agent }, filesCreated: [], summary: "DONE" };
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      emit: async (e) => void events.push(e),
+      maxFixRounds: 1,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0]).toBe("/tmp/atelier-v3-test"); // workDir from base()
+    expect(qaCalls).toContain(-1); // sentinel re-run happened
+    expect(result.qa?.decision).toBe("go");
+    expect(events.some((e) => e.type === "format_rescue.started")).toBe(true);
+    expect(events.some((e) => e.type === "format_rescue.completed")).toBe(true);
+    expect(result.requiresHumanReview).toBeUndefined(); // rescue cleared it
+
+    spy.mockRestore();
+  });
+
+  it("does NOT rescue when the no-go has mixed FormatError + other errors", async () => {
+    const spy = vi
+      .spyOn(formatRescueModule, "runDeterministicFormat")
+      .mockResolvedValue();
+
+    // The fix loop will route the LintError to ui-components (via path),
+    // but the LintError survives → no-go terminal. FormatError is also
+    // present. D2 must NOT dispatch because the rescue condition is
+    // "every error-severity violation is FormatError".
+    const mixedNoGo: QaArtifactV3 = {
+      decision: "no-go",
+      violations: [
+        {
+          rule: "LintError",
+          severity: "error",
+          file: "client/components/ui/Button.tsx",
+          message: "useless lint warning",
+          recommendedFix: "remove",
+        },
+        {
+          rule: "FormatError",
+          severity: "error",
+          file: "(repo-wide)",
+          message: "prettier",
+          recommendedFix: "pnpm format",
+        },
+      ],
+    };
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.agent === "qa-reviewer") {
+        return {
+          artifact: mixedNoGo,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return { artifact: { agent: input.agent }, filesCreated: [], summary: "DONE" };
+    };
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      maxFixRounds: 1,
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(result.qa?.decision).toBe("no-go");
+    // Honesty: no rescue path consumed the format error → escalation flips.
+    // (LintError lands in qa.violations, not gateViolations, so honesty
+    // catch-all isn't the path that flips it; the residual no-go survives
+    // unchanged. We only assert the rescue stayed off.)
+    spy.mockRestore();
+  });
+
+  it("does NOT rescue when qa decision is go", async () => {
+    const spy = vi
+      .spyOn(formatRescueModule, "runDeterministicFormat")
+      .mockResolvedValue();
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.agent === "qa-reviewer") {
+        return {
+          artifact: { decision: "go", violations: [] } satisfies QaArtifactV3,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return { artifact: { agent: input.agent }, filesCreated: [], summary: "DONE" };
+    };
+    await runGenerationV3({ ...base(), runner });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("emits format_rescue.failed and falls through to escalation when pnpm format fails", async () => {
+    const spy = vi
+      .spyOn(formatRescueModule, "runDeterministicFormat")
+      .mockRejectedValue(new Error("pnpm format exit 1: parser error"));
+
+    const formatOnlyNoGo: QaArtifactV3 = {
+      decision: "no-go",
+      violations: [
+        {
+          rule: "FormatError",
+          severity: "error",
+          file: "(repo-wide)",
+          message: "prettier",
+          recommendedFix: "pnpm format",
+        },
+      ],
+    };
+    const runner: AgentRunnerV3 = async (input) => {
+      if (input.agent === "qa-reviewer") {
+        return {
+          artifact: formatOnlyNoGo,
+          filesCreated: [],
+          summary: "QA_DONE",
+        };
+      }
+      return { artifact: { agent: input.agent }, filesCreated: [], summary: "DONE" };
+    };
+    const events: OrchestratorV3Event[] = [];
+    const result = await runGenerationV3({
+      ...base(),
+      runner,
+      emit: async (e) => void events.push(e),
+      maxFixRounds: 1,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const failed = events.find((e) => e.type === "format_rescue.failed");
+    expect(failed).toBeDefined();
+    expect(failed && "reason" in failed ? failed.reason : "").toMatch(/parser error/);
+    // No swallow: the no-go survives.
+    expect(result.qa?.decision).toBe("no-go");
+    spy.mockRestore();
   });
 });

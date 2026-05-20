@@ -57,6 +57,7 @@ import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
 import { dirname as pathDirname, join as pathJoin } from "node:path";
 
 import { AGENT_NAMES_V3, AGENT_NAME_V3_SET, type AgentNameV3 } from "./contracts-v3/agent-names";
+import { runDeterministicFormat } from "./runtime/format-rescue";
 import { routeViolationToAgentV3 } from "./violations-router-v3";
 
 // ─── Wave shape ──────────────────────────────────────────────────────
@@ -202,7 +203,11 @@ export type OrchestratorV3Event =
   | { type: "agent.file_created"; agent: AgentNameV3; wave: WaveNameV3; path: string; lines: number }
   | { type: "qa.fix_round"; round: number; maxRounds: number; violations: number }
   | { type: "agent.fix_started"; agent: AgentNameV3; round: number; violations: number }
-  | { type: "agent.fix_completed"; agent: AgentNameV3; round: number };
+  | { type: "agent.fix_completed"; agent: AgentNameV3; round: number }
+  // D2 — deterministic post-fix-loop `pnpm format` rescue (B-w6-1).
+  | { type: "format_rescue.started"; workDir: string }
+  | { type: "format_rescue.completed" }
+  | { type: "format_rescue.failed"; reason: string };
 
 export type EmitEventV3 = (event: OrchestratorV3Event) => void | Promise<void>;
 
@@ -1149,6 +1154,55 @@ export async function runGenerationV3(
       artifacts["qa-reviewer"] = currentQa;
       qa = currentQa;
       if (currentQa.decision === "go") break;
+    }
+  }
+
+  // ─── D2: deterministic `pnpm format` rescue post-fix-loop (B-w6-1) ──
+  //
+  // Closes the F3-run-16 dead-end where the qa-reviewer fix loop sat
+  // through 3 rounds unable to dispatch a `FormatError`: prettier
+  // --check flagged 145 files across the workspace; the fix is a
+  // one-shot `pnpm format` (no LLM needed) and routing it as a normal
+  // violation produced a dead letter (no agent owns the synthetic
+  // repo-wide "file" qa-reviewer emits for format).
+  //
+  // Activation rule (tight on purpose): the fix loop terminated no-go
+  // AND every remaining error-severity violation is `rule: "FormatError"`.
+  // If mixed with other errors (e.g. a residual LintError), we skip the
+  // rescue this round — format will get its own pass once the other
+  // violations are cleared by their owners on the next fix loop turn,
+  // OR escalation kicks in.
+  //
+  // The re-run uses fixRound -1 as a sentinel so the runner / log
+  // analytics can distinguish "post-loop format rescue qa pass" from
+  // regular fix-loop iterations (which run 1..maxFixRounds).
+  if (qa && qa.decision === "no-go") {
+    const errorViolations = (qa.violations ?? []).filter(
+      (v) => v.severity === "error",
+    );
+    const isFormatOnly =
+      errorViolations.length > 0 &&
+      errorViolations.every((v) => v.rule === "FormatError");
+    if (isFormatOnly) {
+      await opts.emit({ type: "format_rescue.started", workDir: opts.workDir });
+      try {
+        await runDeterministicFormat(opts.workDir);
+        await opts.emit({ type: "format_rescue.completed" });
+        const reQa = await opts.runner({
+          agent: "qa-reviewer",
+          wave: "wave-6-static-qa",
+          workDir: opts.workDir,
+          prd: opts.prd,
+          fixRound: -1,
+          violations: [],
+        });
+        qa = reQa.artifact as QaArtifactV3;
+        artifacts["qa-reviewer"] = qa;
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await opts.emit({ type: "format_rescue.failed", reason });
+        // Fall through to honesty escalation — DO NOT swallow the no-go.
+      }
     }
   }
 
