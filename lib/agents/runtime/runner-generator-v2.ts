@@ -122,9 +122,12 @@ export const AGENT_CONFIG_V2: Record<AgentNameV2, AgentConfigEntry> = {
   persistence: { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "PERSISTENCE_DONE" },
   "seeds-shape": { timeoutMs: 4 * 60_000, model: "opus", stopSentinel: "SEEDS_SHAPE_DONE" },
 
-  // Wave 3
-  "service-layer": { timeoutMs: 15 * 60_000, model: "opus", stopSentinel: "SERVICE_LAYER_DONE" },
-  "auth-security": { timeoutMs: 12 * 60_000, model: "opus", stopSentinel: "AUTH_SECURITY_DONE" },
+  // Wave 3 — service-layer 15→22 + auth-security 12→18: bumped after
+  // F3-run-18 systemic slowness (claude.exe / API latency, observed +50%
+  // baseline across the pipeline; both agents landed at 69-73% of their
+  // prior caps and would have crossed under further variance).
+  "service-layer": { timeoutMs: 22 * 60_000, model: "opus", stopSentinel: "SERVICE_LAYER_DONE" },
+  "auth-security": { timeoutMs: 18 * 60_000, model: "opus", stopSentinel: "AUTH_SECURITY_DONE" },
   "rbac-authorization": {
     timeoutMs: 8 * 60_000,
     model: "opus",
@@ -135,7 +138,11 @@ export const AGENT_CONFIG_V2: Record<AgentNameV2, AgentConfigEntry> = {
   // forms-validations all timed out at their original limits. UI Components
   // generates ALL shadcn primitives + variants for ~28 components and
   // legitimately needs the bigger envelope.
-  "api-backend": { timeoutMs: 20 * 60_000, model: "opus", stopSentinel: "API_BACKEND_DONE" },
+  // api-backend 20→30: bumped after F3-run-18 hard timeout at 1200s (the
+  // agent was still emitting route handlers when killed). Baseline run-16
+  // was 571s; run-18 hit the 20min ceiling with 16 routes already written
+  // but no api-contract.json / sentinel. Buffer = 1.5× run-18 observed.
+  "api-backend": { timeoutMs: 30 * 60_000, model: "opus", stopSentinel: "API_BACKEND_DONE" },
   "frontend-architect": {
     timeoutMs: 18 * 60_000,
     model: "opus",

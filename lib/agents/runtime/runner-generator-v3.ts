@@ -52,8 +52,11 @@ export const AGENT_CONFIG_V3: Record<AgentNameV3, AgentConfigEntry> = {
   ...AGENT_CONFIG_V2,
 
   // ── v3 net-new ─────────────────────────────────────────────────────
+  // bootstrap-devops 8→12: bumped after F3-run-17 timeout (R12 prompt
+  // contributing) AND F3-run-18 post-rollback still at 356s = 74% of the
+  // 8min cap (systemic slowdown). Buffer = 1.5× run-18 observed.
   "bootstrap-devops": {
-    timeoutMs: 8 * 60_000,
+    timeoutMs: 12 * 60_000,
     model: "opus",
     stopSentinel: "BOOTSTRAP_DEVOPS_DONE",
   },
@@ -67,8 +70,12 @@ export const AGENT_CONFIG_V3: Record<AgentNameV3, AgentConfigEntry> = {
     model: "opus",
     stopSentinel: "BRAND_IDENTITY_DONE",
   },
+  // visual-adapter 35→50: preemptive bump after F3-run-18 systemic slowness.
+  // Run-16 baseline was 1395s = 66% of 35min cap — under the +50% slowdown
+  // observed in run-18 it would reach ~100%. Bumped before observing failure
+  // to avoid a 50min round-trip just to confirm the obvious.
   "visual-adapter": {
-    timeoutMs: 35 * 60_000,
+    timeoutMs: 50 * 60_000,
     model: "opus",
     stopSentinel: "VISUAL_ADAPTER_DONE",
   },
