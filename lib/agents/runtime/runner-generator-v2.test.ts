@@ -428,3 +428,100 @@ describe("runGeneratorAgentV2 — context injection", () => {
     expect(userPrompt.length).toBeLessThan(2048);
   });
 });
+
+// ─── ATELIER_TIMEOUT_MULTIPLIER (deuda #25) ─────────────────────────
+//
+// Closes the F3-run-17..20 whack-a-mole: per-agent timeouts were bumped
+// one at a time after each new agent timed out under the systemic ~1.5x
+// claude.exe / API slowdown. The env-var multiplier applies uniformly
+// at the single resolution site in runGeneratorAgentV2.
+//
+// Contract under test:
+//   - When the multiplier is set, the timeoutMs reaching the executor
+//     is the config baseline multiplied (rounded to int).
+//   - When the caller passes `input.timeoutMs`, the override is LITERAL
+//     (tests passing short values like 100ms must not be silently
+//     multiplied — they'd time out unexpectedly).
+//   - When the env var is unset or invalid, behavior matches pre-deuda
+//     #25 (no multiplication).
+
+function captureTimeoutExecutor(captured: { timeoutMs?: number }): SubprocessExecutor {
+  return async (input) => {
+    captured.timeoutMs = input.timeoutMs;
+    return { exitCode: 0, stdout: "ARCHITECT_DONE: ok", stderr: "", killedByTimeout: false };
+  };
+}
+
+describe("runGeneratorAgentV2 — ATELIER_TIMEOUT_MULTIPLIER (deuda #25)", () => {
+  const ENV_KEY = "ATELIER_TIMEOUT_MULTIPLIER";
+
+  it("passes config.timeoutMs literally when the env var is unset", async () => {
+    delete process.env[ENV_KEY];
+    const captured: { timeoutMs?: number } = {};
+    await runGeneratorAgentV2({
+      agent: "architect",
+      systemPrompt: "x",
+      workDir: "/tmp/atelier-test",
+      _executor: captureTimeoutExecutor(captured),
+      _walkFiles: fakeWalk(),
+      _readArtifact: fakeRead({}),
+    });
+    expect(captured.timeoutMs).toBe(AGENT_CONFIG_V2.architect.timeoutMs);
+  });
+
+  it("multiplies config.timeoutMs uniformly when ATELIER_TIMEOUT_MULTIPLIER=1.5", async () => {
+    process.env[ENV_KEY] = "1.5";
+    try {
+      const captured: { timeoutMs?: number } = {};
+      await runGeneratorAgentV2({
+        agent: "architect",
+        systemPrompt: "x",
+        workDir: "/tmp/atelier-test",
+        _executor: captureTimeoutExecutor(captured),
+        _walkFiles: fakeWalk(),
+        _readArtifact: fakeRead({}),
+      });
+      // architect baseline = 5 * 60_000 = 300_000 → 1.5x = 450_000
+      expect(captured.timeoutMs).toBe(Math.round(AGENT_CONFIG_V2.architect.timeoutMs * 1.5));
+    } finally {
+      delete process.env[ENV_KEY];
+    }
+  });
+
+  it("does NOT multiply input.timeoutMs overrides (tests pass literal short values)", async () => {
+    process.env[ENV_KEY] = "2";
+    try {
+      const captured: { timeoutMs?: number } = {};
+      await runGeneratorAgentV2({
+        agent: "architect",
+        systemPrompt: "x",
+        workDir: "/tmp/atelier-test",
+        timeoutMs: 100, // literal override — must survive untouched
+        _executor: captureTimeoutExecutor(captured),
+        _walkFiles: fakeWalk(),
+        _readArtifact: fakeRead({}),
+      });
+      expect(captured.timeoutMs).toBe(100);
+    } finally {
+      delete process.env[ENV_KEY];
+    }
+  });
+
+  it("falls back to 1.0 (no multiplication) on invalid env values", async () => {
+    process.env[ENV_KEY] = "garbage";
+    try {
+      const captured: { timeoutMs?: number } = {};
+      await runGeneratorAgentV2({
+        agent: "architect",
+        systemPrompt: "x",
+        workDir: "/tmp/atelier-test",
+        _executor: captureTimeoutExecutor(captured),
+        _walkFiles: fakeWalk(),
+        _readArtifact: fakeRead({}),
+      });
+      expect(captured.timeoutMs).toBe(AGENT_CONFIG_V2.architect.timeoutMs);
+    } finally {
+      delete process.env[ENV_KEY];
+    }
+  });
+});

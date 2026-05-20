@@ -19,6 +19,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 
+import { applyTimeoutMultiplier } from "./timeout-multiplier";
+
 import type { AgentNameV2 } from "../violations-router-v2";
 
 // ─── Public types ───────────────────────────────────────────────────
@@ -459,7 +461,10 @@ export async function runGeneratorAgentV2(
       `runGeneratorAgentV2: no config for agent "${input.agent}" — pass configOverride for v3 agents`,
     );
   }
-  const timeoutMs = input.timeoutMs ?? config.timeoutMs;
+  // ATELIER_TIMEOUT_MULTIPLIER applies to the config-derived baseline only.
+  // `input.timeoutMs` overrides (tests passing literal short values, e.g.
+  // 100ms) pass through untouched — see lib/agents/runtime/timeout-multiplier.ts.
+  const timeoutMs = input.timeoutMs ?? applyTimeoutMultiplier(config.timeoutMs);
   const model = input.model ?? config.model;
   const artifactsDir = input.artifactsDir ?? join(input.workDir, ".atelier");
   const skipArtifactLoad = input.artifactFile === false;

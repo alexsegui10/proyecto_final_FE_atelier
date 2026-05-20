@@ -36,6 +36,14 @@
  * Usage:
  *   tsx scripts/full-yoga-regen-v3.ts --dry-run
  *   tsx scripts/full-yoga-regen-v3.ts --real --stitch-mode fixture --stitch-fixture fixtures/stitch-yoga.json
+ *
+ * Slowness mitigation (deuda #25):
+ *   ATELIER_TIMEOUT_MULTIPLIER=1.5 tsx scripts/full-yoga-regen-v3.ts --real ...
+ *
+ *   Multiplies every per-agent `timeoutMs` from AGENT_CONFIG by the env value.
+ *   Default 1.0 (no-op). Use 1.5 during claude.exe / Anthropic API slowdown
+ *   windows. Bounds [0.5, 5.0]; out-of-range warns and falls back to 1.0.
+ *   See lib/agents/runtime/timeout-multiplier.ts.
  */
 import { mkdir, readFile, writeFile, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
