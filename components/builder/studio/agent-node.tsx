@@ -40,6 +40,7 @@ import {
 } from "@/lib/styles/studio-tokens";
 
 import type { AgentNameV3 } from "@/lib/agents/contracts-v3/agent-names";
+import { getAnimationForAgent } from "./animations/registry";
 
 // AgentKey is now the full v3 union
 export type AgentKey = AgentNameV3;
@@ -132,6 +133,7 @@ export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
   const Icon = ICONS[data.agent];
   const style = studioStatusStyle[data.status];
   const isActive = data.status === "working" || data.status === "fixing";
+  const Animation = getAnimationForAgent(data.agent);
 
   return (
     <div className="relative" style={{ width: 200, height: 72 }}>
@@ -165,6 +167,8 @@ export function AgentNode({ data }: NodeProps<Node<AgentNodeData>>) {
           position={Position.Left}
           className="!h-2 !w-2 !border-zinc-800 !bg-zinc-900"
         />
+
+        <Animation active={isActive} />
 
         {/* Header */}
         <div className="flex h-full items-center justify-between px-3 py-2">
