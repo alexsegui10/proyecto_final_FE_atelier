@@ -76,7 +76,12 @@ export default async function RevealPage({
     >
       <div className="grid h-full grid-cols-[40%_40%_20%] gap-3 p-3">
         <MonacoPane generationId={id} />
-        <PreviewPane workDir={result?.workDir ?? null} />
+        <PreviewPane
+          workDir={result?.workDir ?? null}
+          generationId={id}
+          generationStatus={generation.status}
+          livePreviewEnabled={process.env.ATELIER_LIVE_PREVIEW === "true"}
+        />
         <SummaryCard
           generationId={id}
           decision={decision}
