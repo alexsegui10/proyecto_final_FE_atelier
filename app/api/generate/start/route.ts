@@ -7,12 +7,8 @@ import { join } from "node:path";
 
 import { prisma } from "@/lib/db/client";
 import { getProjectById } from "@/lib/db/repositories/projects";
-import {
-  runGeneration,
-  type OrchestratorEvent,
-} from "@/lib/agents/orchestrator";
-import type { PRD } from "@/lib/agents/shared-state";
-import { GENERATOR_AGENT_ORDER } from "@/lib/agents/shared-state";
+import { runGenerationV3Bridge } from "@/lib/agents/orchestrator-v3-bridge";
+import { generatorAgentOrderV3 } from "@/lib/agents/orchestrator-v3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,25 +20,6 @@ function parseBody(payload: unknown): RequestBody | null {
   const body = payload as { projectId?: unknown };
   if (typeof body.projectId !== "string" || body.projectId.trim().length === 0) return null;
   return { projectId: body.projectId };
-}
-
-/**
- * Persist every orchestrator event as an Event row so the SSE endpoint can
- * replay them. Errors here are logged but never throw — losing one telemetry
- * event must not abort the generation.
- */
-async function persistEvent(generationId: string, event: OrchestratorEvent): Promise<void> {
-  try {
-    await prisma.event.create({
-      data: {
-        generationId,
-        type: event.type,
-        payload: event as never,
-      },
-    });
-  } catch (err) {
-    console.error("[generate/start] failed to persist event", event.type, err);
-  }
 }
 
 async function prepareWorkDir(generationId: string): Promise<string> {
@@ -97,7 +74,7 @@ function prismaGenerate(workDir: string): Promise<number> {
 async function runOrchestratorInBackground(args: {
   generationId: string;
   projectId: string;
-  prd: PRD;
+  prd: unknown;
 }): Promise<void> {
   const { generationId, projectId, prd } = args;
   let workDir: string | null = null;
@@ -106,54 +83,47 @@ async function runOrchestratorInBackground(args: {
 
     const installCode = await pnpmInstall(workDir);
     if (installCode !== 0) {
-      await persistEvent(generationId, {
-        type: "generation.failed",
-        generationId,
-        reason: `pnpm install failed in workDir (exit ${installCode})`,
-      });
+      await prisma.event.create({
+        data: {
+          generationId,
+          type: "generation.failed",
+          payload: {
+            type: "generation.failed",
+            generationId,
+            reason: `pnpm install failed in workDir (exit ${installCode})`,
+          },
+        },
+      }).catch(() => undefined);
       return;
     }
     const generateCode = await prismaGenerate(workDir);
     if (generateCode !== 0) {
-      await persistEvent(generationId, {
-        type: "generation.failed",
-        generationId,
-        reason: `prisma generate failed in workDir (exit ${generateCode})`,
-      });
+      await prisma.event.create({
+        data: {
+          generationId,
+          type: "generation.failed",
+          payload: {
+            type: "generation.failed",
+            generationId,
+            reason: `prisma generate failed in workDir (exit ${generateCode})`,
+          },
+        },
+      }).catch(() => undefined);
       return;
     }
 
-    const promptsDir = join(process.cwd(), "lib", "agents", "prompts");
-    const result = await runGeneration({
-      generationId,
-      projectId,
-      prd,
-      workDir,
-      promptsDir,
-      onEvent: (event) => persistEvent(generationId, event),
-    });
-
-    await prisma.generation.update({
-      where: { id: generationId },
-      data: {
-        status: result.failedAt ? "failed" : "complete",
-        finishedAt: new Date(),
-        result: {
-          workDir,
-          durationMs: result.durationMs,
-          filesCreated: result.filesCreated.length,
-          summary: result.state.qa?.summary ?? null,
-          decision: result.state.qa?.decision ?? null,
-        },
-      },
-    });
+    await runGenerationV3Bridge({ generationId, projectId, prd, workDir });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "orchestrator crashed";
-    await persistEvent(generationId, {
-      type: "generation.failed",
-      generationId,
-      reason,
-    });
+    await prisma.event
+      .create({
+        data: {
+          generationId,
+          type: "generation.failed",
+          payload: { type: "generation.failed", generationId, reason },
+        },
+      })
+      .catch(() => undefined);
     await prisma.generation
       .update({
         where: { id: generationId },
@@ -196,7 +166,7 @@ export async function POST(request: NextRequest) {
   });
 
   // Pre-create AgentRun rows so the Studio knows which agents will run.
-  for (const agent of GENERATOR_AGENT_ORDER) {
+  for (const agent of generatorAgentOrderV3()) {
     await prisma.agentRun.create({
       data: {
         generationId: generation.id,
@@ -210,7 +180,7 @@ export async function POST(request: NextRequest) {
   void runOrchestratorInBackground({
     generationId: generation.id,
     projectId: project.id,
-    prd: project.prd as unknown as PRD,
+    prd: project.prd,
   });
 
   return NextResponse.json({ generationId: generation.id });
