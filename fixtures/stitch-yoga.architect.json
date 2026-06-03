@@ -1,0 +1,111 @@
+{
+  "stackDecisions": {
+    "framework": "Next.js 16 App Router",
+    "database": "PostgreSQL + Prisma 7",
+    "auth": "Better Auth + custom RefreshToken rotation",
+    "validation": "Zod",
+    "styling": "Tailwind 4 + shadcn/ui",
+    "stateManagement": "Context + TanStack Query",
+    "forms": "react-hook-form + Zod",
+    "tests": "Vitest + Playwright"
+  },
+  "features": [
+    {
+      "name": "auth",
+      "entities": [
+        "User"
+      ],
+      "useCases": [
+        "usuario crea cuenta (sign-up)",
+        "usuario inicia sesión (sign-in)",
+        "usuario gestiona su perfil"
+      ],
+      "publicRoutes": [
+        "/sign-in",
+        "/sign-up"
+      ],
+      "privateRoutes": [
+        "/profile"
+      ],
+      "adminRoutes": [
+        "/admin/users"
+      ]
+    },
+    {
+      "name": "classes",
+      "entities": [
+        "Class"
+      ],
+      "useCases": [
+        "profesor consulta sus clases programadas",
+        "profesor cancela una clase propia y libera reservas",
+        "admin crea, edita y elimina (soft) clases"
+      ],
+      "publicRoutes": [
+        "/",
+        "/shop/classes",
+        "/shop/classes/[slug]"
+      ],
+      "privateRoutes": [
+        "/teacher/classes"
+      ],
+      "adminRoutes": [
+        "/admin/classes"
+      ]
+    },
+    {
+      "name": "bookings",
+      "entities": [
+        "Booking"
+      ],
+      "useCases": [
+        "alumno reserva una clase (consume crédito de su membresía activa)",
+        "alumno cancela una reserva propia hasta 2h antes (devuelve crédito)",
+        "alumno consulta su agenda de reservas",
+        "admin invalida una reserva manualmente"
+      ],
+      "publicRoutes": [],
+      "privateRoutes": [
+        "/my/bookings"
+      ],
+      "adminRoutes": [
+        "/admin/bookings"
+      ]
+    },
+    {
+      "name": "memberships",
+      "entities": [
+        "Membership"
+      ],
+      "useCases": [
+        "alumno consulta créditos restantes y estado de su membresía",
+        "admin gestiona membresías de cualquier alumno"
+      ],
+      "publicRoutes": [
+        "/shop/memberships",
+        "/shop/memberships/[slug]"
+      ],
+      "privateRoutes": [
+        "/my/membership"
+      ],
+      "adminRoutes": [
+        "/admin/memberships"
+      ]
+    }
+  ],
+  "crossCuttingConcerns": {
+    "logging": "structured JSON",
+    "rateLimit": [
+      "/api/auth/*"
+    ],
+    "auditLog": [
+      "create on Booking",
+      "update on Booking (cancel/invalidate)",
+      "create on Membership",
+      "update on Membership (credits, validity)"
+    ],
+    "i18n": false,
+    "darkMode": "system + toggle"
+  },
+  "deploymentNotes": "Single Next.js app, single-tenant. Vercel + Neon Postgres."
+}

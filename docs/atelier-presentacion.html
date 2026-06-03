@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atelier — Generador de Aplicaciones con IA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a28;
+      --border: #2a2a3d;
+      --accent: #7c6af7;
+      --accent2: #a78bfa;
+      --accent3: #34d399;
+      --text: #e8e8f0;
+      --muted: #6b7280;
+      --white: #ffffff;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body { background: #fff; color: #111; }
+      .cover { background: #111 !important; color: #fff !important; }
+      .cover * { color: #fff !important; }
+      .section { page-break-inside: avoid; }
+      .wave-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+
+    /* ── Layout ── */
+    .page { max-width: 960px; margin: 0 auto; padding: 0 2rem; }
+
+    /* ────────────────────────────────────────────────
+       PORTADA
+    ──────────────────────────────────────────────── */
+    .cover {
+      background: linear-gradient(135deg, #0a0a1a 0%, #12103a 50%, #0a1020 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -200px; left: -200px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -150px; right: -150px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(52,211,153,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cover-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 4rem 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cover-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      border: 1px solid rgba(124,106,247,0.4);
+      padding: 0.3rem 0.9rem;
+      border-radius: 100px;
+      margin-bottom: 2.5rem;
+    }
+
+    .cover-title {
+      font-size: clamp(3.5rem, 8vw, 7rem);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    .cover-title span {
+      background: linear-gradient(135deg, #7c6af7, #a78bfa, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cover-subtitle {
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: rgba(255,255,255,0.6);
+      max-width: 560px;
+      margin-bottom: 4rem;
+      line-height: 1.5;
+    }
+
+    .cover-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      max-width: 640px;
+    }
+
+    .cover-meta-item {
+      padding: 1.2rem 1.5rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+    }
+
+    .cover-meta-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .cover-meta-value {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .cover-stats {
+      display: flex;
+      gap: 3rem;
+      margin-top: 4rem;
+      padding-top: 3rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .stat-number {
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: var(--accent2);
+      line-height: 1;
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.4);
+      font-weight: 400;
+      margin-top: 0.3rem;
+    }
+
+    /* ────────────────────────────────────────────────
+       SECCIONES
+    ──────────────────────────────────────────────── */
+    .section {
+      padding: 5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section:last-child { border-bottom: none; }
+
+    .section-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--white);
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-lead {
+      font-size: 1.1rem;
+      color: rgba(232,232,240,0.7);
+      max-width: 680px;
+      line-height: 1.8;
+    }
+
+    /* ── Cards ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .card-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.8rem;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: var(--accent); }
+
+    .card-icon {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 0.6rem;
+    }
+
+    .card-text {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.7rem;
+      border-radius: 100px;
+    }
+
+    .badge-purple { background: rgba(124,106,247,0.15); color: var(--accent2); border: 1px solid rgba(124,106,247,0.3); }
+    .badge-green  { background: rgba(52,211,153,0.12); color: #34d399; border: 1px solid rgba(52,211,153,0.25); }
+    .badge-blue   { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+    .badge-orange { background: rgba(251,146,60,0.12); color: #fb923c; border: 1px solid rgba(251,146,60,0.25); }
+
+    /* ────────────────────────────────────────────────
+       TECH STACK
+    ──────────────────────────────────────────────── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 3rem;
+    }
+
+    .stack-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem;
+      text-align: center;
+    }
+
+    .stack-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 0.3rem;
+    }
+
+    .stack-role {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .stack-emoji { font-size: 1.5rem; margin-bottom: 0.6rem; display: block; }
+
+    /* ────────────────────────────────────────────────
+       WAVE DIAGRAM
+    ──────────────────────────────────────────────── */
+    .wave-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.2rem;
+      margin-top: 3rem;
+    }
+
+    .wave-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      position: relative;
+    }
+
+    .wave-number {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .wave-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 0.8rem;
+    }
+
+    .agent-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .agent-chip {
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      background: rgba(124,106,247,0.1);
+      color: #c4b5fd;
+      border: 1px solid rgba(124,106,247,0.2);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .wave-parallel {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      font-size: 0.6rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 100px;
+      background: rgba(52,211,153,0.12);
+      color: #34d399;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    /* ────────────────────────────────────────────────
+       FLUJO DE USUARIO
+    ──────────────────────────────────────────────── */
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 3rem;
+    }
+
+    .flow-step {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 2.5rem;
+      padding: 2.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .flow-step:last-child { border-bottom: none; }
+
+    .flow-mockup {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      aspect-ratio: 16/10;
+      position: relative;
+    }
+
+    .mockup-bar {
+      height: 28px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 5px;
+    }
+
+    .mockup-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+
+    .mockup-body {
+      padding: 14px;
+      height: calc(100% - 28px);
+    }
+
+    /* Discover mockup */
+    .chat-bubble {
+      border-radius: 8px;
+      padding: 7px 10px;
+      margin-bottom: 6px;
+      font-size: 0.65rem;
+      line-height: 1.4;
+    }
+
+    .chat-ai {
+      background: rgba(124,106,247,0.15);
+      color: #c4b5fd;
+      border: 1px solid rgba(124,106,247,0.2);
+      max-width: 90%;
+    }
+
+    .chat-user {
+      background: rgba(255,255,255,0.06);
+      color: #d1d5db;
+      border: 1px solid rgba(255,255,255,0.08);
+      max-width: 85%;
+      margin-left: auto;
+    }
+
+    .chat-input {
+      position: absolute;
+      bottom: 8px; left: 8px; right: 8px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+    }
+
+    .chat-input-text {
+      font-size: 0.6rem;
+      color: var(--muted);
+      flex: 1;
+    }
+
+    .chat-input-btn {
+      width: 14px; height: 14px;
+      background: var(--accent);
+      border-radius: 4px;
+    }
+
+    /* Studio mockup */
+    .node-graph {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .graph-wave {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .graph-node {
+      border-radius: 5px;
+      padding: 3px 6px;
+      font-size: 0.55rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .node-done {
+      background: rgba(52,211,153,0.15);
+      color: #34d399;
+      border: 1px solid rgba(52,211,153,0.3);
+    }
+
+    .node-active {
+      background: rgba(124,106,247,0.25);
+      color: #a78bfa;
+      border: 1px solid rgba(124,106,247,0.5);
+      animation: pulse 1.5s infinite;
+    }
+
+    .node-pending {
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .graph-arrow {
+      font-size: 0.55rem;
+      color: var(--muted);
+    }
+
+    .progress-bar-wrap {
+      margin-top: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      height: 4px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent3));
+      width: 62%;
+    }
+
+    /* Reveal mockup */
+    .editor-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      height: 100%;
+    }
+
+    .editor-panel {
+      background: #0d1117;
+      border-radius: 6px;
+      padding: 8px;
+      overflow: hidden;
+    }
+
+    .code-line {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.5rem;
+      line-height: 1.6;
+      white-space: nowrap;
+    }
+
+    .code-purple { color: #c084fc; }
+    .code-blue   { color: #60a5fa; }
+    .code-green  { color: #34d399; }
+    .code-white  { color: #e2e8f0; }
+    .code-gray   { color: #4b5563; }
+    .code-orange { color: #fb923c; }
+
+    .preview-panel {
+      background: #fff;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .preview-header {
+      background: #f8fafc;
+      height: 18px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 4px;
+    }
+
+    .preview-nav-item {
+      font-size: 0.5rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .preview-body {
+      padding: 8px;
+    }
+
+    .preview-card {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 6px;
+      margin-bottom: 4px;
+      font-size: 0.5rem;
+      color: #334155;
+    }
+
+    .preview-btn {
+      background: #6366f1;
+      color: #fff;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 0.48rem;
+      font-weight: 600;
+    }
+
+    /* ── Flow step content ── */
+    .flow-content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .flow-step-number {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 0.6rem;
+    }
+
+    .flow-step-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.8rem;
+    }
+
+    .flow-step-desc {
+      font-size: 0.9rem;
+      color: rgba(232,232,240,0.65);
+      line-height: 1.8;
+      margin-bottom: 1.2rem;
+    }
+
+    /* ────────────────────────────────────────────────
+       ARQUITECTURA
+    ──────────────────────────────────────────────── */
+    .arch-diagram {
+      margin-top: 3rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem;
+    }
+
+    .arch-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 0;
+    }
+
+    .arch-arrow {
+      text-align: center;
+      color: var(--muted);
+      font-size: 1.2rem;
+      padding: 0.4rem 0;
+    }
+
+    .arch-box {
+      border-radius: 12px;
+      padding: 1rem 1.4rem;
+      text-align: center;
+      min-width: 140px;
+    }
+
+    .arch-box-main {
+      background: rgba(124,106,247,0.12);
+      border: 1px solid rgba(124,106,247,0.3);
+    }
+
+    .arch-box-secondary {
+      background: rgba(52,211,153,0.08);
+      border: 1px solid rgba(52,211,153,0.2);
+    }
+
+    .arch-box-neutral {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+
+    .arch-box-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 0.2rem;
+    }
+
+    .arch-box-sub {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .arch-section-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+      margin: 1.2rem 0 0.6rem;
+    }
+
+    .arch-agents-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 1rem;
+      background: rgba(124,106,247,0.05);
+      border: 1px dashed rgba(124,106,247,0.2);
+      border-radius: 12px;
+      margin: 0.5rem 0;
+    }
+
+    /* ────────────────────────────────────────────────
+       CONTRATOS (Zod)
+    ──────────────────────────────────────────────── */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 1.8rem;
+      margin-top: 2rem;
+      overflow-x: auto;
+    }
+
+    .code-block pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.8;
+      color: #e2e8f0;
+    }
+
+    .code-comment { color: #4b5563; }
+    .code-keyword { color: #c084fc; }
+    .code-string  { color: #34d399; }
+    .code-type    { color: #60a5fa; }
+    .code-fn      { color: #fbbf24; }
+
+    /* ────────────────────────────────────────────────
+       ESTADO ACTUAL
+    ──────────────────────────────────────────────── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.8rem;
+    }
+
+    .status-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .check-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .check-list li {
+      font-size: 0.875rem;
+      color: rgba(232,232,240,0.7);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      line-height: 1.5;
+    }
+
+    .check-list li::before {
+      content: '✓';
+      color: var(--accent3);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.05em;
+    }
+
+    .check-list.pending li::before {
+      content: '○';
+      color: var(--muted);
+    }
+
+    /* ────────────────────────────────────────────────
+       FOOTER
+    ──────────────────────────────────────────────── */
+    .footer {
+      padding: 3rem 0;
+      text-align: center;
+    }
+
+    .footer-logo {
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+
+    .footer-logo span {
+      background: linear-gradient(135deg, #7c6af7, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .footer-text {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* ── Utilities ── */
+    .mt-2  { margin-top: 0.5rem; }
+    .mt-3  { margin-top: 0.75rem; }
+    .mt-4  { margin-top: 1rem; }
+    .mt-6  { margin-top: 1.5rem; }
+    .mt-8  { margin-top: 2rem; }
+    .mt-12 { margin-top: 3rem; }
+    .flex  { display: flex; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-3 { gap: 0.75rem; }
+    .flex-wrap { flex-wrap: wrap; }
+    .items-center { align-items: center; }
+
+    .highlight-box {
+      background: rgba(124,106,247,0.08);
+      border: 1px solid rgba(124,106,247,0.2);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-top: 2rem;
+    }
+
+    .highlight-box p {
+      font-size: 0.95rem;
+      color: rgba(232,232,240,0.75);
+      line-height: 1.8;
+    }
+
+    .highlight-box strong {
+      color: var(--accent2);
+      font-weight: 600;
+    }
+
+    /* ── DB Schema table ── */
+    .schema-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+      font-size: 0.82rem;
+    }
+
+    .schema-table th {
+      text-align: left;
+      padding: 0.6rem 1rem;
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .schema-table td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid rgba(42,42,61,0.5);
+      color: rgba(232,232,240,0.75);
+      vertical-align: top;
+    }
+
+    .schema-table td:first-child {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #c4b5fd;
+    }
+
+    .schema-table td:nth-child(2) {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PORTADA
+══════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-inner">
+    <div class="cover-tag">Proyecto de Curso · 2025–2026</div>
+
+    <h1 class="cover-title">
+      Atelier<br/>
+      <span>Studio</span>
+    </h1>
+
+    <p class="cover-subtitle">
+      Plataforma de generación de aplicaciones web mediante inteligencia artificial multiagente
+    </p>
+
+    <div class="cover-meta">
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">Alumno</div>
+        <div class="cover-meta-value">Alex Seguí</div>
+      </div>
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">Tecnología principal</div>
+        <div class="cover-meta-value">Next.js 16 + Claude AI</div>
+      </div>
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">Curso</div>
+        <div class="cover-meta-value">2025 · 2026</div>
+      </div>
+    </div>
+
+    <div class="cover-stats">
+      <div>
+        <span class="stat-number">21</span>
+        <div class="stat-label">Agentes de IA especializados</div>
+      </div>
+      <div>
+        <span class="stat-number">7</span>
+        <div class="stat-label">Fases de generación (waves)</div>
+      </div>
+      <div>
+        <span class="stat-number">233</span>
+        <div class="stat-label">Tests automatizados en verde</div>
+      </div>
+      <div>
+        <span class="stat-number">14</span>
+        <div class="stat-label">Commits limpios</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     CONTENIDO
+══════════════════════════════════════════ -->
+<div class="page">
+
+
+  <!-- ── 1. QUÉ ES ── -->
+  <div class="section">
+    <div class="section-tag">01 · Introducción</div>
+    <h2 class="section-title">¿Qué es Atelier?</h2>
+    <p class="section-lead">
+      Atelier es una plataforma SaaS que convierte una descripción en lenguaje natural en una aplicación web
+      funcional y production-ready. El usuario describe lo que necesita en un chat; un sistema de 21 agentes
+      especializados, coordinados en 7 oleadas secuenciales, genera el código, la base de datos, la autenticación,
+      los tests y la infraestructura del proyecto.
+    </p>
+
+    <div class="highlight-box" style="margin-top: 2rem;">
+      <p>
+        <strong>Ejemplo real:</strong> Un usuario escribe "Quiero una app de gestión de clases de yoga con panel de
+        administrador, perfil de profesor y portal para alumnos, con pagos y reservas". Atelier analiza la descripción,
+        extrae los requisitos, y genera un proyecto Next.js completo con Prisma, autenticación por roles, API REST,
+        componentes React y una suite de tests Playwright — listo para desplegar.
+      </p>
+    </div>
+
+    <div class="card-grid mt-8">
+      <div class="card">
+        <div class="card-icon">💬</div>
+        <div class="card-title">Discover</div>
+        <div class="card-text">
+          El usuario conversa con el sistema. La IA extrae un PRD estructurado (Product Requirements Document)
+          con entidades, roles, pantallas y flujos de negocio.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">⚙️</div>
+        <div class="card-title">Studio</div>
+        <div class="card-text">
+          Los 21 agentes trabajan en cascada. El usuario observa el progreso en tiempo real a través de un
+          grafo de ejecución con streaming de eventos SSE.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🚀</div>
+        <div class="card-title">Reveal</div>
+        <div class="card-text">
+          El código generado se presenta en un editor Monaco integrado junto a una preview en vivo del
+          proyecto arrancado en un proceso hijo.
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── 2. FLUJO DE USUARIO ── -->
+  <div class="section">
+    <div class="section-tag">02 · Experiencia de usuario</div>
+    <h2 class="section-title">Cómo funciona paso a paso</h2>
+    <p class="section-lead">
+      El flujo está diseñado para que cualquier persona —sin conocimientos técnicos— pueda obtener un
+      proyecto funcional en cuestión de minutos.
+    </p>
+
+    <div class="flow-steps">
+
+      <!-- Step 1: Discover -->
+      <div class="flow-step">
+        <div class="flow-mockup">
+          <div class="mockup-bar">
+            <div class="mockup-dot" style="background:#ff5f57"></div>
+            <div class="mockup-dot" style="background:#febc2e"></div>
+            <div class="mockup-dot" style="background:#28c840"></div>
+          </div>
+          <div class="mockup-body" style="position:relative; padding-bottom: 36px;">
+            <div class="chat-bubble chat-ai">
+              Hola, soy Atelier. Cuéntame qué aplicación quieres construir.
+            </div>
+            <div class="chat-bubble chat-user">
+              Una app de yoga con admin, profesores y alumnos. Con reservas y pagos.
+            </div>
+            <div class="chat-bubble chat-ai">
+              Perfecto. He identificado 3 roles, 8 entidades y 12 pantallas. ¿Añadimos sistema de membresías?
+            </div>
+            <div class="chat-bubble chat-user">
+              Sí, con planes mensuales y anuales.
+            </div>
+            <div class="chat-bubble chat-ai" style="background: rgba(52,211,153,0.12); color: #34d399; border-color: rgba(52,211,153,0.25);">
+              ✓ PRD generado · 14 entidades · 18 pantallas · Listo para generar
+            </div>
+            <div class="chat-input">
+              <span class="chat-input-text">Escribe tu descripción…</span>
+              <div class="chat-input-btn"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-content">
+          <div class="flow-step-number">PASO 01</div>
+          <div class="flow-step-title">Conversación con IA</div>
+          <p class="flow-step-desc">
+            El usuario describe su aplicación en lenguaje natural. El sistema realiza preguntas de
+            clarificación para extraer un PRD completo: entidades del dominio, roles de usuario,
+            pantallas, flujos y reglas de negocio.
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <span class="badge badge-purple">Claude API</span>
+            <span class="badge badge-green">Streaming SSE</span>
+            <span class="badge badge-blue">PRD estructurado</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Studio -->
+      <div class="flow-step">
+        <div class="flow-mockup">
+          <div class="mockup-bar">
+            <div class="mockup-dot" style="background:#ff5f57"></div>
+            <div class="mockup-dot" style="background:#febc2e"></div>
+            <div class="mockup-dot" style="background:#28c840"></div>
+          </div>
+          <div class="mockup-body">
+            <div class="node-graph">
+              <div class="graph-wave">
+                <div class="graph-node node-done">bootstrap</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node node-done">architect</div>
+              </div>
+              <div class="graph-arrow" style="padding-left: 8px;">↓</div>
+              <div class="graph-wave">
+                <div class="graph-node node-done">ux-designer</div>
+                <div class="graph-arrow">∥</div>
+                <div class="graph-node node-done">brand</div>
+                <div class="graph-arrow">∥</div>
+                <div class="graph-node node-done">layout</div>
+              </div>
+              <div class="graph-arrow" style="padding-left: 8px;">↓</div>
+              <div class="graph-wave">
+                <div class="graph-node node-done">domain</div>
+                <div class="graph-arrow">∥</div>
+                <div class="graph-node node-done">persistence</div>
+              </div>
+              <div class="graph-arrow" style="padding-left: 8px;">↓</div>
+              <div class="graph-wave">
+                <div class="graph-node node-active">api-backend</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node node-pending">frontend-arch</div>
+              </div>
+              <div class="graph-wave" style="margin-top: 5px;">
+                <div class="graph-node node-pending">ui-components</div>
+                <div class="graph-arrow">∥</div>
+                <div class="graph-node node-pending">forms</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node node-pending">qa</div>
+              </div>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-content">
+          <div class="flow-step-number">PASO 02</div>
+          <div class="flow-step-title">Orquestación multiagente</div>
+          <p class="flow-step-desc">
+            Los 21 agentes se ejecutan en 7 oleadas dependenciales. Los agentes de una misma oleada
+            corren en paralelo con <code>Promise.allSettled</code>. Cada agente produce un artefacto
+            JSON validado por un schema Zod antes de pasarse al siguiente.
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <span class="badge badge-purple">21 agentes</span>
+            <span class="badge badge-green">Ejecución paralela</span>
+            <span class="badge badge-orange">Zod contracts</span>
+            <span class="badge badge-blue">Fix loop QA</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Reveal -->
+      <div class="flow-step">
+        <div class="flow-mockup">
+          <div class="mockup-bar">
+            <div class="mockup-dot" style="background:#ff5f57"></div>
+            <div class="mockup-dot" style="background:#febc2e"></div>
+            <div class="mockup-dot" style="background:#28c840"></div>
+          </div>
+          <div class="mockup-body" style="padding: 8px;">
+            <div class="editor-wrap">
+              <div class="editor-panel">
+                <div class="code-line code-comment">// schema.prisma</div>
+                <div class="code-line"><span class="code-purple">model</span> <span class="code-blue">User</span> <span class="code-white">{</span></div>
+                <div class="code-line" style="padding-left: 8px;"><span class="code-green">id</span>    <span class="code-blue">String</span></div>
+                <div class="code-line" style="padding-left: 8px;"><span class="code-green">email</span> <span class="code-blue">String</span></div>
+                <div class="code-line"><span class="code-white">}</span></div>
+                <div class="code-line">&nbsp;</div>
+                <div class="code-line"><span class="code-purple">model</span> <span class="code-blue">Clase</span> <span class="code-white">{</span></div>
+                <div class="code-line" style="padding-left: 8px;"><span class="code-green">id</span>     <span class="code-blue">String</span></div>
+                <div class="code-line" style="padding-left: 8px;"><span class="code-green">titulo</span> <span class="code-blue">String</span></div>
+                <div class="code-line" style="padding-left: 8px;"><span class="code-green">hora</span>   <span class="code-blue">DateTime</span></div>
+                <div class="code-line"><span class="code-white">}</span></div>
+              </div>
+              <div class="preview-panel">
+                <div class="preview-header">
+                  <span class="preview-nav-item">Mi Yoga</span>
+                  <span class="preview-nav-item" style="margin-left:auto; color:#6366f1;">Admin</span>
+                </div>
+                <div class="preview-body">
+                  <div class="preview-card">
+                    <strong style="font-size:0.52rem; color:#1e293b;">Clases del lunes</strong><br/>
+                    <span style="color:#64748b; font-size:0.48rem;">Vinyasa · 10:00 · 8/12 plazas</span>
+                  </div>
+                  <div class="preview-card">
+                    <strong style="font-size:0.52rem; color:#1e293b;">Hatha Yoga</strong><br/>
+                    <span style="color:#64748b; font-size:0.48rem;">11:30 · 3/12 plazas</span>
+                  </div>
+                  <div style="margin-top: 5px;">
+                    <span class="preview-btn">+ Nueva clase</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-content">
+          <div class="flow-step-number">PASO 03</div>
+          <div class="flow-step-title">Código + Preview en vivo</div>
+          <p class="flow-step-desc">
+            El proyecto generado se presenta en un editor Monaco con resaltado de sintaxis.
+            Simultáneamente, la plataforma arranca el proyecto en un proceso hijo y sirve
+            una preview navegable en tiempo real.
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <span class="badge badge-purple">Monaco Editor</span>
+            <span class="badge badge-green">Preview live</span>
+            <span class="badge badge-blue">Descarga ZIP</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ── 3. ARQUITECTURA TÉCNICA ── -->
+  <div class="section">
+    <div class="section-tag">03 · Arquitectura</div>
+    <h2 class="section-title">Arquitectura del sistema</h2>
+    <p class="section-lead">
+      Atelier sigue una arquitectura de capas clara: la interfaz de usuario llama a rutas de API de Next.js
+      que orquestan los agentes. La persistencia recoge cada evento de la generación para que el usuario
+      pueda reanudar o inspeccionar ejecuciones pasadas.
+    </p>
+
+    <div class="arch-diagram">
+
+      <div class="arch-section-label">Interfaz de usuario</div>
+      <div class="arch-row">
+        <div class="arch-box arch-box-main">
+          <div class="arch-box-title">Discover Chat</div>
+          <div class="arch-box-sub">React · SSE stream</div>
+        </div>
+        <div class="arch-box arch-box-main">
+          <div class="arch-box-title">Studio</div>
+          <div class="arch-box-sub">React Flow · Realtime</div>
+        </div>
+        <div class="arch-box arch-box-main">
+          <div class="arch-box-title">Reveal</div>
+          <div class="arch-box-sub">Monaco · Preview iframe</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓</div>
+
+      <div class="arch-section-label">API Layer — Next.js App Router</div>
+      <div class="arch-row">
+        <div class="arch-box arch-box-neutral">
+          <div class="arch-box-title">/api/discovery/stream</div>
+          <div class="arch-box-sub">Chat con Claude · SSE</div>
+        </div>
+        <div class="arch-box arch-box-neutral">
+          <div class="arch-box-title">/api/generate/start</div>
+          <div class="arch-box-sub">Lanza orquestador</div>
+        </div>
+        <div class="arch-box arch-box-neutral">
+          <div class="arch-box-title">/api/preview</div>
+          <div class="arch-box-sub">Spawn proceso hijo</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓</div>
+
+      <div class="arch-section-label">Orquestador V3 — 21 agentes · 7 waves</div>
+      <div class="arch-agents-row">
+        <span class="agent-chip">bootstrap</span>
+        <span class="agent-chip">architect</span>
+        <span class="agent-chip">ux-designer</span>
+        <span class="agent-chip">layout-arch</span>
+        <span class="agent-chip">brand-identity</span>
+        <span class="agent-chip">domain-modeler</span>
+        <span class="agent-chip">persistence</span>
+        <span class="agent-chip">seeds-shape</span>
+        <span class="agent-chip">service-layer</span>
+        <span class="agent-chip">auth-security</span>
+        <span class="agent-chip">rbac-auth</span>
+        <span class="agent-chip">api-backend</span>
+        <span class="agent-chip">frontend-arch</span>
+        <span class="agent-chip">ui-components</span>
+        <span class="agent-chip">forms-validations</span>
+        <span class="agent-chip">visual-adapter</span>
+        <span class="agent-chip">seeds-fixtures</span>
+        <span class="agent-chip">tests-writer</span>
+        <span class="agent-chip">qa-reviewer</span>
+        <span class="agent-chip">visual-qa</span>
+        <span class="agent-chip">format-rescue</span>
+      </div>
+
+      <div class="arch-arrow">↓</div>
+
+      <div class="arch-section-label">Persistencia</div>
+      <div class="arch-row">
+        <div class="arch-box arch-box-secondary">
+          <div class="arch-box-title">PostgreSQL</div>
+          <div class="arch-box-sub">Prisma ORM</div>
+        </div>
+        <div class="arch-box arch-box-secondary">
+          <div class="arch-box-title">Anthropic API</div>
+          <div class="arch-box-sub">Claude Sonnet</div>
+        </div>
+        <div class="arch-box arch-box-secondary">
+          <div class="arch-box-title">Stitch SDK</div>
+          <div class="arch-box-sub">Google · Diseño UI</div>
+        </div>
+        <div class="arch-box arch-box-secondary">
+          <div class="arch-box-title">Clerk</div>
+          <div class="arch-box-sub">Autenticación</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ── 4. WAVES DE AGENTES ── -->
+  <div class="section">
+    <div class="section-tag">04 · Sistema multiagente</div>
+    <h2 class="section-title">Las 7 oleadas de generación</h2>
+    <p class="section-lead">
+      Los agentes están ordenados por dependencias. Los de una misma oleada no dependen entre sí
+      y se ejecutan en paralelo. El resultado de cada oleada alimenta a las siguientes.
+    </p>
+
+    <div class="wave-grid">
+
+      <div class="wave-card">
+        <div class="wave-number">Wave 1</div>
+        <div class="wave-name">Bootstrap &amp; Arquitectura</div>
+        <div class="agent-chips">
+          <span class="agent-chip">bootstrap-devops</span>
+          <span class="agent-chip">architect</span>
+        </div>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-parallel">PARALELO</div>
+        <div class="wave-number">Wave 2A</div>
+        <div class="wave-name">Diseño visual</div>
+        <div class="agent-chips">
+          <span class="agent-chip">ux-ui-designer</span>
+          <span class="agent-chip">layout-architect</span>
+          <span class="agent-chip">brand-identity</span>
+        </div>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-parallel">PARALELO</div>
+        <div class="wave-number">Wave 2B</div>
+        <div class="wave-name">Dominio &amp; Persistencia</div>
+        <div class="agent-chips">
+          <span class="agent-chip">domain-modeler</span>
+          <span class="agent-chip">persistence</span>
+          <span class="agent-chip">seeds-shape</span>
+        </div>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-parallel">PARALELO</div>
+        <div class="wave-number">Wave 3</div>
+        <div class="wave-name">Seguridad &amp; Servicios</div>
+        <div class="agent-chips">
+          <span class="agent-chip">service-layer</span>
+          <span class="agent-chip">auth-security</span>
+          <span class="agent-chip">rbac-authorization</span>
+        </div>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-number">Wave 4</div>
+        <div class="wave-name">Frontend completo</div>
+        <div class="agent-chips">
+          <span class="agent-chip">api-backend</span>
+          <span class="agent-chip">frontend-arch</span>
+          <span class="agent-chip">ui-components</span>
+          <span class="agent-chip">forms-validations</span>
+          <span class="agent-chip">visual-adapter</span>
+        </div>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-number">Wave 5 · 6</div>
+        <div class="wave-name">Seeds, Tests &amp; QA</div>
+        <div class="agent-chips">
+          <span class="agent-chip">seeds-fixtures</span>
+          <span class="agent-chip">tests-writer</span>
+          <span class="agent-chip">qa-reviewer</span>
+        </div>
+      </div>
+
+      <div class="wave-card" style="grid-column: 1 / -1; background: rgba(52,211,153,0.05); border-color: rgba(52,211,153,0.2);">
+        <div class="wave-number" style="color: #34d399;">Wave 7 · QA Visual</div>
+        <div class="wave-name">Runtime &amp; Visual QA</div>
+        <div style="font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; line-height: 1.7;">
+          El agente <strong style="color: rgba(232,232,240,0.7);">visual-qa</strong> arranca la aplicación generada con Playwright, ejecuta flujos de cliente y administrador
+          con clics reales, captura screenshots y detecta errores en runtime. Si detecta violaciones, las rutas
+          de vuelta al agente responsable mediante el <strong style="color: rgba(232,232,240,0.7);">fix loop</strong>.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="highlight-box mt-8">
+      <p>
+        <strong>Fix loop:</strong> tras cada oleada, el agente <code>qa-reviewer</code> valida los artefactos producidos.
+        Si detecta violaciones, las enruta al agente causante para que las corrija, hasta 3 rondas. Sólo si las
+        violaciones persisten como <code>critical</code> se detiene la generación. Las de tipo <code>warn</code>
+        se acumulan y se presentan en el informe final sin bloquear.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ── 5. CONTRATOS ZOD ── -->
+  <div class="section">
+    <div class="section-tag">05 · Calidad del código</div>
+    <h2 class="section-title">Contratos tipados entre agentes</h2>
+    <p class="section-lead">
+      Cada agente tiene su propio schema Zod. El orquestador valida el JSON de salida antes de pasarlo
+      al siguiente agente. Esto elimina la posibilidad de que errores de formato se propaguen silenciosamente.
+    </p>
+
+    <div class="code-block">
+      <pre><span class="code-comment">// lib/agents/contracts-v3/bootstrap.schema.ts</span>
+<span class="code-keyword">export const</span> <span class="code-fn">bootstrapOutputSchema</span> = z.<span class="code-fn">object</span>({
+  envManifest: z.<span class="code-fn">array</span>(z.<span class="code-fn">object</span>({
+    key:      z.<span class="code-fn">string</span>(),
+    required: z.<span class="code-fn">boolean</span>(),
+    source:   z.<span class="code-fn">enum</span>([<span class="code-string">'env'</span>, <span class="code-string">'generated'</span>, <span class="code-string">'default'</span>]),
+  })),
+  healthcheckUrl:    z.<span class="code-fn">string</span>().<span class="code-fn">url</span>(),
+  crossPlatformOk:   z.<span class="code-fn">boolean</span>(),
+  startupCommand:    z.<span class="code-fn">string</span>(),
+}).<span class="code-fn">refine</span>(
+  (d) => d.envManifest.<span class="code-fn">every</span>(e => e.source !== <span class="code-string">'hardcoded'</span>),
+  <span class="code-string">"R0 — ninguna variable de entorno puede estar hardcodeada"</span>
+);</pre>
+    </div>
+
+    <div class="card-grid-2 mt-8">
+      <div class="card">
+        <div class="card-title">🔒 Invariantes en Zod</div>
+        <div class="card-text">
+          Los schemas incluyen refinements que comprueban reglas de negocio. Por ejemplo, R0 garantiza
+          que ningún agente hardcodee variables de entorno en el código generado.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🧪 Tests de contratos</div>
+        <div class="card-text">
+          Cada schema tiene su propio fichero de tests. Los 233 tests en verde cubren schemas,
+          validaciones de contratos, lógica del orquestador y comportamiento del runtime.
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── 6. BASE DE DATOS ── -->
+  <div class="section">
+    <div class="section-tag">06 · Persistencia</div>
+    <h2 class="section-title">Modelo de datos de Atelier</h2>
+    <p class="section-lead">
+      La base de datos de Atelier registra cada usuario, proyecto, generación y evento de agente.
+      Esto permite reanudar generaciones interrumpidas e inspeccionar el historial completo.
+    </p>
+
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th>Modelo</th>
+          <th>Campos clave</th>
+          <th>Descripción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>User</td>
+          <td>id (Clerk), email</td>
+          <td>Usuario autenticado vía Clerk. El id es el proporcionado por Clerk.</td>
+        </tr>
+        <tr>
+          <td>Project</td>
+          <td>id, slug, prd (JSON)</td>
+          <td>Proyecto creado por el usuario. El campo <code>prd</code> almacena el documento de requisitos extraído en la fase Discover.</td>
+        </tr>
+        <tr>
+          <td>Generation</td>
+          <td>status, startedAt, result</td>
+          <td>Cada ejecución del orquestador. Status: <code>pending | running | complete | failed</code>.</td>
+        </tr>
+        <tr>
+          <td>AgentRun</td>
+          <td>agent, status, output</td>
+          <td>Registro de cada agente dentro de una generación. Almacena el artefacto JSON producido.</td>
+        </tr>
+        <tr>
+          <td>Event</td>
+          <td>type, payload (JSON)</td>
+          <td>Flujo de eventos del orquestador. Los 20 tipos de evento (wave.started, agent.completed, etc.) se persisten verbatim.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ── 7. TECH STACK ── -->
+  <div class="section">
+    <div class="section-tag">07 · Tecnologías</div>
+    <h2 class="section-title">Stack tecnológico</h2>
+    <p class="section-lead">
+      Atelier utiliza tecnologías modernas y production-grade. Todas las dependencias
+      están fijadas a versiones concretas para garantizar reproducibilidad.
+    </p>
+
+    <div class="stack-grid">
+      <div class="stack-item">
+        <span class="stack-emoji">⚛️</span>
+        <div class="stack-name">Next.js 16</div>
+        <div class="stack-role">App Router · React 19</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🔷</span>
+        <div class="stack-name">TypeScript 5</div>
+        <div class="stack-role">Tipado estricto</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🗄️</span>
+        <div class="stack-name">Prisma + PG</div>
+        <div class="stack-role">ORM · PostgreSQL</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🔐</span>
+        <div class="stack-name">Clerk</div>
+        <div class="stack-role">Autenticación</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🤖</span>
+        <div class="stack-name">Claude API</div>
+        <div class="stack-role">Anthropic · LLM</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🎨</span>
+        <div class="stack-name">Stitch SDK</div>
+        <div class="stack-role">Google · UI gen</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">✅</span>
+        <div class="stack-name">Zod</div>
+        <div class="stack-role">Validación schemas</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🧪</span>
+        <div class="stack-name">Vitest</div>
+        <div class="stack-role">233 tests · CI</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🎭</span>
+        <div class="stack-name">Playwright</div>
+        <div class="stack-role">Tests E2E · Visual QA</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">💅</span>
+        <div class="stack-name">Tailwind v4</div>
+        <div class="stack-role">Estilos · CSS</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🗺️</span>
+        <div class="stack-name">React Flow</div>
+        <div class="stack-role">Grafo de agentes</div>
+      </div>
+      <div class="stack-item">
+        <span class="stack-emoji">🐋</span>
+        <div class="stack-name">Docker</div>
+        <div class="stack-role">PostgreSQL local</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── 8. ESTADO ACTUAL ── -->
+  <div class="section">
+    <div class="section-tag">08 · Estado del proyecto</div>
+    <h2 class="section-title">Estado actual: ~92% completado</h2>
+    <p class="section-lead">
+      Las 6 primeras waves de generación están implementadas y validadas con LLMs reales.
+      La interfaz de usuario está completa: chat, grafo de agentes en tiempo real, preview en vivo y exportación.
+      Queda pendiente únicamente la integración final del agente Visual QA en el entorno de producción desplegado.
+    </p>
+
+    <!-- Barra de progreso -->
+    <div style="margin-top: 2rem;">
+      <div style="display:flex; justify-content:space-between; margin-bottom: 0.5rem;">
+        <span style="font-size:0.8rem; font-weight:600; color:var(--white);">Progreso global</span>
+        <span style="font-size:0.8rem; font-weight:700; color:var(--accent3);">92%</span>
+      </div>
+      <div style="background:rgba(255,255,255,0.06); border-radius:8px; height:10px; overflow:hidden;">
+        <div style="width:92%; height:100%; border-radius:8px; background:linear-gradient(90deg, #7c6af7, #34d399);"></div>
+      </div>
+      <div style="display:flex; gap:1.5rem; margin-top:1rem; flex-wrap:wrap;">
+        <span style="font-size:0.75rem; color:var(--muted);">Waves 1–6 <strong style="color:var(--accent3);">✓ completas</strong></span>
+        <span style="font-size:0.75rem; color:var(--muted);">UI completa <strong style="color:var(--accent3);">✓</strong></span>
+        <span style="font-size:0.75rem; color:var(--muted);">233 tests en verde <strong style="color:var(--accent3);">✓</strong></span>
+        <span style="font-size:0.75rem; color:var(--muted);">Wave 7 Visual QA producción <strong style="color:#fb923c);">⏳ en curso</strong></span>
+      </div>
+    </div>
+
+    <div class="status-grid">
+      <div class="status-card">
+        <div class="status-card-title">
+          <span style="color: var(--accent3);">✓</span> Implementado y validado
+        </div>
+        <ul class="check-list">
+          <li>Orquestador V3 con 7 oleadas, dependencias y ejecución paralela</li>
+          <li>21 agentes especializados con contratos Zod e invariantes</li>
+          <li>Waves 1–6 validadas end-to-end con LLMs reales (yoga, tutorías)</li>
+          <li>Fix loop: qa-reviewer detecta violaciones y las enruta al agente responsable</li>
+          <li>Gate de runtime smoke sin LLM (5 probes HTTP)</li>
+          <li>Mecanismo step-by-step con aprobación humana entre waves</li>
+          <li>Interfaz Discover: chat con IA, extracción de PRD estructurado</li>
+          <li>Interfaz Studio: grafo de 7 waves con animaciones en tiempo real</li>
+          <li>HUD con wave activa, contador de agentes y rondas de fix</li>
+          <li>Preview live del proyecto generado (spawn de proceso hijo + iframe)</li>
+          <li>Copy-to-clipboard del código generado</li>
+          <li>Docker Compose + script de demo automatizado (<code>pnpm demo:setup</code>)</li>
+          <li>Autenticación con Clerk y persistencia completa en PostgreSQL</li>
+          <li>233 tests en verde · 14 commits limpios · CI estable</li>
+        </ul>
+      </div>
+      <div class="status-card">
+        <div class="status-card-title">
+          <span style="color: #fb923c;">⏳</span> Trabajo restante (~8%)
+        </div>
+        <ul class="check-list pending">
+          <li>Wave 7: integración del agente Visual QA con Playwright en el entorno de producción (la lógica está implementada; falta el wiring con la app desplegada)</li>
+          <li>Exportación del proyecto generado como ZIP descargable</li>
+          <li>Despliegue en Vercel con base de datos en producción</li>
+        </ul>
+
+        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.15); border-radius: 10px;">
+          <p style="font-size: 0.82rem; color: rgba(232,232,240,0.65); line-height: 1.7;">
+            El sistema genera aplicaciones completas y funcionales.
+            El trabajo restante es de infraestructura de despliegue,
+            no de lógica de producto.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── PROYECTO ADICIONAL ── -->
+  <div class="section">
+    <div class="section-tag">09 · Otros proyectos</div>
+    <h2 class="section-title">Web para empresa real: MRC Taller</h2>
+    <p class="section-lead">
+      Además de Atelier, he desarrollado y desplegado una web profesional para una empresa real de taller
+      de coches. El proyecto está en producción y accesible públicamente.
+    </p>
+
+    <div class="card-grid-2 mt-8">
+      <div class="card" style="border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.04);">
+        <div class="card-icon">🔧</div>
+        <div class="card-title" style="color: #fb923c;">MRC Taller Mecánico</div>
+        <div class="card-text" style="margin-bottom: 1rem;">
+          Web corporativa completa para una empresa de servicios de mecánica. Incluye presentación
+          de servicios, galería, información de contacto y formulario de cita previa.
+        </div>
+        <a href="https://mrc-sooty.vercel.app/" target="_blank"
+           style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:600;
+                  color:#fb923c; text-decoration:none; border:1px solid rgba(251,146,60,0.35);
+                  padding:0.4rem 0.9rem; border-radius:8px; background:rgba(251,146,60,0.08);">
+          🌐 mrc-sooty.vercel.app
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Características del proyecto</div>
+        <ul class="check-list" style="margin-top: 0.5rem;">
+          <li>Desplegado en producción con Vercel</li>
+          <li>Diseño responsive adaptado a móvil y escritorio</li>
+          <li>Cliente real — empresa de taller mecánico</li>
+          <li>Rendimiento optimizado y accesible públicamente</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div class="footer">
+    <div class="footer-logo">Atelier <span>Studio</span></div>
+    <div class="footer-text">
+      Proyecto desarrollado durante el curso 2025–2026 · Alex Seguí<br/>
+      Next.js 16 · React 19 · TypeScript · Prisma · Claude AI · Vitest · Playwright
+    </div>
+  </div>
+
+</div><!-- /.page -->
+</body>
+</html>
