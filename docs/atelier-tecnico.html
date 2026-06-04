@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atelier — Documentación Técnica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131f;
+      --surface2: #1c1c2e;
+      --border: #2a2a3d;
+      --accent: #7c6af7;
+      --accent2: #a78bfa;
+      --green: #34d399;
+      --orange: #fb923c;
+      --blue: #60a5fa;
+      --text: #e2e2f0;
+      --muted: #6b7280;
+    }
+
+    html { font-size: 15px; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    @media print {
+      body { background: #fff; color: #111; font-size: 13px; }
+      .cover { background: #111 !important; }
+      .cover * { color: #fff !important; }
+      h1, h2, h3 { color: #000 !important; }
+      .section { page-break-inside: avoid; }
+      code, pre { background: #f4f4f8 !important; color: #111 !important; border: 1px solid #ddd !important; }
+      .badge { border: 1px solid #ccc !important; color: #333 !important; background: #f4f4f4 !important; }
+      .card { border: 1px solid #ddd !important; background: #fafafa !important; }
+      .wave-card { border: 1px solid #ddd !important; background: #f9f9ff !important; }
+      .code-block { background: #f4f4f8 !important; border: 1px solid #ddd !important; }
+      .folder-tree { background: #f4f4f8 !important; border: 1px solid #ddd !important; }
+      .highlight { background: #f0f0ff !important; border: 1px solid #c4b5fd !important; }
+      a { color: #5b21b6 !important; }
+      .muted { color: #555 !important; }
+    }
+
+    .wrap { max-width: 900px; margin: 0 auto; padding: 0 2rem; }
+
+    /* ── Portada ── */
+    .cover {
+      background: linear-gradient(135deg, #0a0a1a 0%, #12103a 60%, #0a1020 100%);
+      padding: 4rem 2rem 3.5rem;
+      margin-bottom: 0;
+    }
+
+    .cover-inner { max-width: 900px; margin: 0 auto; }
+
+    .cover-label {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--accent2);
+      margin-bottom: 1.2rem;
+    }
+
+    .cover-title {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 900; letter-spacing: -0.04em;
+      color: #fff; line-height: 1.05; margin-bottom: 0.6rem;
+    }
+
+    .cover-title span {
+      background: linear-gradient(135deg, #7c6af7, #34d399);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cover-sub {
+      font-size: 1.1rem; color: rgba(255,255,255,0.5);
+      font-weight: 300; margin-bottom: 2rem;
+    }
+
+    .cover-pills { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 2rem; }
+
+    .pill {
+      font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.8rem;
+      border-radius: 100px; border: 1px solid rgba(124,106,247,0.35);
+      background: rgba(124,106,247,0.1); color: var(--accent2);
+    }
+
+    .pill-green { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.08); color: var(--green); }
+    .pill-blue  { border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.08); color: var(--blue); }
+
+    /* ── Secciones ── */
+    .section { padding: 3.5rem 0; border-bottom: 1px solid var(--border); }
+    .section:last-child { border-bottom: none; }
+
+    .sec-tag {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 0.6rem;
+    }
+
+    h2 {
+      font-size: 1.9rem; font-weight: 800; letter-spacing: -0.03em;
+      color: #fff; margin-bottom: 1rem; line-height: 1.2;
+    }
+
+    h3 {
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      margin: 2rem 0 0.6rem;
+    }
+
+    h4 {
+      font-size: 0.9rem; font-weight: 700; color: var(--accent2);
+      margin: 1.4rem 0 0.4rem;
+    }
+
+    p {
+      font-size: 0.92rem; color: rgba(226,226,240,0.75);
+      line-height: 1.85; margin-bottom: 0.9rem;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    a { color: var(--accent2); }
+
+    .muted { color: var(--muted); font-size: 0.85rem; }
+
+    /* ── Código inline ── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8em;
+      background: rgba(124,106,247,0.1);
+      border: 1px solid rgba(124,106,247,0.2);
+      color: #c4b5fd;
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+    }
+
+    /* ── Bloques de código ── */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem 1.6rem;
+      margin: 1.2rem 0;
+      overflow-x: auto;
+    }
+
+    .code-block pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 1.8;
+      color: #e2e8f0;
+    }
+
+    .ck { color: #c084fc; }   /* keyword */
+    .cs { color: #34d399; }   /* string */
+    .ct { color: #60a5fa; }   /* type */
+    .cf { color: #fbbf24; }   /* function */
+    .cc { color: #4b5563; }   /* comment */
+    .co { color: #fb923c; }   /* operator / special */
+
+    /* ── Árbol de carpetas ── */
+    .folder-tree {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem 1.6rem;
+      margin: 1.2rem 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 1.9;
+      color: #e2e8f0;
+    }
+
+    .ft-dir   { color: #60a5fa; font-weight: 600; }
+    .ft-file  { color: #94a3b8; }
+    .ft-note  { color: #4b5563; font-style: italic; }
+    .ft-green { color: #34d399; }
+    .ft-purple{ color: #c4b5fd; }
+
+    /* ── Cards ── */
+    .card-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1.5rem; }
+    .card-grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; margin-top: 1.5rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem;
+    }
+
+    .card-title { font-size: 0.9rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+    .card-text  { font-size: 0.82rem; color: var(--muted); line-height: 1.7; }
+
+    /* ── Wave cards ── */
+    .wave-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+
+    .wave-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem 1.6rem;
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .wave-head { }
+
+    .wave-num {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 0.3rem;
+    }
+
+    .wave-name {
+      font-size: 0.92rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;
+    }
+
+    .wave-parallel {
+      display: inline-block; font-size: 0.6rem; font-weight: 600;
+      padding: 0.15rem 0.5rem; border-radius: 100px;
+      background: rgba(52,211,153,0.1); color: var(--green);
+      border: 1px solid rgba(52,211,153,0.25);
+    }
+
+    .wave-body { }
+
+    .agent-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .agent-row {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 0.8rem;
+      align-items: baseline;
+      font-size: 0.83rem;
+    }
+
+    .agent-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #c4b5fd;
+      font-weight: 500;
+    }
+
+    .agent-desc { color: rgba(226,226,240,0.65); line-height: 1.5; }
+
+    /* ── Diagrama de flujo ── */
+    .flow-diagram {
+      margin: 1.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+    }
+
+    .flow-box {
+      font-size: 0.78rem; font-weight: 600;
+      padding: 0.4rem 0.9rem;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .fb-purple { background: rgba(124,106,247,0.15); border: 1px solid rgba(124,106,247,0.3); color: #c4b5fd; }
+    .fb-green  { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.25); color: var(--green); }
+    .fb-blue   { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.25); color: var(--blue); }
+    .fb-orange { background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.25); color: var(--orange); }
+    .fb-gray   { background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--muted); }
+
+    .flow-arrow { color: var(--muted); font-size: 0.9rem; }
+
+    /* ── Highlight box ── */
+    .highlight {
+      background: rgba(124,106,247,0.07);
+      border: 1px solid rgba(124,106,247,0.2);
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin: 1.2rem 0;
+    }
+
+    .highlight p { color: rgba(226,226,240,0.8); }
+    .highlight strong { color: var(--accent2); }
+
+    /* ── Tabla ── */
+    table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.83rem; }
+    th {
+      text-align: left; padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.04);
+      color: var(--muted); font-size: 0.68rem;
+      font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid rgba(42,42,61,0.5);
+      color: rgba(226,226,240,0.7);
+      vertical-align: top;
+    }
+    td:first-child { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #c4b5fd; }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block; font-size: 0.7rem; font-weight: 600;
+      padding: 0.2rem 0.6rem; border-radius: 100px;
+    }
+    .b-purple { background: rgba(124,106,247,0.12); color: var(--accent2); border: 1px solid rgba(124,106,247,0.25); }
+    .b-green  { background: rgba(52,211,153,0.1);  color: var(--green);   border: 1px solid rgba(52,211,153,0.2); }
+    .b-orange { background: rgba(251,146,60,0.1);  color: var(--orange);  border: 1px solid rgba(251,146,60,0.2); }
+
+    /* ── Footer ── */
+    .footer { padding: 3rem 0 2rem; text-align: center; }
+    .footer p { font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<!-- PORTADA -->
+<div class="cover">
+  <div class="cover-inner">
+    <div class="cover-label">Documentación técnica · Curso 2025–2026</div>
+    <h1 class="cover-title">Atelier <span>Studio</span></h1>
+    <p class="cover-sub">Cómo está construido el sistema multiagente de generación de aplicaciones web</p>
+    <div class="cover-pills">
+      <span class="pill">Next.js 16</span>
+      <span class="pill">TypeScript</span>
+      <span class="pill pill-green">21 agentes IA</span>
+      <span class="pill pill-green">Zod contracts</span>
+      <span class="pill pill-blue">Claude API</span>
+      <span class="pill pill-blue">Prisma + PostgreSQL</span>
+      <span class="pill">Vitest · 233 tests</span>
+    </div>
+    <p class="muted">
+      Alex Seguí ·
+      <a href="https://github.com/alexsegui10/proyecto_final_FE_atelier">github.com/alexsegui10/proyecto_final_FE_atelier</a>
+    </p>
+  </div>
+</div>
+
+
+<div class="wrap">
+
+<!-- ════════════════════════════════════════
+     1. QUÉ ES
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">01 · Introducción</div>
+  <h2>¿Qué es Atelier?</h2>
+
+  <p>
+    Atelier es una plataforma web que genera aplicaciones web completas a partir de una descripción
+    en lenguaje natural. El usuario describe lo que quiere construir en un chat; el sistema orquesta
+    21 agentes de inteligencia artificial que trabajan en cadena y producen un proyecto Next.js funcional
+    con base de datos, autenticación, API, componentes, tests y configuración de despliegue.
+  </p>
+
+  <p>
+    <strong style="color:#fff;">Qué genera exactamente:</strong> un proyecto Next.js (App Router) con TypeScript,
+    Prisma + PostgreSQL, autenticación con Better Auth, componentes shadcn/ui adaptados al diseño generado,
+    API REST con rutas de Next.js, tests Vitest y Playwright, y scripts de arranque multiplataforma.
+    Todo listo para ejecutar con <code>pnpm demo:setup</code>.
+  </p>
+
+  <div class="highlight">
+    <p>
+      <strong>Ejemplo real validado:</strong> a partir de la descripción
+      <em>"app de clases de yoga con administrador, profesores y alumnos, reservas y pagos"</em>,
+      Atelier genera un proyecto completo en aproximadamente 15 minutos: 14 entidades de dominio,
+      18 pantallas, sistema de roles RBAC, integración de pagos, seeds con datos realistas y
+      una suite de tests E2E.
+    </p>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     2. ARQUITECTURA DEL PROYECTO
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">02 · Arquitectura del proyecto</div>
+  <h2>Cómo está organizado el código</h2>
+
+  <p>
+    Atelier es una aplicación Next.js 16 con App Router. La carpeta <code>app/</code> contiene
+    las rutas y la UI propia de la plataforma. La carpeta <code>lib/agents/</code> contiene
+    todo el sistema de generación. Son dos mundos completamente separados.
+  </p>
+
+  <div class="folder-tree">
+<span class="ft-dir">projecto/</span>
+├── <span class="ft-dir">app/</span>                          <span class="ft-note">← UI de la plataforma Atelier</span>
+│   ├── <span class="ft-dir">(dashboard)/</span>
+│   │   ├── <span class="ft-dir">discover/</span>             <span class="ft-note">← chat con IA para describir la app</span>
+│   │   ├── <span class="ft-dir">studio/[id]/</span>          <span class="ft-note">← grafo de agentes en tiempo real</span>
+│   │   └── <span class="ft-dir">reveal/[id]/</span>          <span class="ft-note">← editor Monaco + preview live</span>
+│   └── <span class="ft-dir">api/</span>
+│       ├── <span class="ft-dir">discovery/stream/</span>     <span class="ft-note">← SSE del chat de discovery</span>
+│       ├── <span class="ft-dir">generate/start/</span>       <span class="ft-note">← lanza el orquestador</span>
+│       └── <span class="ft-dir">preview/</span>              <span class="ft-note">← spawn proceso hijo para preview</span>
+│
+├── <span class="ft-dir">lib/</span>
+│   ├── <span class="ft-dir">agents/</span>                   <span class="ft-note">← el sistema multiagente completo</span>
+│   │   ├── <span class="ft-dir">contracts-v3/</span>         <span class="ft-purple">← schemas Zod, uno por agente</span>
+│   │   │   ├── bootstrap.schema.ts
+│   │   │   ├── layout-tree.schema.ts
+│   │   │   └── ... (un .schema.ts por agente)
+│   │   ├── <span class="ft-dir">prompts-v3/</span>           <span class="ft-green">← system prompts en Markdown, uno por agente</span>
+│   │   │   ├── bootstrap-devops.md
+│   │   │   ├── ux-ui-designer.md
+│   │   │   └── ... (un .md por agente)
+│   │   ├── <span class="ft-dir">runtime/</span>              <span class="ft-note">← motor que invoca Claude y valida outputs</span>
+│   │   │   ├── runner-generator-v3.ts
+│   │   │   ├── stitch-client.ts
+│   │   │   └── qa-gates/
+│   │   ├── orchestrator-v3.ts            <span class="ft-note">← director de waves y dependencias</span>
+│   │   ├── orchestrator-v3-bridge.ts     <span class="ft-note">← conecta la API HTTP con el orquestador</span>
+│   │   └── violations-router-v3.ts       <span class="ft-note">← enruta errores al agente responsable</span>
+│   ├── <span class="ft-dir">db/</span>                       <span class="ft-note">← cliente Prisma + repositorios</span>
+│   └── <span class="ft-dir">skeleton/</span>                 <span class="ft-note">← plantilla base del proyecto generado</span>
+│
+├── <span class="ft-dir">components/builder/</span>           <span class="ft-note">← componentes React de la UI de Atelier</span>
+├── <span class="ft-dir">prisma/schema.prisma</span>          <span class="ft-note">← BD de Atelier (no la generada)</span>
+└── <span class="ft-dir">lib/skeleton/</span>                 <span class="ft-note">← proyecto Next.js vacío que se rellena</span>
+  </div>
+
+  <h3>Flujo de una petición de generación</h3>
+
+  <div class="flow-diagram">
+    <div class="flow-row">
+      <div class="flow-box fb-blue">Usuario: POST /api/generate/start</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-purple">orchestrator-v3-bridge.ts</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-purple">runGenerationV3()</div>
+    </div>
+    <div class="flow-row" style="padding-left: 2rem;">
+      <span class="flow-arrow">↓ para cada wave</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-purple">orchestrator-v3.ts</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-green">runner-generator-v3.ts</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-orange">spawn claude.exe</div>
+    </div>
+    <div class="flow-row" style="padding-left: 2rem;">
+      <span class="flow-arrow">↓ respuesta del agente</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-orange">JSON output del agente</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-green">z.parse() con schema Zod</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-purple">siguiente wave / fix loop</div>
+    </div>
+    <div class="flow-row" style="padding-left: 2rem;">
+      <span class="flow-arrow">↓ eventos emitidos en tiempo real</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-blue">Event table (PostgreSQL)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-blue">SSE → UI Studio</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     3. CÓMO ESTÁ CONSTRUIDO CADA AGENTE
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">03 · El sistema agentico por dentro</div>
+  <h2>Cómo está construido cada agente</h2>
+
+  <p>
+    Cada agente en Atelier no es una clase ni un objeto — es la combinación de tres piezas independientes
+    que el runner une en tiempo de ejecución:
+  </p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">1. System prompt (.md)</div>
+      <div class="card-text">
+        Un fichero Markdown en <code>prompts-v3/</code>. Define el rol del agente, qué inputs lee
+        (qué ficheros del <code>.atelier/</code> anterior), qué output debe producir, y las reglas
+        que debe respetar (R0, R1… Rn). Es el "contrato de comportamiento".
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">2. Schema Zod (.schema.ts)</div>
+      <div class="card-text">
+        Un schema TypeScript en <code>contracts-v3/</code> que describe exactamente el JSON que
+        debe producir el agente. Incluye refinements con invariantes de negocio. Si el output
+        no pasa el <code>z.parse()</code>, se emite una violación.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">3. Config en el runner</div>
+      <div class="card-text">
+        Una entrada en <code>AGENT_CONFIG_V3</code> con el timeout, el sentinel de parada,
+        y el nombre del fichero artifact que debe producir. El runner usa esto para saber
+        cuánto esperar y cuándo considerar el agente terminado.
+      </div>
+    </div>
+  </div>
+
+  <h3>Cómo se invoca un agente</h3>
+  <p>
+    El runner (<code>runner-generator-v3.ts</code>) lanza un subproceso de <code>claude.exe</code>
+    con el system prompt del agente y el contexto acumulado (los artefactos de las waves anteriores).
+    Lee el stdout por streaming hasta detectar el sentinel de parada, luego parsea el JSON y lo
+    valida con el schema Zod.
+  </p>
+
+  <div class="code-block">
+    <pre><span class="cc">// runner-generator-v3.ts — simplificado</span>
+<span class="ck">async function</span> <span class="cf">runGeneratorAgentV3</span>(input: AgentRunInputV3) {
+  <span class="cc">// 1. Carga el system prompt del agente</span>
+  <span class="ck">const</span> prompt = <span class="ck">await</span> readFile(<span class="cs">`prompts-v3/${input.agent}.md`</span>);
+
+  <span class="cc">// 2. Lanza Claude como subproceso</span>
+  <span class="ck">const</span> child = <span class="cf">spawn</span>(<span class="cs">"claude"</span>, [<span class="cs">"--system"</span>, prompt, <span class="cs">"--output-format"</span>, <span class="cs">"json"</span>]);
+
+  <span class="cc">// 3. Lee el output por streaming hasta el sentinel</span>
+  <span class="ck">const</span> rawJson = <span class="ck">await</span> <span class="cf">collectOutput</span>(child, config.stopSentinel);
+
+  <span class="cc">// 4. Valida con el schema Zod del agente</span>
+  <span class="ck">const</span> artifact = <span class="cf">getSchemaForAgent</span>(input.agent).<span class="cf">parse</span>(rawJson);
+
+  <span class="cc">// 5. Escribe los ficheros físicos en el workDir</span>
+  <span class="ck">await</span> <span class="cf">writeArtifactFiles</span>(artifact, input.workDir);
+
+  <span class="ck">return</span> { artifact, filesCreated, summary };
+}</pre>
+  </div>
+
+  <h3>Ejemplo real: el agente Bootstrap</h3>
+  <p>
+    Su system prompt (<code>prompts-v3/bootstrap-devops.md</code>) le ordena ser la
+    <em>autoridad única sobre variables de entorno</em>. Ningún otro agente puede declarar
+    un <code>process.env.X</code> sin que esté registrado en el <code>envManifest</code>
+    de Bootstrap — si lo hace, el QA Reviewer emite una violación BLOCKER.
+  </p>
+
+  <p>Su schema Zod (<code>contracts-v3/bootstrap.schema.ts</code>) valida:</p>
+
+  <div class="code-block">
+    <pre><span class="ck">export const</span> <span class="ct">bootstrapOutputSchema</span> = z.<span class="cf">object</span>({
+  envManifest: z.<span class="cf">array</span>(z.<span class="cf">object</span>({
+    key:      z.<span class="cf">string</span>(),           <span class="cc">// nombre de la variable</span>
+    required: z.<span class="cf">boolean</span>(),
+    source:   z.<span class="cf">enum</span>([<span class="cs">'env'</span>, <span class="cs">'generated'</span>, <span class="cs">'default'</span>]),
+    example:  z.<span class="cf">string</span>(),
+  })),
+  dockerServices:  z.<span class="cf">array</span>(...),
+  healthcheckUrl:  z.<span class="cf">string</span>().<span class="cf">url</span>(),
+  filesProduced:   z.<span class="cf">array</span>(z.<span class="cf">string</span>()),
+}).<span class="cf">refine</span>(
+  (d) => d.envManifest.<span class="cf">every</span>(e => e.source !== <span class="cs">'hardcoded'</span>),
+  <span class="cs">"R0 — ninguna variable puede estar hardcodeada en el código"</span>
+);</pre>
+  </div>
+
+  <div class="highlight">
+    <p>
+      <strong>Por qué Zod y no solo TypeScript:</strong> TypeScript solo existe en tiempo de compilación.
+      Los agentes producen JSON en tiempo de ejecución — puede tener campos que faltan, tipos incorrectos
+      o invariantes rotas. Zod valida el JSON real, no los tipos, y permite expresar reglas de negocio
+      como refinements (<em>"el source nunca puede ser 'hardcoded'"</em>).
+    </p>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     4. LAS 7 WAVES EN DETALLE
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">04 · Las 7 waves de generación</div>
+  <h2>Qué hace cada agente</h2>
+
+  <p>
+    Los 21 agentes están organizados en waves por dependencias: un agente de la wave N solo puede
+    ejecutarse cuando todos los agentes de los que depende han terminado. Los agentes de una misma
+    wave que no dependen entre sí se ejecutan en paralelo con <code>Promise.allSettled</code>.
+  </p>
+
+  <div class="wave-list">
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 1A</div>
+        <div class="wave-name">Bootstrap</div>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">bootstrap-devops</span>
+            <span class="agent-desc">Lee el PRD y genera toda la infraestructura de arranque: <code>.env.example</code>, <code>docker-compose.yml</code>, scripts de setup cross-platform y el validador de entorno. Es la autoridad única sobre variables de entorno — ningún otro agente puede declarar variables sin registrarlas aquí.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 1B</div>
+        <div class="wave-name">Arquitectura</div>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">architect</span>
+            <span class="agent-desc">Lee el PRD y el output de bootstrap. Decide la estructura completa de la aplicación: qué páginas existen, qué entidades del dominio hay, qué roles de usuario, cómo se llaman las rutas, qué módulos tiene el proyecto. Su output es el contrato maestro que leen todos los agentes posteriores.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 2A</div>
+        <div class="wave-name">Diseño visual</div>
+        <span class="wave-parallel">PARALELO</span>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">ux-ui-designer</span>
+            <span class="agent-desc">Define el design system base: tokens de color, tipografía, espaciado y el "design vibe" general de la app. Usa el Stitch SDK de Google para generar mockups de las pantallas principales.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">layout-architect</span>
+            <span class="agent-desc">Diseña la estructura visual de cada página: qué secciones tiene, qué componentes van en cada una, cómo se compone el layout. Produce el <code>layout-tree.json</code> que es la referencia estructural para visual-adapter.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">brand-identity</span>
+            <span class="agent-desc">Define los tokens de marca específicos del proyecto generado: paleta de color exacta con referencias hex, escala tipográfica, microcopy (textos de botones, placeholders, mensajes de error en el idioma de la app).</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 2B</div>
+        <div class="wave-name">Dominio</div>
+        <span class="wave-parallel">PARALELO</span>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">domain-modeler</span>
+            <span class="agent-desc">Lee el output del architect y define el modelo de dominio completo: todas las entidades, sus campos, tipos y relaciones. Este modelo se convierte en el schema Prisma del proyecto generado.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">persistence</span>
+            <span class="agent-desc">Traduce el modelo de dominio a un <code>schema.prisma</code> concreto con relaciones, índices, constraints y configuración del adaptador de base de datos.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">seeds-shape</span>
+            <span class="agent-desc">Define la forma de los datos de ejemplo que se cargarán en la base de datos. No genera los datos todavía — define su estructura para que el agente seeds-fixtures los genere correctamente en la wave 5.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 3</div>
+        <div class="wave-name">Seguridad</div>
+        <span class="wave-parallel">PARALELO</span>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">service-layer</span>
+            <span class="agent-desc">Genera la capa de servicios: las funciones de lógica de negocio que intermedian entre la API y la base de datos. Aquí viven las reglas como "un alumno no puede cancelar una clase de otro alumno".</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">auth-security</span>
+            <span class="agent-desc">Configura el sistema de autenticación con Better Auth: registro, login, sesiones, tokens, cookies HttpOnly. Genera los ficheros de configuración y los middlewares.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">rbac-authorization</span>
+            <span class="agent-desc">Define y aplica el sistema de permisos por rol (RBAC). Genera las políticas de acceso: qué puede hacer cada rol en cada ruta y qué datos puede ver.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 4</div>
+        <div class="wave-name">Frontend completo</div>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">api-backend</span>
+            <span class="agent-desc">Genera todas las rutas de API (Next.js Route Handlers): los endpoints REST con validación de entrada (Zod), llamadas a la service-layer y respuestas tipadas.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">frontend-architect</span>
+            <span class="agent-desc">Define cómo se organiza el código React: hooks, providers de contexto, estructura de carpetas del cliente. El contrato que siguen ui-components y forms-validations.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">ui-components</span>
+            <span class="agent-desc">Genera el catálogo de componentes React de la app: tablas, cards, modales, navegación. Usa shadcn/ui como base y aplica los tokens de brand-identity.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">forms-validations</span>
+            <span class="agent-desc">Genera los formularios de la app con React Hook Form + Zod: todos los campos, sus validaciones, mensajes de error y comportamiento de envío.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">visual-adapter</span>
+            <span class="agent-desc">El agente más complejo de wave 4. Lee los HTMLs generados por Stitch (los mockups visuales) y los convierte en páginas JSX reales: inyecta test-ids, conecta los datos de la API, aplica el microcopy de brand-identity y preserva el diseño visual.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card">
+      <div class="wave-head">
+        <div class="wave-num">Wave 5 + 6</div>
+        <div class="wave-name">Datos y QA</div>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">seeds-fixtures</span>
+            <span class="agent-desc">Genera los datos de ejemplo realistas para la base de datos: usuarios, contenido, relaciones. Usa la shape definida en wave 2B y los nombres del dominio concreto de la app.</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">tests-writer</span>
+            <span class="agent-desc">Genera la suite de tests: unitarios con Vitest para la service-layer y E2E con Playwright para los flujos principales de usuario (registro, login, CRUD).</span>
+          </div>
+          <div class="agent-row">
+            <span class="agent-name">qa-reviewer</span>
+            <span class="agent-desc">Revisa todos los artefactos producidos buscando inconsistencias: variables de entorno sin registrar, rutas sin protección de rol, componentes sin test-ids. Emite violaciones con severidad warn / error / critical.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wave-card" style="border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.04);">
+      <div class="wave-head">
+        <div class="wave-num" style="color: var(--green);">Wave 7</div>
+        <div class="wave-name">Visual QA</div>
+      </div>
+      <div class="wave-body">
+        <div class="agent-rows">
+          <div class="agent-row">
+            <span class="agent-name">visual-qa</span>
+            <span class="agent-desc">Arranca la aplicación generada con Playwright headless. Ejecuta flujos reales de cliente y administrador: registro, login, CRUD, navegación entre páginas. Captura screenshots, detecta errores de consola en runtime y errores visuales con comparación de pixels (pixelmatch). Si detecta fallos, los enruta al agente responsable para que los corrija.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     5. EL FIX LOOP
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">05 · Calidad y robustez</div>
+  <h2>El fix loop: cómo se corrigen los errores</h2>
+
+  <p>
+    El sistema no asume que los agentes producen output perfecto a la primera.
+    Después de cada wave, el <code>qa-reviewer</code> analiza los artefactos producidos.
+    Si encuentra violaciones, el orquestador no pasa a la siguiente wave — manda los errores
+    de vuelta al agente responsable usando el <code>violations-router-v3.ts</code>.
+  </p>
+
+  <div class="flow-diagram">
+    <div class="flow-row">
+      <div class="flow-box fb-purple">Agente produce artefacto</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-green">z.parse() valida el JSON</div>
+    </div>
+    <div class="flow-row" style="padding-left: 1rem;">
+      <span class="flow-arrow">↓ si pasa</span>
+      <span style="margin-left: 2rem; color: var(--muted); font-size: 0.8rem;">↘ si falla → violación inmediata</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-purple">qa-reviewer analiza la wave</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-green">¿hay violaciones?</div>
+    </div>
+    <div class="flow-row">
+      <span style="color:var(--muted); font-size:0.8rem; padding-left:1rem;">NO →</span>
+      <div class="flow-box fb-green" style="margin-left: 0.5rem;">siguiente wave</div>
+      <span style="color:var(--muted); font-size:0.8rem; margin-left: 2rem;">SÍ (hasta 3 rondas) →</span>
+      <div class="flow-box fb-orange" style="margin-left: 0.5rem;">violations-router: ¿qué agente lo causó?</div>
+    </div>
+    <div class="flow-row" style="padding-left: 1rem;">
+      <span class="flow-arrow">↓</span>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-orange">Agente responsable recibe el error y regenera</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box fb-green">z.parse() de nuevo</div>
+    </div>
+  </div>
+
+  <p>
+    Las violaciones tienen tres niveles de severidad:
+  </p>
+
+  <table>
+    <thead><tr><th>Severidad</th><th>Qué significa</th><th>Qué hace el orquestador</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>warn</td>
+        <td>Algo mejorable pero no bloqueante</td>
+        <td>Acumula en el informe final, no interrumpe</td>
+      </tr>
+      <tr>
+        <td>error</td>
+        <td>Fallo recuperable: el agente puede corregirlo</td>
+        <td>Lanza el fix loop (máximo 3 rondas)</td>
+      </tr>
+      <tr>
+        <td>critical</td>
+        <td>Fallo irrecuperable: el agente tiene un bug de diseño</td>
+        <td>Detiene la generación inmediatamente, reporta al usuario</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     6. BASE DE DATOS DE ATELIER
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">06 · Persistencia</div>
+  <h2>La base de datos de la plataforma</h2>
+
+  <p>
+    Atelier tiene su propia base de datos PostgreSQL (distinta de la que genera para el usuario).
+    Almacena usuarios, proyectos, generaciones y todos los eventos del orquestador para que
+    el usuario pueda retomar generaciones y ver el historial.
+  </p>
+
+  <div class="code-block">
+    <pre><span class="cc">// prisma/schema.prisma — base de datos de Atelier</span>
+
+<span class="ck">model</span> <span class="ct">User</span>       { id <span class="ct">String</span>  <span class="co">@id</span>  <span class="cc">// id de Clerk</span> }
+<span class="ck">model</span> <span class="ct">Project</span>    { id <span class="ct">String</span>; prd <span class="ct">Json</span>; generations <span class="ct">Generation[]</span> }
+<span class="ck">model</span> <span class="ct">Generation</span> { id <span class="ct">String</span>; status <span class="ct">String</span>; agentRuns <span class="ct">AgentRun[]</span>; events <span class="ct">Event[]</span> }
+<span class="ck">model</span> <span class="ct">AgentRun</span>   { agent <span class="ct">String</span>; status <span class="ct">String</span>; output <span class="ct">Json</span> }
+<span class="ck">model</span> <span class="ct">Event</span>      { type <span class="ct">String</span>; payload <span class="ct">Json</span>  <span class="cc">// wave.started, agent.completed...</span> }</pre>
+  </div>
+
+  <p>
+    El campo <code>Event.type</code> es un <code>String</code> libre — no un enum. Esto permite
+    añadir nuevos tipos de evento sin migraciones de base de datos. El payload se guarda como
+    <code>Json</code> y el frontend lo interpreta según el type.
+  </p>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     7. STACK COMPLETO
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">07 · Stack tecnológico</div>
+  <h2>Cada tecnología y su rol concreto</h2>
+
+  <table>
+    <thead><tr><th>Tecnología</th><th>Versión</th><th>Para qué se usa</th></tr></thead>
+    <tbody>
+      <tr><td>Next.js</td><td>16.2</td><td>Framework principal. App Router para las rutas de la plataforma y Route Handlers para la API de generación.</td></tr>
+      <tr><td>React</td><td>19.2</td><td>UI de Atelier: chat, grafo de agentes (React Flow), editor Monaco, preview live.</td></tr>
+      <tr><td>TypeScript</td><td>^5</td><td>Tipado estricto en todo el proyecto, especialmente en los contratos entre agentes.</td></tr>
+      <tr><td>Prisma</td><td>7.8</td><td>ORM para la base de datos de Atelier. También genera el schema Prisma de los proyectos creados.</td></tr>
+      <tr><td>PostgreSQL</td><td>—</td><td>Base de datos de Atelier. Gestionada con Docker Compose en desarrollo.</td></tr>
+      <tr><td>Clerk</td><td>^7</td><td>Autenticación de la plataforma: registro, login, gestión de sesiones.</td></tr>
+      <tr><td>Zod</td><td>^3</td><td>Validación de los artefactos JSON que producen los agentes. Contratos entre waves.</td></tr>
+      <tr><td>Claude API (Anthropic)</td><td>—</td><td>Motor de los 21 agentes. Se invoca vía subprocess de <code>claude.exe</code>.</td></tr>
+      <tr><td>Stitch SDK (Google)</td><td>^0.3</td><td>Generación de mockups visuales de las pantallas. El agente layout-architect lo usa vía MCP.</td></tr>
+      <tr><td>React Flow</td><td>^12</td><td>Grafo interactivo del Studio: muestra las waves y el estado de cada agente en tiempo real.</td></tr>
+      <tr><td>Monaco Editor</td><td>^4</td><td>Editor de código en la pantalla Reveal para mostrar los ficheros generados.</td></tr>
+      <tr><td>Vitest</td><td>^4</td><td>Tests unitarios. 233 tests que cubren schemas, orquestador, runtime y lógica de gates.</td></tr>
+      <tr><td>Playwright</td><td>—</td><td>Usado por el agente visual-qa para ejecutar flujos reales contra la app generada.</td></tr>
+      <tr><td>Tailwind CSS</td><td>v4</td><td>Estilos de la UI de la plataforma.</td></tr>
+      <tr><td>Motion</td><td>^12</td><td>Animaciones del Studio: pulsos en los agentes activos, transiciones entre estados.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     8. DECISIONES TÉCNICAS
+════════════════════════════════════════ -->
+<div class="section">
+  <div class="sec-tag">08 · Decisiones de diseño</div>
+  <h2>Por qué se tomaron estas decisiones</h2>
+
+  <div class="card-grid-2">
+
+    <div class="card">
+      <div class="card-title">Subproceso en vez de API HTTP</div>
+      <div class="card-text">
+        Los agentes se invocan lanzando <code>claude.exe</code> como subproceso en lugar de
+        llamar a la Anthropic API directamente. Razón: el CLI de Claude maneja el contexto,
+        el streaming y los reintentos de forma nativa, y permite usar los mismos prompts
+        que un desarrollador usaría manualmente.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Un .md por agente, no código</div>
+      <div class="card-text">
+        Los system prompts son ficheros Markdown editables, no strings en el código TypeScript.
+        Esto permite iterar sobre el comportamiento de un agente sin tocar el código del orquestador,
+        y hace que los prompts sean revisables con diff de git como cualquier otro fichero.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Artefactos JSON + Zod, no texto libre</div>
+      <div class="card-text">
+        Cada agente produce JSON estructurado, no texto libre. Esto hace el output verificable
+        programáticamente, trazable (se guarda en BD), y consumible por el siguiente agente
+        de forma determinista. El texto libre solo aparece en el campo <code>summary</code>
+        para mostrar al usuario.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Skeleton como plantilla base</div>
+      <div class="card-text">
+        Los agentes no generan un proyecto desde cero — escriben sobre una plantilla base
+        (<code>lib/skeleton/</code>) que ya tiene configurado Next.js, TypeScript, ESLint y
+        Prisma. Los agentes rellenan el contenido específico del dominio. Esto reduce errores
+        de configuración y hace el output más predecible.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">SSE para el Studio</div>
+      <div class="card-text">
+        El Studio muestra el progreso en tiempo real usando Server-Sent Events (SSE) en lugar
+        de WebSockets. Razón: los eventos de generación son unidireccionales (servidor → cliente),
+        SSE es más simple de implementar con Next.js Route Handlers y no requiere infraestructura
+        adicional.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Waves paralelas con Promise.allSettled</div>
+      <div class="card-text">
+        Dentro de una wave, los agentes sin dependencias entre sí se ejecutan en paralelo.
+        Se usa <code>Promise.allSettled</code> en lugar de <code>Promise.all</code> para que
+        el fallo de un agente no cancele los demás — el orquestador recoge todos los resultados
+        y decide si continuar o activar el fix loop.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- FOOTER -->
+<div class="footer">
+  <p>
+    Alex Seguí · Curso 2025–2026 ·
+    <a href="https://github.com/alexsegui10/proyecto_final_FE_atelier">github.com/alexsegui10/proyecto_final_FE_atelier</a>
+  </p>
+  <p style="margin-top: 0.4rem;">
+    Otros proyectos: <a href="https://mrc-sooty.vercel.app/">mrc-sooty.vercel.app</a> — Web profesional para taller mecánico
+  </p>
+</div>
+
+</div><!-- /.wrap -->
+</body>
+</html>
